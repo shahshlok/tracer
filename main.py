@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -44,7 +45,8 @@ def main() -> None:
         for code_path in submissions:
             progress.log(f"Evaluating {code_path}")
             try:
-                evaluation = evaluate_submission(code_path, question, rubric)
+                # Run the async evaluation (GPT-5 and EduAI in parallel)
+                evaluation = asyncio.run(evaluate_submission(code_path, question, rubric))
                 results.append(evaluation)
             except Exception as exc:
                 logger.exception("Failed to evaluate %s: %s", code_path, exc)
@@ -97,8 +99,8 @@ def _clean_response(response: Any) -> Any:
     if not isinstance(response, dict):
         return response
 
-    # Create a copy and remove internal metadata fields
-    cleaned = {k: v for k, v in response.items() if not k.startswith("_")}
+    # Create a copy and remove internal metadata fields and criteria_scores
+    cleaned = {k: v for k, v in response.items() if not k.startswith("_") and k != "criteria_scores"}
     return cleaned
 
 

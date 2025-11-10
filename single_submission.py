@@ -2,20 +2,20 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import logging
 from pathlib import Path
+from threading import Thread
+import time
 from typing import Any, Dict
 
 from dotenv import load_dotenv
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
 
 from main import _load_question_and_rubric  # reuse existing helper
 from utils.evaluator import evaluate_submission
 from utils.display import display_results
-
-from threading import Thread
-import time
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,8 @@ def _evaluate_with_progress(code_path: Path, question: str, rubric: Dict[str, An
 
     def runner() -> None:
         try:
-            container["result"] = evaluate_submission(code_path, question, rubric)
+            # Run the async evaluation (GPT-5 and EduAI in parallel)
+            container["result"] = asyncio.run(evaluate_submission(code_path, question, rubric))
         except Exception as exc:  # pragma: no cover - defensive
             container["error"] = exc
 
@@ -159,8 +160,8 @@ def _clean_result(result: Dict[str, Any]) -> Dict[str, Any]:
             return None
         if not isinstance(response, dict):
             return response
-        # Remove internal metadata fields (those starting with _)
-        return {k: v for k, v in response.items() if not k.startswith("_")}
+        # Remove internal metadata fields (those starting with _) and criteria_scores
+        return {k: v for k, v in response.items() if not k.startswith("_") and k != "criteria_scores"}
 
     return {
         "student": result.get("student"),

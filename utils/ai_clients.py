@@ -12,9 +12,28 @@ import openai
 
 logger = logging.getLogger(__name__)
 
+# Optional rate limiting via semaphore
+_rate_limit_semaphore: Optional[asyncio.Semaphore] = None
+
+
+def _get_semaphore() -> Optional[asyncio.Semaphore]:
+    """Get or create the rate limit semaphore based on MAX_CONCURRENT_MODELS env variable."""
+    global _rate_limit_semaphore
+    if _rate_limit_semaphore is None:
+        max_concurrent = os.getenv("MAX_CONCURRENT_MODELS")
+        if max_concurrent and max_concurrent.isdigit():
+            limit = int(max_concurrent)
+            logger.info("Rate limiting enabled: max %d concurrent model calls", limit)
+            _rate_limit_semaphore = asyncio.Semaphore(limit)
+    return _rate_limit_semaphore
+
 
 async def get_openai_eval(prompt: str) -> Optional[Dict[str, Any]]:
     """Call OpenAI GPT-5 asynchronously and return parsed JSON."""
+    semaphore = _get_semaphore()
+    if semaphore:
+        async with semaphore:
+            return await asyncio.to_thread(_call_openai_eval, prompt)
     return await asyncio.to_thread(_call_openai_eval, prompt)
 
 
@@ -92,7 +111,21 @@ def _serialize_openai_response(response: Any) -> Any:
 
 
 def get_eduai_eval(prompt: str) -> Optional[Dict[str, Any]]:
-    """Call the EduAI GPT-OSS 120B endpoint via curl."""
+    """Call the EduAI GPT-OSS 120B endpoint via curl (synchronous version)."""
+    return _call_eduai_eval(prompt)
+
+
+async def get_eduai_eval_async(prompt: str) -> Optional[Dict[str, Any]]:
+    """Call the EduAI GPT-OSS 120B endpoint via curl (async version)."""
+    semaphore = _get_semaphore()
+    if semaphore:
+        async with semaphore:
+            return await asyncio.to_thread(_call_eduai_eval, prompt)
+    return await asyncio.to_thread(_call_eduai_eval, prompt)
+
+
+def _call_eduai_eval(prompt: str) -> Optional[Dict[str, Any]]:
+    """Internal helper to call EduAI endpoint via curl."""
     endpoint = os.getenv("EDUAI_ENDPOINT", "https://eduai.ok.ubc.ca/api/chat")
     api_key = os.getenv("EDUAI_API_KEY")
     if not api_key:

@@ -3,25 +3,28 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import threading
 from pathlib import Path
 from statistics import mean
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from prompts.eme_prompt import build_eme_prompt
-from .ai_clients import get_eduai_eval, get_openai_eval
+from .ai_clients import get_eduai_eval_async, get_openai_eval
 
 logger = logging.getLogger(__name__)
 
 
-def evaluate_submission(code_path: Path, question: str, rubric: Dict[str, Any]) -> Dict[str, Any]:
-    """Evaluate a single Java submission with both GPT-5 and EduAI."""
+async def evaluate_submission(code_path: Path, question: str, rubric: Dict[str, Any]) -> Dict[str, Any]:
+    """Evaluate a single Java submission with both GPT-5 and EduAI in parallel."""
     student = code_path.parent.name or code_path.stem
     student_code = code_path.read_text(encoding="utf-8")
     prompt = build_eme_prompt(question, rubric, student_code)
 
-    gpt5_result = _run_openai(prompt)
-    eduai_result = get_eduai_eval(prompt)
+    # Call both models in parallel using asyncio.gather
+    gpt5_result, eduai_result = await asyncio.gather(
+        get_openai_eval(prompt),
+        get_eduai_eval_async(prompt),
+        return_exceptions=False,
+    )
 
     metrics = compute_metrics(gpt5_result, eduai_result)
     return {
@@ -32,29 +35,6 @@ def evaluate_submission(code_path: Path, question: str, rubric: Dict[str, Any]) 
         "eduai_result": eduai_result,
         "metrics": metrics,
     }
-
-
-def _run_openai(prompt: str) -> Optional[Dict[str, Any]]:
-    """Run the async OpenAI call from synchronous code."""
-    try:
-        return asyncio.run(get_openai_eval(prompt))
-    except RuntimeError:
-        # Fall back to a background thread if an event loop is already running.
-        result_container: List[Optional[Dict[str, Any]]] = [None]
-        exc_container: List[Optional[Exception]] = [None]
-
-        def runner() -> None:
-            try:
-                result_container[0] = asyncio.run(get_openai_eval(prompt))
-            except Exception as exc:  # pragma: no cover - defensive fallback
-                exc_container[0] = exc
-
-        thread = threading.Thread(target=runner, daemon=True)
-        thread.start()
-        thread.join()
-        if exc_container[0]:
-            logger.warning("OpenAI evaluation failed in thread: %s", exc_container[0])
-        return result_container[0]
 
 
 def compute_metrics(gpt5_result: Optional[Dict[str, Any]], eduai_result: Optional[Dict[str, Any]]) -> Dict[str, Any]:
