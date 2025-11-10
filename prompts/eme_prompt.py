@@ -5,8 +5,8 @@ By default, it enforces a 100-point rubric and a strict JSON-only reply.
 """
 from __future__ import annotations
 
-from typing import Dict, Any, List
 import json
+from typing import Any, Dict, List
 
 
 def build_eme_prompt(question: str, rubric_json: Dict[str, Any], student_code: str) -> str:
@@ -26,34 +26,41 @@ def build_eme_prompt(question: str, rubric_json: Dict[str, Any], student_code: s
     rubric_block = json.dumps(rubric_json, indent=2)
 
     prompt = f"""
-You are evaluating a student's code submission for a programming problem.
+    You are an automated programming assignment grader using a standardized rubric.
+    Be impartial, consistent, and evaluate purely by rubric adherence.
+    Do not infer or assume intent beyond what is in the student's code.
 
-Provide your evaluation in VALID JSON format only (no markdown fences, no prose outside JSON).
+    Provide your evaluation in VALID JSON format only (no markdown, no prose).
 
-Problem:
-{question}
+    Problem:
+    {question}
 
-Rubric (target total = 100 points):
-{rubric_block}
+    Rubric (target total = 100 points):
+    {rubric_block}
 
-Student Code:
-{student_code}
+    Student Code:
+    {student_code}
 
-STRICT INSTRUCTIONS:
-1) Score ONLY according to the rubric categories above. Treat each category as a criterion.
-2) For each category, output an object with fields: criterion (category name), score (integer), max_score (category points), feedback (<= 2 short sentences).
-3) total_score MUST equal the sum of all category scores and MUST be in [0, 100].
-4) max_possible_score MUST be 100.
-5) Return ONLY JSON with EXACTLY these top-level keys:
-   {{
-     "criteria_scores": [
-       {{"criterion": "<category>", "score": <int>, "max_score": <int>, "feedback": "<short>"}},
-       ...
-     ],
-     "total_score": <int>,
-     "max_possible_score": 100,
-     "overall_feedback": "<2-3 sentences max>"
-   }}
-6) Do NOT include code fences, explanations, or any text outside the JSON.
-""".strip()
+    STRICT INSTRUCTIONS:
+    1) Evaluate each rubric category independently. If a category is missing evidence, assign 0.
+    2) For each category, return:
+       {{
+         "criterion": "<category name>",
+         "score": <int>,
+         "max_score": <int>,
+         "feedback": "<<=2 short sentences>"
+       }}
+    3) The "total_score" MUST equal the sum of all category scores.
+    4) "max_possible_score" MUST be 100.
+    5) Include an "overall_feedback" field (2–3 concise sentences on correctness, clarity, and code quality).
+    6) Return ONLY JSON with exactly these keys:
+       {{
+         "criteria_scores": [...],
+         "total_score": <int>,
+         "max_possible_score": 100,
+         "overall_feedback": "<summary>"
+       }}
+    7) If the output cannot be validated as JSON, it is incorrect.
+    """.strip()
+
     return prompt
