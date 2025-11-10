@@ -165,10 +165,6 @@ async def _run_all_modes(
         all_results[mode] = results
 
     # Display individual results
-    console.print("\n" + "─" * 80)
-    console.print("INDIVIDUAL RESULTS")
-    console.print("─" * 80)
-
     for mode, results in all_results.items():
         _display_mode_results(mode, results)
         _save_results(mode, results)
@@ -216,7 +212,7 @@ def _prompt_mode_selection() -> str:
     options_table.add_row(
         "[3]",
         "Ensemble (EME)",
-        "Balanced prompt optimized for both models"
+        "The prompt in the RIAYN paper, just tweaked a bit"
     )
     options_table.add_row(
         "[4]",
