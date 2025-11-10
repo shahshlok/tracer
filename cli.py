@@ -156,7 +156,7 @@ async def _run_all_modes(
     advanced: bool,
 ) -> None:
     """Run all three grading modes and display comparison."""
-    console.print("\n[bold magenta]Running ALL grading paradigms...[/bold magenta]")
+    console.print("\n[bold]Running all grading strategies...[/bold]")
 
     # Run all modes
     all_results = {}
@@ -165,36 +165,67 @@ async def _run_all_modes(
         all_results[mode] = results
 
     # Display individual results
-    console.print("\n" + "=" * 80)
-    console.print("[bold]INDIVIDUAL MODE RESULTS[/bold]")
-    console.print("=" * 80)
+    console.print("\n" + "─" * 80)
+    console.print("INDIVIDUAL RESULTS")
+    console.print("─" * 80)
 
     for mode, results in all_results.items():
         _display_mode_results(mode, results)
         _save_results(mode, results)
 
-    # Display cross-paradigm comparison
+    # Display strategy comparison
     _display_cross_paradigm_comparison(all_results)
 
 
 def _display_banner() -> None:
     """Display the EduBench banner."""
     banner = """
-[bold cyan]╭────────────────────────────────────────────╮[/bold cyan]
-[bold cyan]│   EduBench: Unified AI Grading Benchmark   │[/bold cyan]
-[bold cyan]│    Compare GPT-5 & EduAI across paradigms  │[/bold cyan]
-[bold cyan]╰────────────────────────────────────────────╯[/bold cyan]
+
+   [bold]EduBench: AI Grading Benchmark[/bold]  
+   Compare GPT-5 & EduAI grading strategies     
+
 """
     console.print(banner)
 
 
 def _prompt_mode_selection() -> str:
-    """Prompt user to select a grading paradigm."""
-    console.print("\n[bold]Select a grading paradigm:[/bold]")
-    console.print("[1] Direct Grading")
-    console.print("[2] Reverse Grading")
-    console.print("[3] Ensembling (EME)")
-    console.print("[4] Run All")
+    """Prompt user to select a grading strategy."""
+    console.print("\n[bold]Select a grading strategy:[/bold]\n")
+
+    # Create a clean options table
+    options_table = Table(
+        show_header=False,
+        box=None,
+        padding=(0, 2),
+        collapse_padding=True,
+    )
+    options_table.add_column("Choice", style="cyan", width=3)
+    options_table.add_column("Strategy", style="bold", width=20)
+    options_table.add_column("Description", style="dim")
+
+    options_table.add_row(
+        "[1]",
+        "Direct Grading",
+        "Grade student code directly against rubric"
+    )
+    options_table.add_row(
+        "[2]",
+        "Reverse Grading",
+        "Generate ideal solution first, then compare"
+    )
+    options_table.add_row(
+        "[3]",
+        "Ensemble (EME)",
+        "Balanced prompt optimized for both models"
+    )
+    options_table.add_row(
+        "[4]",
+        "Run All",
+        "Compare all three strategies side-by-side"
+    )
+
+    console.print(options_table)
+    console.print()
 
     choice = Prompt.ask("Enter choice", choices=["1", "2", "3", "4"], default="1")
 
@@ -294,15 +325,10 @@ def _display_summary(mode: str, summary: Dict[str, Any]) -> None:
   Flagged: {flagged}/{total} submissions
   Agreement rate: {agreement_rate:.1f}%
 """
-    console.print(Panel(summary_text, border_style="dim", padding=(0, 2)))
+    console.print(summary_text)
 
 
 def _display_cross_paradigm_comparison(all_results: Dict[str, List[Dict[str, Any]]]) -> None:
-    """Display comparison across all paradigms."""
-    console.print("\n" + "─" * 80)
-    console.print("CROSS-PARADIGM COMPARISON")
-    console.print("─" * 80 + "\n")
-
     # Aggregate statistics
     stats = {}
     for mode, results in all_results.items():
@@ -311,13 +337,13 @@ def _display_cross_paradigm_comparison(all_results: Dict[str, List[Dict[str, Any
 
     # Create comparison table
     table = Table(
-        title="Paradigm Comparison",
+        title="Strategy Comparison",
         box=box.SIMPLE,
         show_header=True,
         header_style="bold",
         border_style="dim",
     )
-    table.add_column("Paradigm")
+    table.add_column("Strategy")
     table.add_column("Mean Diff %", justify="right")
     table.add_column("Flagged", justify="right")
     table.add_column("Agreement Rate", justify="right")
