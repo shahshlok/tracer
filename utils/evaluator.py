@@ -6,12 +6,15 @@ import logging
 import os
 from pathlib import Path
 from statistics import mean
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from prompts.eme_prompt import build_eme_prompt
 from .ai_clients import get_eduai_eval_async, get_openai_eval
 
 logger = logging.getLogger(__name__)
+
+# Type alias for prompt builder functions
+PromptBuilder = Callable[[str, Dict[str, Any], str], str]
 
 # Optional rate limiting for student-level concurrency
 _student_semaphore: Optional[asyncio.Semaphore] = None
@@ -29,20 +32,41 @@ def _get_student_semaphore() -> Optional[asyncio.Semaphore]:
     return _student_semaphore
 
 
-async def evaluate_submission(code_path: Path, question: str, rubric: Dict[str, Any]) -> Dict[str, Any]:
-    """Evaluate a single Java submission with both GPT-5 and EduAI in parallel."""
+async def evaluate_submission(
+    code_path: Path,
+    question: str,
+    rubric: Dict[str, Any],
+    prompt_builder: Optional[PromptBuilder] = None,
+) -> Dict[str, Any]:
+    """Evaluate a single Java submission with both GPT-5 and EduAI in parallel.
+
+    Args:
+        code_path: Path to the student's Java file
+        question: The problem statement
+        rubric: The grading rubric as a dictionary
+        prompt_builder: Optional custom prompt builder function. If None, uses EME prompt.
+    """
     semaphore = _get_student_semaphore()
     if semaphore:
         async with semaphore:
-            return await _evaluate_submission_impl(code_path, question, rubric)
-    return await _evaluate_submission_impl(code_path, question, rubric)
+            return await _evaluate_submission_impl(code_path, question, rubric, prompt_builder)
+    return await _evaluate_submission_impl(code_path, question, rubric, prompt_builder)
 
 
-async def _evaluate_submission_impl(code_path: Path, question: str, rubric: Dict[str, Any]) -> Dict[str, Any]:
+async def _evaluate_submission_impl(
+    code_path: Path,
+    question: str,
+    rubric: Dict[str, Any],
+    prompt_builder: Optional[PromptBuilder] = None,
+) -> Dict[str, Any]:
     """Internal implementation of evaluate_submission."""
     student = code_path.parent.name or code_path.stem
     student_code = code_path.read_text(encoding="utf-8")
-    prompt = build_eme_prompt(question, rubric, student_code)
+
+    # Use provided prompt builder or default to EME
+    if prompt_builder is None:
+        prompt_builder = build_eme_prompt
+    prompt = prompt_builder(question, rubric, student_code)
 
     # Call both models in parallel using asyncio.gather
     gpt5_result, eduai_result = await asyncio.gather(
