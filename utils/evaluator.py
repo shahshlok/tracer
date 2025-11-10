@@ -81,11 +81,11 @@ def compute_metrics(gpt5_result: Optional[Dict[str, Any]], eduai_result: Optiona
         flag = "🚩"
         comment = "Missing comparison data"
     else:
-        threshold = 5.0
+        threshold = 10.0
         flag = "✅" if diff_pct <= threshold else "🚩"
         if flag == "✅":
             comment = "Models agree within tolerance"
-        elif gpt5_scores["pct"] > eduai_scores["pct"]:
+        elif gpt5_scores["pct"] < eduai_scores["pct"]:
             comment = f"GPT-5 stricter by {diff_pct:.1f} pts"
         else:
             comment = f"EduAI stricter by {diff_pct:.1f} pts"
