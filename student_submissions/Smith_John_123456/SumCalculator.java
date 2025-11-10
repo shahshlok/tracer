@@ -1,8 +1,9 @@
-public class Miller_Sarah_678901 {
+// Smith John 123456
+public class SumCalculator {
     public static void main(String[] args) {
         int totalSum = 0;
         for (int i = 1; i <= 100; i++) {
-            totalSum += i;
+            totalSum = totalSum + i;
         }
         System.out.println("The sum of numbers from 1 to 100 is: " + totalSum);
     }

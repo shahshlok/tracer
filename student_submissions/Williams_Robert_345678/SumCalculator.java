@@ -1,4 +1,5 @@
-public class Williams_Robert_345678 {
+// Williams Robert 345678
+public class SumCalculator {
     public static void main(String[] args) {
         int totalSum = 0;
         for (int i = 1; i < 100; i++) {

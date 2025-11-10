@@ -1,4 +1,5 @@
-public class Davis_Michael_567890 {
+// Davis Michael 567890
+public class SumCalculator {
     public static void main(String[] args) {
         int evenSum = 0;
         for (int i = 1; i <= 100; i++) {

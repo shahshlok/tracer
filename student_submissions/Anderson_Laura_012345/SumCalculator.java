@@ -1,4 +1,5 @@
-public class Anderson_Laura_012345 {
+// Anderson Laura 012345
+public class SumCalculator {
     public static void main(String[] args) {
         int sum = 0;
         for (int i = 1; i < 101; i++) {

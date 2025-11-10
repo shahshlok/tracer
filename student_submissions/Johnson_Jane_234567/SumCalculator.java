@@ -1,4 +1,5 @@
-public class Johnson_Jane_234567 {
+// Johnson Jane 234567
+public class SumCalculator {
     public static void main(String[] args) {
         int s = 0;
         for (int x = 1; x <= 100; x++) {
