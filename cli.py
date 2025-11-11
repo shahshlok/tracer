@@ -12,7 +12,7 @@ import typer
 from dotenv import load_dotenv
 from rich import box
 from rich.console import Console
-from rich.panel import Panel
+
 from rich.progress import (
     BarColumn,
     Progress,

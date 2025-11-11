@@ -6,7 +6,7 @@ By default, it enforces a 100-point rubric and a strict JSON-only reply.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 
 def build_eme_prompt(question: str, rubric_json: Dict[str, Any], student_code: str) -> str:
@@ -19,8 +19,7 @@ def build_eme_prompt(question: str, rubric_json: Dict[str, Any], student_code: s
     - Each category becomes a criterion with `max_score = points` and an integer `score`.
     """
 
-    total_points = rubric_json.get("totalPoints")
-    categories: List[Dict[str, Any]] = rubric_json.get("categories", [])
+
 
     # Fall back to printing whatever rubric was provided, but emphasize 100-point requirement
     rubric_block = json.dumps(rubric_json, indent=2)
