@@ -232,7 +232,7 @@ def _prompt_mode_selection() -> str:
     console.print(options_table)
     console.print()
 
-    choice = Prompt.ask("Enter choice", choices=["1", "2", "3", "4", "5"], default="1")
+    choice = Prompt.ask("Enter choice", choices=["1", "2", "3", "4", "5"])
 
     # Handle analysis separately
     if choice == "5":
@@ -278,7 +278,7 @@ def _run_analysis_menu() -> None:
     console.print(options_table)
     console.print()
 
-    choice = Prompt.ask("Enter choice", choices=["1", "2"], default="1")
+    choice = Prompt.ask("Enter choice", choices=["1", "2"])
 
     if choice == "1":
         _restore_json_from_db()
