@@ -65,6 +65,9 @@ def benchmark(
     # Interactive mode selection if not provided
     if mode is None:
         mode = _prompt_mode_selection()
+        # If mode is still None, it means analysis was selected (no benchmark to run)
+        if mode is None:
+            return
 
     # Run the selected mode
     asyncio.run(_run_benchmark_async(mode, advanced))
@@ -220,11 +223,21 @@ def _prompt_mode_selection() -> str:
         "Run All",
         "Compare all three strategies side-by-side"
     )
+    options_table.add_row(
+        "[5]",
+        "Analysis",
+        "Restore JSON files from database and analyze results"
+    )
 
     console.print(options_table)
     console.print()
 
-    choice = Prompt.ask("Enter choice", choices=["1", "2", "3", "4"], default="1")
+    choice = Prompt.ask("Enter choice", choices=["1", "2", "3", "4", "5"], default="1")
+
+    # Handle analysis separately
+    if choice == "5":
+        _run_analysis_menu()
+        return None  # Signal that no benchmark should run
 
     mode_map = {
         "1": "direct",
@@ -234,6 +247,56 @@ def _prompt_mode_selection() -> str:
     }
 
     return mode_map[choice]
+
+
+def _run_analysis_menu() -> None:
+    """Display and run the analysis menu."""
+    console.print("\n[bold cyan]Analysis Options[/bold cyan]\n")
+
+    # Create analysis options table
+    options_table = Table(
+        show_header=False,
+        box=None,
+        padding=(0, 2),
+        collapse_padding=True,
+    )
+    options_table.add_column("Choice", style="cyan", width=3)
+    options_table.add_column("Action", style="bold", width=30)
+    options_table.add_column("Description", style="dim")
+
+    options_table.add_row(
+        "[1]",
+        "Restore JSON from Database",
+        "Export all evaluation results from DB to data/ directory"
+    )
+    options_table.add_row(
+        "[2]",
+        "Back to Main Menu",
+        "Return to benchmark selection"
+    )
+
+    console.print(options_table)
+    console.print()
+
+    choice = Prompt.ask("Enter choice", choices=["1", "2"], default="1")
+
+    if choice == "1":
+        _restore_json_from_db()
+    elif choice == "2":
+        # Return to main menu by recursively calling the mode selection
+        console.print("\n[dim]Returning to main menu...[/dim]\n")
+        from cli import benchmark
+        benchmark()
+
+
+def _restore_json_from_db() -> None:
+    """Restore JSON files from the database to the data/ directory."""
+    console.print("\n[bold cyan]Restoring JSON files from database...[/bold cyan]")
+
+    # TODO: This will be implemented when the database layer is added
+    # For now, just show a placeholder message
+    console.print("[yellow]Database functionality not yet implemented.[/yellow]")
+    console.print("[dim]This will restore all evaluation JSON files from the SQLite database to the data/ directory.[/dim]\n")
 
 
 def _load_question_and_rubric() -> tuple[str, Dict[str, Any]]:
