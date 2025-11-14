@@ -373,8 +373,8 @@ ORDER BY r.run_timestamp;
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Benchmark Execution                      │
-│                  (uv run edubench benchmark)                 │
+│                     Benchmark Execution                     │
+│                  (uv run edubench benchmark)                │
 └────────────────────────────┬────────────────────────────────┘
                              │
                              ▼
@@ -404,7 +404,7 @@ ORDER BY r.run_timestamp;
             │ Validate via │      │ Insert into  │    │ Insert into  │
             │ JSON Schema  │──OK──│ runs table   │    │ evaluations  │
             └──────────────┘      └──────────────┘    │ table        │
-                    │                                  └──────────────┘
+                    │                                 └──────────────┘
                     │
                   FAIL
                     │
@@ -416,8 +416,8 @@ ORDER BY r.run_timestamp;
 
 
 ┌─────────────────────────────────────────────────────────────┐
-│                      Analysis Mode                           │
-│              (uv run edubench → Option 5 → 1)                │
+│                      Analysis Mode                          │
+│              (uv run edubench → Option 5 → 1)               │
 └────────────────────────────┬────────────────────────────────┘
                              │
                              ▼
@@ -437,8 +437,8 @@ ORDER BY r.run_timestamp;
                                 │ Reconstruct     │
                                 │ JSON array      │
                                 └────────┬────────┘
-                                          │
-                                          ▼
+                                         │
+                                         ▼
                                 ┌─────────────────┐
                                 │ Write to data/  │
                                 │ {source_file}   │
