@@ -66,7 +66,6 @@ def _extract_text_response(response: Any) -> str:
     `text` field. Falls back to `output_text` or generic string conversion.
     """
     try:
-        # Some SDKs expose a convenience property aggregating text outputs
         output_text = getattr(response, "output_text", None)
         if output_text:
             if isinstance(output_text, list):

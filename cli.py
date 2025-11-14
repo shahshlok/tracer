@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -177,8 +178,8 @@ def _display_banner() -> None:
     """Display the EduBench banner."""
     banner = """
 
-   [bold]EduBench: AI Grading Benchmark[/bold]  
-   Compare GPT-5 & EduAI grading strategies     
+   [bold]EduBench: AI Grading Benchmark[/bold]
+   Compare GPT-5 Nano & GPT-OSS 120B grading strategies
 
 """
     console.print(banner)
@@ -274,8 +275,8 @@ def _display_mode_results(mode: str, results: List[Dict[str, Any]]) -> None:
         border_style="dim",
     )
     table.add_column("Student")
-    table.add_column("GPT-5", justify="right")
-    table.add_column("EduAI", justify="right")
+    table.add_column("GPT-5 Nano", justify="right")
+    table.add_column("GPT-OSS 120B", justify="right")
     table.add_column("Avg %", justify="right")
     table.add_column("Diff %", justify="right")
     table.add_column("Flag", justify="center")
@@ -294,8 +295,8 @@ def _display_mode_results(mode: str, results: List[Dict[str, Any]]) -> None:
 
         table.add_row(
             result.get("student", "Unknown"),
-            _fmt_score(metrics.get("gpt5", {})),
-            _fmt_score(metrics.get("eduai", {})),
+            _fmt_score(metrics.get("gpt5_nano", {})),
+            _fmt_score(metrics.get("gpt_oss_120b", {})),
             _fmt_pct(metrics.get("avg_pct")),
             diff_str,
             flag,
@@ -343,8 +344,8 @@ def _display_cross_paradigm_comparison(all_results: Dict[str, List[Dict[str, Any
     table.add_column("Mean Diff %", justify="right")
     table.add_column("Flagged", justify="right")
     table.add_column("Agreement Rate", justify="right")
-    table.add_column("GPT-5 Stricter", justify="right")
-    table.add_column("EduAI Stricter", justify="right")
+    table.add_column("GPT-5 Nano Stricter", justify="right")
+    table.add_column("GPT-OSS 120B Stricter", justify="right")
 
     for mode, summary in stats.items():
         total = summary.get("total", 0)
@@ -353,17 +354,17 @@ def _display_cross_paradigm_comparison(all_results: Dict[str, List[Dict[str, Any
 
         # Count which model is stricter
         results = all_results[mode]
-        gpt5_stricter = sum(
+        gpt5_nano_stricter = sum(
             1
             for r in results
-            if r.get("metrics", {}).get("gpt5", {}).get("pct", 0)
-            < r.get("metrics", {}).get("eduai", {}).get("pct", 0)
+            if r.get("metrics", {}).get("gpt5_nano", {}).get("pct", 0)
+            < r.get("metrics", {}).get("gpt_oss_120b", {}).get("pct", 0)
         )
-        eduai_stricter = sum(
+        gpt_oss_120b_stricter = sum(
             1
             for r in results
-            if r.get("metrics", {}).get("eduai", {}).get("pct", 0)
-            < r.get("metrics", {}).get("gpt5", {}).get("pct", 0)
+            if r.get("metrics", {}).get("gpt_oss_120b", {}).get("pct", 0)
+            < r.get("metrics", {}).get("gpt5_nano", {}).get("pct", 0)
         )
 
         table.add_row(
@@ -371,8 +372,8 @@ def _display_cross_paradigm_comparison(all_results: Dict[str, List[Dict[str, Any
             _fmt_pct(summary.get("mean_diff_pct")),
             f"{flagged}/{total}",
             f"{agreement_rate:.1f}%",
-            str(gpt5_stricter),
-            str(eduai_stricter),
+            str(gpt5_nano_stricter),
+            str(gpt_oss_120b_stricter),
         )
 
     console.print(table)
@@ -382,23 +383,23 @@ def _display_cross_paradigm_comparison(all_results: Dict[str, List[Dict[str, Any
     best_mode = min(stats.items(), key=lambda x: x[1].get("mean_diff_pct", float("inf")))
     console.print(f"  • Lowest variance: {best_mode[0].upper()} ({_fmt_pct(best_mode[1].get('mean_diff_pct'))})")
 
-    overall_gpt5 = sum(
+    overall_gpt5_nano = sum(
         1
         for mode_results in all_results.values()
         for r in mode_results
-        if r.get("metrics", {}).get("gpt5", {}).get("pct", 0)
-        < r.get("metrics", {}).get("eduai", {}).get("pct", 0)
+        if r.get("metrics", {}).get("gpt5_nano", {}).get("pct", 0)
+        < r.get("metrics", {}).get("gpt_oss_120b", {}).get("pct", 0)
     )
-    overall_eduai = sum(
+    overall_gpt_oss_120b = sum(
         1
         for mode_results in all_results.values()
         for r in mode_results
-        if r.get("metrics", {}).get("eduai", {}).get("pct", 0)
-        < r.get("metrics", {}).get("gpt5", {}).get("pct", 0)
+        if r.get("metrics", {}).get("gpt_oss_120b", {}).get("pct", 0)
+        < r.get("metrics", {}).get("gpt5_nano", {}).get("pct", 0)
     )
 
-    console.print(f"  • GPT-5 stricter in {overall_gpt5} evaluations across all modes")
-    console.print(f"  • EduAI stricter in {overall_eduai} evaluations across all modes")
+    console.print(f"  • GPT-5 Nano stricter in {overall_gpt5_nano} evaluations across all modes")
+    console.print(f"  • GPT-OSS 120B stricter in {overall_gpt_oss_120b} evaluations across all modes")
 
 
 def _build_summary(results: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -454,8 +455,8 @@ def _save_results(mode: str, results: List[Dict[str, Any]]) -> None:
     for result in results:
         cleaned = {
             "student": result.get("student"),
-            "gpt5_result": _clean_response(result.get("gpt5_result")),
-            "eduai_result": _clean_response(result.get("eduai_result")),
+            "gpt5_nano_result": _clean_response(result.get("gpt5_nano_result")),
+            "gpt_oss_120b_result": _clean_response(result.get("gpt_oss_120b_result")),
             "metrics": result.get("metrics"),
         }
         cleaned_results.append(cleaned)
