@@ -445,10 +445,11 @@ def _fmt_pct(value: Any) -> str:
 
 
 def _save_results(mode: str, results: List[Dict[str, Any]]) -> None:
-    """Save results to a JSON file."""
+    """Save results to a JSON file with ISO date timestamp."""
     data_dir = Path("data")
     data_dir.mkdir(parents=True, exist_ok=True)
-    output_path = data_dir / f"results_{mode}.json"
+    iso_date = datetime.now().isoformat(timespec="seconds").replace(":", "-")
+    output_path = data_dir / f"results_{mode}_{iso_date}.json"
 
     # Strip down to essentials
     cleaned_results = []
