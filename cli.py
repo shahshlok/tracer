@@ -79,7 +79,7 @@ def benchmark(
 
 async def _run_benchmark_async(mode: str, advanced: bool) -> None:
     """Async main pipeline for running benchmarks."""
-    load_dotenv()
+    load_dotenv(override=True)
 
     # Load question and rubric
     question, rubric = _load_question_and_rubric()
@@ -311,19 +311,215 @@ def _restore_json_from_db() -> None:
         logger.exception("Failed to restore JSON files from database")
 
 
-def _load_question_and_rubric() -> tuple[str, Dict[str, Any]]:
-    """Load question and rubric from environment."""
-    question = os.getenv("QUESTION")
-    rubric_raw = os.getenv("RUBRIC")
+def _discover_question_files() -> List[Path]:
+    """Discover all question_*.md files in the root directory."""
+    root = Path(".")
+    question_files = sorted(root.glob("question_*.md"))
+    return question_files
+
+
+def _discover_rubric_files() -> List[Path]:
+    """Discover all rubric_*.json files in the root directory."""
+    root = Path(".")
+    rubric_files = sorted(root.glob("rubric_*.json"))
+    return rubric_files
+
+
+def _validate_rubric_structure(rubric: Dict[str, Any]) -> None:
+    """Validate that rubric has required structure.
+
+    Expected structure:
+    {
+        "totalPoints": <number>,
+        "categories": [
+            {
+                "name": <string>,
+                "points": <number>,
+                "description": <string>
+            },
+            ...
+        ]
+    }
+    """
+    # Check top-level required fields
+    if "totalPoints" not in rubric:
+        raise ValueError("Rubric missing required field: 'totalPoints'")
+    if "categories" not in rubric:
+        raise ValueError("Rubric missing required field: 'categories'")
+
+    # Validate totalPoints is a number
+    if not isinstance(rubric["totalPoints"], (int, float)):
+        raise ValueError("Rubric 'totalPoints' must be a number")
+
+    # Validate categories is a list
+    if not isinstance(rubric["categories"], list):
+        raise ValueError("Rubric 'categories' must be a list")
+
+    if len(rubric["categories"]) == 0:
+        raise ValueError("Rubric 'categories' cannot be empty")
+
+    # Validate each category
+    for i, category in enumerate(rubric["categories"]):
+        if not isinstance(category, dict):
+            raise ValueError(f"Category {i} must be a dictionary")
+
+        required_fields = ["name", "points", "description"]
+        for field in required_fields:
+            if field not in category:
+                raise ValueError(f"Category {i} missing required field: '{field}'")
+
+        if not isinstance(category["name"], str):
+            raise ValueError(f"Category {i} 'name' must be a string")
+        if not isinstance(category["points"], (int, float)):
+            raise ValueError(f"Category {i} 'points' must be a number")
+        if not isinstance(category["description"], str):
+            raise ValueError(f"Category {i} 'description' must be a string")
+
+    # Validate that category points sum to totalPoints
+    total_category_points = sum(cat["points"] for cat in rubric["categories"])
+    if abs(total_category_points - rubric["totalPoints"]) > 0.01:  # Allow small floating point errors
+        raise ValueError(
+            f"Category points ({total_category_points}) do not sum to totalPoints ({rubric['totalPoints']})"
+        )
+
+
+def _load_question_from_file(file_path: Path) -> str:
+    """Load question text from a markdown file."""
+    if not file_path.exists():
+        raise FileNotFoundError(f"Question file not found: {file_path}")
+
+    question = file_path.read_text(encoding="utf-8").strip()
     if not question:
-        raise RuntimeError("QUESTION is not set in the environment")
-    if not rubric_raw:
-        raise RuntimeError("RUBRIC is not set in the environment")
+        raise ValueError(f"Question file is empty: {file_path}")
+
+    return question
+
+
+def _load_rubric_from_file(file_path: Path) -> Dict[str, Any]:
+    """Load and validate rubric from a JSON file."""
+    if not file_path.exists():
+        raise FileNotFoundError(f"Rubric file not found: {file_path}")
 
     try:
-        rubric = json.loads(rubric_raw)
+        rubric_text = file_path.read_text(encoding="utf-8")
+        rubric = json.loads(rubric_text)
     except json.JSONDecodeError as exc:
-        raise RuntimeError("RUBRIC must be valid JSON") from exc
+        raise ValueError(f"Rubric file contains invalid JSON: {file_path}") from exc
+
+    # Validate structure
+    try:
+        _validate_rubric_structure(rubric)
+    except ValueError as exc:
+        raise ValueError(f"Invalid rubric structure in {file_path}: {exc}") from exc
+
+    return rubric
+
+
+def _extract_identifier(file_path: Path, prefix: str) -> str:
+    """Extract identifier from filename (e.g., 'question_foo.md' -> 'foo')."""
+    name = file_path.stem  # Remove extension
+    if name.startswith(prefix):
+        return name[len(prefix):]
+    return name
+
+
+def _prompt_question_selection() -> tuple[str, str]:
+    """Prompt user to select a question and rubric.
+
+    Returns:
+        Tuple of (question_identifier, rubric_identifier)
+    """
+    question_files = _discover_question_files()
+    rubric_files = _discover_rubric_files()
+
+    if not question_files:
+        raise RuntimeError(
+            "No question files found. Please create a question_*.md file in the root directory."
+        )
+
+    if not rubric_files:
+        raise RuntimeError(
+            "No rubric files found. Please create a rubric_*.json file in the root directory."
+        )
+
+    console.print("\n[bold]Select a question:[/bold]\n")
+
+    # Create question selection table
+    question_table = Table(
+        show_header=False,
+        box=None,
+        padding=(0, 2),
+        collapse_padding=True,
+    )
+    question_table.add_column("Choice", style="cyan", width=3)
+    question_table.add_column("Question File", style="bold")
+
+    question_map = {}
+    for i, qfile in enumerate(question_files, 1):
+        question_table.add_row(f"[{i}]", qfile.name)
+        question_map[str(i)] = qfile
+
+    console.print(question_table)
+    console.print()
+
+    question_choice = Prompt.ask(
+        "Enter question choice",
+        choices=[str(i) for i in range(1, len(question_files) + 1)]
+    )
+
+    selected_question_file = question_map[question_choice]
+    question_id = _extract_identifier(selected_question_file, "question_")
+
+    console.print("\n[bold]Select a rubric:[/bold]\n")
+
+    # Create rubric selection table
+    rubric_table = Table(
+        show_header=False,
+        box=None,
+        padding=(0, 2),
+        collapse_padding=True,
+    )
+    rubric_table.add_column("Choice", style="cyan", width=3)
+    rubric_table.add_column("Rubric File", style="bold")
+
+    rubric_map = {}
+    for i, rfile in enumerate(rubric_files, 1):
+        rubric_table.add_row(f"[{i}]", rfile.name)
+        rubric_map[str(i)] = rfile
+
+    console.print(rubric_table)
+    console.print()
+
+    rubric_choice = Prompt.ask(
+        "Enter rubric choice",
+        choices=[str(i) for i in range(1, len(rubric_files) + 1)]
+    )
+
+    selected_rubric_file = rubric_map[rubric_choice]
+    rubric_id = _extract_identifier(selected_rubric_file, "rubric_")
+
+    return question_id, rubric_id
+
+
+def _load_question_and_rubric() -> tuple[str, Dict[str, Any]]:
+    """Load question and rubric from files.
+
+    Prompts user to select from available question_*.md and rubric_*.json files
+    in the root directory, validates the rubric structure, and returns both.
+    """
+    # Prompt for selection
+    question_id, rubric_id = _prompt_question_selection()
+
+    # Load files
+    question_file = Path(f"question_{question_id}.md")
+    rubric_file = Path(f"rubric_{rubric_id}.json")
+
+    console.print(f"\n[cyan]Loading question from: {question_file}[/cyan]")
+    console.print(f"[cyan]Loading rubric from: {rubric_file}[/cyan]\n")
+
+    question = _load_question_from_file(question_file)
+    rubric = _load_rubric_from_file(rubric_file)
+
     return question, rubric
 
 

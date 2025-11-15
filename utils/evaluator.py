@@ -75,6 +75,9 @@ async def _evaluate_submission_impl(
         return_exceptions=False,
     )
 
+    gpt5_nano_result = _normalize_model_result("GPT-5 Nano", gpt5_nano_result)
+    gpt_oss_120b_result = _normalize_model_result("GPT-OSS 120B", gpt_oss_120b_result)
+
     metrics = compute_metrics(gpt5_nano_result, gpt_oss_120b_result)
     return {
         "student": student,
@@ -136,3 +139,48 @@ def _to_number(value: Any) -> Optional[float]:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _normalize_model_result(model_name: str, payload: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Ensure model payload includes the grading fields required by downstream schema.
+
+    Returns None if the payload is invalid or missing required fields, allowing
+    partial results to be processed downstream.
+    """
+
+    if not isinstance(payload, dict):
+        logger.warning(f"{model_name} returned no structured grading payload")
+        return None
+
+    normalized: Dict[str, Any] = dict(payload)
+
+    # Provide graceful fallbacks for common alias names emitted by different evaluators.
+    alias_map = {
+        "total_score": ["total", "score", "final_score"],
+        "max_possible_score": ["max_score", "max", "max_points"],
+        "overall_feedback": ["feedback", "comment", "comments"],
+    }
+
+    for canonical_key, aliases in alias_map.items():
+        if normalized.get(canonical_key) in (None, ""):
+            for alias in aliases:
+                value = normalized.get(alias)
+                if value not in (None, ""):
+                    normalized[canonical_key] = value
+                    break
+
+    total = _to_number(normalized.get("total_score"))
+    max_score = _to_number(normalized.get("max_possible_score"))
+    feedback = normalized.get("overall_feedback")
+
+    if total is None or max_score is None or not isinstance(feedback, str) or not feedback.strip():
+        logger.warning(
+            f"{model_name} response missing required grading fields (total={total}, max={max_score}, feedback={'present' if feedback else 'missing'})"
+        )
+        return None
+
+    normalized["total_score"] = total
+    normalized["max_possible_score"] = max_score
+    normalized["overall_feedback"] = feedback.strip()
+
+    return normalized

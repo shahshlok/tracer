@@ -115,32 +115,45 @@ def _validate_record_structure(
 
     metrics = record.get("metrics", {})
 
-    # Validate avg_pct and diff_pct if model metrics available
+    # Validate avg_pct and diff_pct if model metrics available.
+    # Metrics may legitimately contain nulls when one model failed to return
+    # a usable score; in that case we skip consistency checks but still
+    # enforce that any present percentage values are numeric.
     gpt5 = metrics.get("gpt5_nano")
     oss = metrics.get("gpt_oss_120b")
 
     if isinstance(gpt5, dict) and isinstance(oss, dict):
-        try:
-            gpt5_pct = float(gpt5.get("pct", 0))
-            oss_pct = float(oss.get("pct", 0))
-            avg_pct = float(metrics.get("avg_pct", 0))
-            diff_pct = float(metrics.get("diff_pct", 0))
-        except (TypeError, ValueError):
-            errors.append("Metrics pct values must be numeric")
-        else:
-            expected_avg = (gpt5_pct + oss_pct) / 2
-            if abs(expected_avg - avg_pct) > 0.1:
-                errors.append(
-                    f"avg_pct ({avg_pct}) doesn't match calculated average "
-                    f"({expected_avg:.2f})"
-                )
+        def _as_optional_float(value: Any) -> Optional[float]:
+            if value is None:
+                return None
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                errors.append("Metrics pct values must be numeric")
+                return None
 
-            expected_diff = abs(gpt5_pct - oss_pct)
-            if abs(expected_diff - abs(diff_pct)) > 0.1:
-                errors.append(
-                    f"diff_pct ({diff_pct}) doesn't match calculated "
-                    f"difference ({expected_diff:.2f})"
-                )
+        gpt5_pct = _as_optional_float(gpt5.get("pct"))
+        oss_pct = _as_optional_float(oss.get("pct"))
+        avg_pct = _as_optional_float(metrics.get("avg_pct"))
+        diff_pct = _as_optional_float(metrics.get("diff_pct"))
+
+        # If numeric conversion failed, do not attempt further consistency checks.
+        if not any("Metrics pct values must be numeric" in e for e in errors):
+            if gpt5_pct is not None and oss_pct is not None and avg_pct is not None:
+                expected_avg = (gpt5_pct + oss_pct) / 2
+                if abs(expected_avg - avg_pct) > 0.1:
+                    errors.append(
+                        f"avg_pct ({avg_pct}) doesn't match calculated average "
+                        f"({expected_avg:.2f})"
+                    )
+
+            if gpt5_pct is not None and oss_pct is not None and diff_pct is not None:
+                expected_diff = abs(gpt5_pct - oss_pct)
+                if abs(expected_diff - abs(diff_pct)) > 0.1:
+                    errors.append(
+                        f"diff_pct ({diff_pct}) doesn't match calculated "
+                        f"difference ({expected_diff:.2f})"
+                    )
 
     return errors, warnings
 
@@ -205,5 +218,4 @@ def validate_json_file(
 
     is_valid = len(all_errors) == 0
     return ValidationResult(is_valid=is_valid, errors=all_errors, warnings=all_warnings)
-
 

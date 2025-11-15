@@ -168,6 +168,23 @@ class TestRecordValidation:
         assert len(errors) > 0
         assert any("numeric" in error for error in errors)
 
+    def test_validate_record_with_missing_model_scores(self, sample_evaluation):
+        """Test that records with a missing model score are allowed."""
+        # Simulate a case where GPT-5 Nano did not return usable grading JSON.
+        sample_evaluation["gpt5_nano_result"] = None
+        sample_evaluation["metrics"]["gpt5_nano"]["total"] = None
+        sample_evaluation["metrics"]["gpt5_nano"]["max"] = None
+        sample_evaluation["metrics"]["gpt5_nano"]["pct"] = None
+        # Only OSS percentage is available; avg_pct is based on that, diff_pct is None.
+        sample_evaluation["metrics"]["avg_pct"] = sample_evaluation["metrics"]["gpt_oss_120b"]["pct"]
+        sample_evaluation["metrics"]["diff_pct"] = None
+
+        schema = _load_schema(None)
+        errors, warnings = _validate_record_structure(sample_evaluation, schema)
+
+        # Partial records should still pass validation.
+        assert len(errors) == 0
+
     def test_validate_record_missing_model_metrics(self, sample_evaluation):
         """Test validating record with missing model metrics."""
         del sample_evaluation["metrics"]["gpt5_nano"]
