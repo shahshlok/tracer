@@ -1,265 +1,330 @@
-# EduBench Documentation Hub 📚
+# 📚 EME Framework Documentation Hub
 
-Welcome to the EduBench docs. This folder is the **beginner‑friendly entry point** to the entire codebase.
+**Version 2.0.0** - Complete Documentation Index
 
-If you are new, start with the first two sections below and then dive deeper as needed.
+Welcome to the Ensemble Model Evaluation (EME) Framework documentation! This is your starting point whether you're a complete beginner or an experienced developer.
 
----
-
-## 1. Big Picture
-
-- **What is EduBench?**  
-  EduBench is a small framework to **benchmark AI graders** on student code. It runs multiple grading strategies over Java submissions and compares:
-  - **GPT‑5 Nano** (via OpenAI)
-  - **GPT‑OSS 120B** (via EduAI)
-
-- **Core ideas**
-  - Student code in → **two model grades out** → metrics + JSON files → SQLite database.
-  - Everything is driven via a **Typer CLI** (`bench`) or a **one‑off script** (`single_submission.py`).
-
-High‑level flow:
-
-```text
-Java submissions (.java)
-        │
-        ▼
-   CLI / scripts
-        │
-        ▼
-  Grading modes (direct / reverse / EME)
-        │
-        ▼
- Model clients (OpenAI + EduAI)
-        │
-        ▼
- JSON results  ──>  Validation  ──>  SQLite (evaluations.db)
-        │                          ▲
-        └──────────── Restore JSON ┘
-```
-
-For a more detailed component view, see `docs/ARCHITECTURE.md`.
+> **Note**: This is Version 2 - a major redesign focused on research-grade ensemble evaluation and misconception pattern discovery.
 
 ---
 
-## 2. Quickstart for Beginners
+## 🚀 Start Here (Choose Your Path)
 
-Read this together with the top‑level `README.md`.
+### 👋 I'm New to This Project
+**Start with:** [GETTING_STARTED.md](GETTING_STARTED.md)
+- Installation and setup (5 minutes)
+- Your first evaluation (10 minutes)
+- Understanding the basics with visual diagrams
 
-### 2.1. Install and set up
+### 👨‍💻 I Want to Develop/Extend
+**Start with:** [ARCHITECTURE.md](ARCHITECTURE.md) → [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md)
+- System design and data flow
+- Adding new features and providers
+- Code organization
 
-From the project root:
+### 🔬 I'm Using This for Research
+**Start with:** [RESEARCH_GUIDE.md](RESEARCH_GUIDE.md)
+- Research workflows and examples
+- Statistical metrics explained
+- Publishing your findings
 
-```bash
-uv sync           # install dependencies from pyproject.toml
-```
-
-Set up your `.env` file with:
-
-- a **programming question**
-- a **rubric JSON**
-- API keys for the models
-
-Example (simplified):
-
-```env
-QUESTION="Write a Java program that prints numbers 1..100."
-
-RUBRIC='{
-  "totalPoints": 100,
-  "categories": [
-    {"name": "correctness", "points": 60, "description": "Program prints numbers 1..100"},
-    {"name": "style", "points": 20, "description": "Readable, idiomatic Java"},
-    {"name": "documentation", "points": 20, "description": "Meaningful comments"}
-  ]
-}'
-
-OPENAI_API_KEY=sk-your-openai-key
-EDUAI_API_KEY=sk-your-eduai-key
-EDUAI_ENDPOINT=https://eduai.ok.ubc.ca/api/chat
-EDUAI_MODEL=ollama:gpt-oss:120b
-```
-
-Place student submissions as `.java` files under:
-
-```text
-student_submissions/<student_id>/*.java
-```
-
-For example:
-
-```text
-student_submissions/
-  Smith_John_123456/
-    solution.java
-  Doe_Jane_654321/
-    Main.java
-```
-
-### 2.2. Run a benchmark (all students)
-
-Interactive mode (recommended):
-
-```bash
-uv run bench benchmark
-```
-
-You will see a menu:
-
-```text
-Select a grading strategy:
-
-[1] Direct Grading           Grade student code directly against rubric
-[2] Reverse Grading          Generate ideal solution first, then compare
-[3] Ensemble (EME)           RIAYN‑style ensemble prompt
-[4] Run All                  Compare all three strategies side‑by‑side
-[5] Analysis                 Restore JSON files from database and analyze results
-```
-
-Then:
-
-- EduBench will ask you to choose:
-  - a `question_*.md` file (e.g. `question_cuboid.md`)
-  - a matching `rubric_*.json` file (e.g. `rubric_cuboid.json`)
-- It will discover `*.java` files in `student_submissions/`.
-- It runs the chosen strategy (or all strategies) with a progress bar.
-- Results are written to:
-  - JSON files in `data/results_{strategy}_{timestamp}.json`
-  - `evaluations.db` via the database manager.
-
-You will also see a Rich table showing, per student:
-
-- GPT‑5 Nano score and %
-- GPT‑OSS 120B score and %
-- Average %
-- Difference %
-- Agreement flag (✅ / 🚩)
-
-### 2.3. Analyze / restore results later
-
-To rebuild JSON files from the database:
-
-```bash
-uv run bench benchmark
-# Select option [5] Analysis
-# Then [1] Restore JSON from Database
-```
-
-This uses `db/manager.py` under the hood.  
-For more details, see `docs/DATABASE.md`.
+### 🔄 I'm Migrating from Version 1
+**Start with:** [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)
+- Breaking changes and updates
+- Migration checklist
+- Backward compatibility notes
 
 ---
 
-## 3. Running a Single Submission
+## 📖 Complete Documentation Map
 
-If you just want to quickly grade **one student’s file** with the EME ensemble pipeline, use `single_submission.py`:
-
-```bash
-python single_submission.py path/to/Student123/Main.java
 ```
-
-What happens:
-
-1. Loads `.env` (question + rubric).
-2. Finds the Java file you passed (or the first `.java` inside a directory).
-3. Runs `utils.evaluator.evaluate_submission(...)` using the EME prompt.
-4. Shows a progress bar for the one evaluation.
-5. Prints a Rich table and a small grade summary like:
-
-```text
-=== Grade Summary ===
-Student: Student123
-GPT-5:  85.0/100.0 (85.0%)
-EduAI:  82.0/100.0 (82.0%)
-Avg %:  83.5%
-Diff %: 3.0%
-Flag:   ✅
+docs/
+├── INDEX.md                    ← You are here
+│
+├── Getting Started
+│   ├── GETTING_STARTED.md      # Installation, first steps, examples
+│   └── QUICK_REFERENCE.md      # Command cheat sheet
+│
+├── Core Concepts
+│   ├── ARCHITECTURE.md         # System design, data flow, modules
+│   ├── SCHEMA_GUIDE.md         # JSON structure, database schema
+│   └── CONCEPTS.md             # Key terminology and ideas
+│
+├── Developer Guides
+│   ├── IMPLEMENTATION_GUIDE.md # Building features, adding providers
+│   ├── API_REFERENCE.md        # Function/class documentation
+│   └── TESTING.md              # Testing guide
+│
+├── Research & Analysis
+│   ├── RESEARCH_GUIDE.md       # Using EME for research
+│   ├── METRICS_EXPLAINED.md    # Statistical metrics guide
+│   └── EXAMPLES.md             # Research examples and workflows
+│
+└── Operations
+    ├── MIGRATION_GUIDE.md      # v1 → v2 migration
+    ├── DEPLOYMENT.md           # Production setup
+    └── TROUBLESHOOTING.md      # Common issues and solutions
 ```
-
-Useful options:
-
-```bash
-python single_submission.py path/to/Student123/Main.java \
-  --show-raw \
-  --dump-json data/single_student_result.json
-```
-
-- `--show-raw` prints the raw model responses (good for debugging).
-- `--dump-json` saves a clean JSON summary to the path you provide.
 
 ---
 
-## 4. How the CLI and Pipeline Work
+## 🎯 What is the EME Framework?
 
-This is a simplified diagram of the main benchmark command (`cli.py`):
+The **Ensemble Model Evaluation** framework helps you:
 
-```text
-bench benchmark
-        │
-        ▼
- _display_banner()
-        │
-        ▼
-prompt: choose mode (1–5)
-        │
-        ├─► if mode == 'analysis':
-        │        _run_analysis_menu()
-        │        └─► option 1 → restore_json_files(...)
-        │
-        └─► else (direct / reverse / eme / all)
-                 │
-                 ▼
-         _run_benchmark_async(...)
-                 │
-                 ├─► _load_question_and_rubric()
-                 │        ├─ discover question_*.md
-                 │        └─ discover rubric_*.json
-                 │
-                 ├─► _discover_submissions(student_submissions/)
-                 │
-                 └─► run mode(s):
-                          _run_single_mode(...) OR _run_all_modes(...)
-                          │
-                          └─► evaluate_submission(...) per .java
-                                   │
-                                   └─► call GPT‑5 + EduAI in parallel
+### 1. Grade Code with Multiple LLMs
+```
+Student Code → [LLM 1] + [LLM 2] + [LLM 3] → Grades + Feedback
 ```
 
-Key modules involved:
+### 2. Discover Patterns in Student Work
+```
+Misconceptions → Pattern Analysis → Insights for Teaching
+```
 
-- `cli.py` – entry point and menus.
-- `modes/*.py` – different grading strategies.
-- `prompts/*.py` – how the prompt is phrased for the model.
-- `utils/evaluator.py` – calls models, computes metrics.
-- `utils/ai_clients.py` – OpenAI (GPT‑5), EduAI, and OpenRouter clients.
-- `db/manager.py` – stores and restores results via SQLite.
+### 3. Research Ensemble Strategies
+```
+Model A vs B vs C → Statistical Analysis → Which works best?
+```
 
-For a more detailed walkthrough of each module, see:
-
-- `docs/ARCHITECTURE.md`
-- `docs/JSON_OUTPUT.md`
-- `docs/DATABASE.md`
-
----
-
-## 5. Detailed Guides
-
-Use these when you need more depth:
-
-- **Database & persistence** – `docs/DATABASE.md`  
-  How `evaluations.db` is structured, how JSON is validated and ingested, and how to restore runs.
-
-- **Structured JSON model outputs** – `docs/JSON_OUTPUT.md`  
-  How GPT‑5 Nano and OpenRouter (Gemini) are configured to always return JSON, with examples.
-
-- **System architecture & module map** – `docs/ARCHITECTURE.md`  
-  End‑to‑end pipeline diagrams and a file‑by‑file explanation of the main modules.
+### 4. Get Publication-Ready Data
+```
+Raw Grades → ICC, Correlations, CI → Research Paper
+```
 
 ---
 
-## 6. Where to Go Next
+## 📊 How It Works (Visual Overview)
 
-- To **understand how grading prompts work**, read `prompts/*.py`, then `docs/JSON_OUTPUT.md`.
-- To **change how runs are stored or queried**, start with `db/manager.py` and `docs/DATABASE.md`.
-- To **extend or refactor the CLI**, study `cli.py` and `docs/ARCHITECTURE.md`.
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Step 1: INPUT                                              │
+│  ┌────────────┐  ┌─────────────┐  ┌───────────────────┐   │
+│  │  Question  │  │   Rubric    │  │ Student Code      │   │
+│  │  (.md)     │  │   (.json)   │  │ (.java/.py/etc)   │   │
+│  └────────────┘  └─────────────┘  └───────────────────┘   │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Step 2: MULTI-MODEL GRADING                                │
+│                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │   OpenAI     │  │    eduai     │  │ OpenRouter   │     │
+│  │  gpt-5-nano  │  │ gpt-oss-120b │  │   gemini     │     │
+│  └──────────────┘  └──────────────┘  └──────────────┘     │
+│         │                  │                  │             │
+│         └──────────────────┴──────────────────┘             │
+│                            │                                │
+│                  Each model returns:                        │
+│                  • Score                                    │
+│                  • Feedback                                 │
+│                  • Misconceptions                           │
+│                  • Confidence                               │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Step 3: COMPARISON ANALYSIS                                │
+│                                                              │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  Statistical Metrics:                                  │ │
+│  │  ✓ Inter-rater reliability (ICC, Krippendorff's α)   │ │
+│  │  ✓ Model agreement (Pearson, Spearman correlation)    │ │
+│  │  ✓ Ensemble decisions (mean, median, weighted)        │ │
+│  │  ✓ Confidence intervals & standard error              │ │
+│  │  ✓ Model characteristics (strictness, consistency)    │ │
+│  └────────────────────────────────────────────────────────┘ │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Step 4: STORAGE & OUTPUT                                   │
+│                                                              │
+│  ┌──────────────┐         ┌────────────────────────────┐   │
+│  │   SQLite DB  │         │  Evaluation JSON           │   │
+│  │  evaluations │  ←───   │  {                         │   │
+│  │ misconceptions│         │    context: {...},        │   │
+│  └──────────────┘         │    models: {...},         │   │
+│                            │    comparison: {...}       │   │
+│                            │  }                         │   │
+│                            └────────────────────────────┘   │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Step 5: ANALYSIS & INSIGHTS                                │
+│                                                              │
+│  ┌────────────────┐  ┌────────────────┐  ┌──────────────┐ │
+│  │   Dashboard    │  │ LLM Pattern    │  │   Research   │ │
+│  │  (for TAs)     │  │   Analysis     │  │    Export    │ │
+│  └────────────────┘  └────────────────┘  └──────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
 
-If you get stuck or you’re unsure where a piece of logic lives, start with the *Project Structure* section in `README.md`, then come back here and follow the links.
+---
+
+## 🆕 What's New in Version 2?
+
+### Major Changes
+
+#### 1. **Research-Grade Statistics**
+```
+v1: Basic score comparison
+v2: ICC, Krippendorff's α, SEM, CI, correlations
+```
+
+#### 2. **Misconception Tracking**
+```
+v1: Simple feedback text
+v2: Structured misconceptions with evidence, confidence, patterns
+```
+
+#### 3. **Extensible Comparison Metrics**
+```
+v1: Fixed metrics
+v2: Modular metric system - add new ones easily
+```
+
+#### 4. **Cleaner Architecture**
+```
+v1: Tightly coupled LLM calls
+v2: Plug-and-play provider system
+```
+
+### Breaking Changes
+- ⚠️ Evaluation JSON structure completely redesigned
+- ⚠️ Database schema updated (evaluations + misconceptions tables)
+- ⚠️ LLM service APIs will be refactored (in progress)
+
+See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for details.
+
+---
+
+## 🛠️ Quick Reference by Task
+
+| I want to... | Go to... |
+|-------------|----------|
+| Install and run my first evaluation | [GETTING_STARTED.md#installation](GETTING_STARTED.md#installation) |
+| Understand the system architecture | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Learn about the JSON schema | [SCHEMA_GUIDE.md](SCHEMA_GUIDE.md) or [../SCHEMA_DOCUMENTATION.md](../SCHEMA_DOCUMENTATION.md) |
+| Add a new LLM provider | [IMPLEMENTATION_GUIDE.md#adding-llm-providers](IMPLEMENTATION_GUIDE.md#adding-llm-providers) |
+| Understand comparison metrics | [METRICS_EXPLAINED.md](METRICS_EXPLAINED.md) |
+| Set up for research | [RESEARCH_GUIDE.md#getting-started](RESEARCH_GUIDE.md#getting-started) |
+| Migrate from v1 | [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) |
+| Troubleshoot an issue | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
+| Deploy to production | [DEPLOYMENT.md](DEPLOYMENT.md) |
+
+---
+
+## 📚 External Documentation
+
+### Root-Level Docs
+- **[SCHEMA_DOCUMENTATION.md](../SCHEMA_DOCUMENTATION.md)** - Complete schema reference with all fields
+- **[example.jsonc](../example.jsonc)** - Fully annotated example evaluation
+- **[README.md](../README.md)** - Project overview and quick start
+
+### Legacy Docs (v1)
+- **[DATABASE.md](DATABASE.md)** - Current database implementation (being updated)
+- **[JSON_OUTPUT.md](JSON_OUTPUT.md)** - Old JSON structure (deprecated)
+- **[later_CLI_PROVIDER_PLAN.md](later_CLI_PROVIDER_PLAN.md)** - Future plans
+
+---
+
+## 🎓 Learning Paths
+
+### Path 1: Quick Start (30 minutes)
+```
+1. [GETTING_STARTED.md]
+   ↓
+2. Run your first evaluation
+   ↓
+3. Explore the output JSON
+```
+
+### Path 2: Developer Onboarding (2 hours)
+```
+1. [GETTING_STARTED.md]
+   ↓
+2. [ARCHITECTURE.md] - Understand system design
+   ↓
+3. [SCHEMA_GUIDE.md] - Master the data model
+   ↓
+4. [IMPLEMENTATION_GUIDE.md] - Start building
+```
+
+### Path 3: Research User (1 hour)
+```
+1. [GETTING_STARTED.md]
+   ↓
+2. [RESEARCH_GUIDE.md] - Research workflows
+   ↓
+3. [METRICS_EXPLAINED.md] - Understand statistics
+   ↓
+4. Run analyses, export data
+```
+
+---
+
+## 💡 Key Concepts (Quick Definitions)
+
+| Term | What It Means |
+|------|---------------|
+| **Evaluation** | One student's submission graded by all models |
+| **Ensemble** | Using multiple models together for better results |
+| **Misconception** | A specific misunderstanding in student code |
+| **ICC** | Inter-class correlation - measures rater agreement |
+| **Comparison** | Statistical analysis comparing model outputs |
+| **Provider** | An LLM service (OpenAI, eduai, OpenRouter) |
+| **Rubric Category** | One aspect of grading (e.g., "syntax", "logic") |
+
+For complete definitions, see [CONCEPTS.md](CONCEPTS.md).
+
+---
+
+## 🤝 Contributing to Docs
+
+When updating documentation:
+
+✅ **Keep it beginner-friendly** - Assume readers are new
+✅ **Use visual diagrams** - ASCII art is perfectly fine
+✅ **Provide examples** - Show actual code/JSON
+✅ **Link between pages** - Help readers navigate
+✅ **Update this index** - When you add new docs
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full guide.
+
+---
+
+## 🆘 Getting Help
+
+### Common Issues
+- Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md) first
+- Review [GETTING_STARTED.md](GETTING_STARTED.md) if setup fails
+- See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) if upgrading from v1
+
+### Still Stuck?
+1. Check if your question is answered in the relevant guide
+2. Look at [../example.jsonc](../example.jsonc) for a working example
+3. Review the root [README.md](../README.md)
+4. Report an issue with details about what you tried
+
+---
+
+## 📞 Project Info
+
+**Version:** 2.0.0
+**Status:** Active Development (Schema Revamp Phase)
+**Researcher:** Shlok Shah
+**Institution:** UBC Okanagan
+**Course:** COSC 499 - Honours Thesis
+
+See [../README.md#research-context](../README.md#research-context) for citation and contact info.
+
+---
+
+**Last Updated:** November 2024 (Version 2.0.0 Schema Redesign)
+**Next Update:** Implementation phase completion
+
+Happy coding! 🚀

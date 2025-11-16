@@ -18,7 +18,7 @@ from typing import Any, Dict, Optional
 
 from openai import OpenAI
 
-from .openai_client import _safe_json_loads, _serialize_openai_response, _get_semaphore
+from .openai_client import _get_semaphore, _safe_json_loads, _serialize_openai_response
 from .structured_outputs import get_grading_response_format
 
 logger = logging.getLogger(__name__)

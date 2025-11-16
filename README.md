@@ -1,6 +1,27 @@
-# EduBench: AI Grading Benchmark
+# Ensemble Model Evaluation (EME) Framework
 
-A comprehensive benchmarking system for comparing GPT-5 Nano and GPT-OSS 120B grading strategies on student code submissions. Features automatic result persistence via SQLite and a rich CLI interface.
+A research tool for grading student code submissions using multiple LLM models, discovering misconception patterns, and evaluating ensemble grading strategies through comprehensive cross-model analytics.
+
+## ⚠️ Schema Revamp (v1.0.0)
+
+**Major update in progress**: The evaluation schema has been completely redesigned to support research-grade ensemble analysis and misconception pattern discovery. See **[SCHEMA_DOCUMENTATION.md](./SCHEMA_DOCUMENTATION.md)** for the new comprehensive schema.
+
+### What's New
+- ✅ **Rich comparison metrics**: ICC, correlations, ensemble quality scores
+- ✅ **Misconception tracking**: Inductive approach with evidence linking
+- ✅ **Model characteristics**: Strictness rankings, confidence analysis
+- ✅ **Publication-ready stats**: Krippendorff's alpha, SEM, confidence intervals
+- ✅ **Extensible design**: Add metrics as research needs evolve
+
+### Key Files
+- **[SCHEMA_DOCUMENTATION.md](./SCHEMA_DOCUMENTATION.md)** - Complete schema reference and research applications
+- **[example.jsonc](./example.jsonc)** - Fully annotated example with all metrics
+
+---
+
+## Current CLI Tool (Legacy)
+
+The existing CLI benchmarking system is being updated to match the new schema. Documentation below reflects the current implementation.
 
 ---
 
@@ -308,9 +329,36 @@ Each evaluation file (`data/results_{strategy}_{timestamp}.json`) contains an ar
 
 ---
 
-## Future Enhancements
+## Schema Migration Roadmap
 
-Potential features (see [DATABASE.md](docs/DATABASE.md#future-enhancements) for details):
+### Phase 1: Schema & Infrastructure ✅
+- [x] Finalize evaluation JSON schema (v1.0.0)
+- [x] Define misconception structure (inductive approach)
+- [x] Design comprehensive comparison metrics
+- [x] Document all fields and interpretations
+
+### Phase 2: Implementation (Next)
+- [ ] Update CLI to generate new schema format
+- [ ] Implement comparison computation engine
+- [ ] Migrate database schema to match new structure
+- [ ] Build misconception extraction pipeline
+
+### Phase 3: Analysis Tools
+- [ ] LLM-powered misconception pattern analysis
+- [ ] Statistical analysis scripts (ICC, correlations, etc.)
+- [ ] Instructor dashboard with rich visualizations
+
+### Phase 4: Research Applications
+- [ ] Ensemble strategy comparison studies
+- [ ] Model reliability & calibration analysis
+- [ ] Misconception clustering and insights
+- [ ] Publication-ready data exports
+
+---
+
+## Future Enhancements (Legacy)
+
+Potential features for current CLI (see [DATABASE.md](docs/DATABASE.md#future-enhancements) for details):
 
 - Query interface for database (`uv run bench query --student "Smith_John"`)
 - Statistics dashboard across all runs
@@ -347,10 +395,28 @@ When adding features:
 
 ---
 
+## Research Context
+
+**Project:** Honours Thesis Research - Ensemble Model Evaluation for Code Grading
+**Institution:** University of British Columbia Okanagan (UBCO)
+**Course:** COSC 499 - Honours Thesis
+**Researcher:** Shlok Shah
+**Academic Year:** 2024-2025
+
+## Citation
+
+If you use this schema or framework in your research, please cite:
+
+```bibtex
+@software{eme_framework_2025,
+  author = {Shah, Shlok},
+  title = {Ensemble Model Evaluation Framework for Code Grading},
+  year = {2025},
+  institution = {University of British Columbia Okanagan},
+  note = {Honours Thesis Research Project}
+}
+```
+
 ## License
 
-[Your License Here]
-
-## Contact
-
-[Your Contact Info Here]
+TBD (Academic Research Project)
