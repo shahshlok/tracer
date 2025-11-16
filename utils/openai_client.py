@@ -51,11 +51,14 @@ def _call_openai_eval(prompt: str) -> Optional[Dict[str, Any]]:
 
     openai.api_key = api_key
     try:
-        # Ask the model to return strictly structured JSON using json_schema.
+        # Ask the model to return strictly structured JSON using the Responses API format.
+        # The Responses API uses text.format (not response_format).
         response = openai.responses.create(
             model="gpt-5-nano",
             input=prompt,
-            response_format=get_grading_response_format(),
+            text={
+                "format": get_grading_response_format(),
+            },
         )
         content = _extract_text_response(response)
         parsed = _safe_json_loads(content)
