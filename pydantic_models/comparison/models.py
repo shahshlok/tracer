@@ -1,6 +1,6 @@
 """Main comparison model combining all comparison components."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .confidence_analysis import ConfidenceAnalysis, ModelCharacteristics
 from .ensemble import ComparisonMetadata, EnsembleDecision, EnsembleQuality, Flags
@@ -22,6 +22,8 @@ class Comparison(BaseModel):
     comprehensive analysis including score statistics, agreement metrics,
     misconception analysis, reliability measures, and ensemble decisions.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     score_summary: ScoreSummary = Field(
         ..., description="Aggregate statistics across all grading models"

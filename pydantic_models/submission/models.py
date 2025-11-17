@@ -2,12 +2,13 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class StudentFile(BaseModel):
     """A single file submitted by the student."""
 
+    model_config = ConfigDict(extra="forbid")
     path: str = Field(..., description="Path/name exactly as in the submission")
     language: str = Field(..., description="Programming language of this specific file")
     content: str = Field(..., description="Full source code of the file")
@@ -19,6 +20,8 @@ class Submission(BaseModel):
 
     Contains student information, submission metadata, and all submitted files.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     student_id: str = Field(..., description="Unique identifier for the student")
     student_name: str = Field(..., description="Student's full name")

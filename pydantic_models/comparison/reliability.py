@@ -1,10 +1,14 @@
 """Models for inter-rater reliability metrics."""
 
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ConfidenceInterval95(BaseModel):
     """95% confidence interval for the true score."""
+
+    model_config = ConfigDict(extra="forbid")
 
     lower: float = Field(..., description="Lower bound of 95% CI: mean - (1.96 * SEM)")
     upper: float = Field(..., description="Upper bound of 95% CI: mean + (1.96 * SEM)")
@@ -16,6 +20,8 @@ class ReliabilityMetrics(BaseModel):
 
     Critical metrics for publication and establishing credibility of ensemble grading.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     pearson_correlation: float = Field(
         ...,
@@ -35,7 +41,7 @@ class ReliabilityMetrics(BaseModel):
         ...,
         description="General reliability across multiple raters/categories. Interpretation: >0.80 good reliability, 0.67-0.80 tentative, <0.67 discard",
     )
-    reliability_interpretation: str = Field(
+    reliability_interpretation: Literal["poor", "fair", "moderate", "good", "excellent"] = Field(
         ..., description="Overall assessment: 'poor', 'fair', 'moderate', 'good', or 'excellent'"
     )
     standard_error_of_measurement: float = Field(

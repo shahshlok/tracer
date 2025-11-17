@@ -1,9 +1,11 @@
 """Models for individual model evaluation results."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class Config(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     """Configuration settings for model evaluation."""
 
     system_prompt_id: str = Field(..., description="ID of system prompt template used")
@@ -15,6 +17,8 @@ class Config(BaseModel):
 class Scores(BaseModel):
     """Overall scoring information."""
 
+    model_config = ConfigDict(extra="forbid")
+
     total_points_awarded: int = Field(
         ..., description="Sum of all category_scores[*].points_awarded"
     )
@@ -25,9 +29,24 @@ class Scores(BaseModel):
         ..., description="Percentage score (total_points_awarded / max_points * 100)"
     )
 
+    @model_validator(mode="after")
+    def validate_percentage(self) -> "Scores":
+        if self.max_points <= 0:
+            return self
+        expected = (self.total_points_awarded / self.max_points) * 100
+        # Allow small floating point slack
+        if abs(self.percentage - expected) > 1e-6:
+            raise ValueError(
+                f"percentage {self.percentage} does not match "
+                f"total_points_awarded / max_points * 100 ({expected})"
+            )
+        return self
+
 
 class CategoryScore(BaseModel):
     """Scoring information for a specific rubric category."""
+
+    model_config = ConfigDict(extra="forbid")
 
     category_id: str = Field(..., description="Links to rubric.categories[*].category_id")
     category_name: str = Field(..., description="Human-readable name of the category")
@@ -45,6 +64,8 @@ class CategoryScore(BaseModel):
 class Feedback(BaseModel):
     """Human-readable feedback bundle for a submission."""
 
+    model_config = ConfigDict(extra="forbid")
+
     overall_comment: str = Field(
         ...,
         description="Holistic comment on the submission (descriptive, what you'd show a student)",
@@ -59,6 +80,8 @@ class Feedback(BaseModel):
 
 class Evidence(BaseModel):
     """Evidence supporting a misconception finding."""
+
+    model_config = ConfigDict(extra="forbid")
 
     source: str = Field(
         ..., description="Where the snippet comes from (e.g., student_code, tests, text_answer)"
@@ -82,6 +105,8 @@ class Evidence(BaseModel):
 
 class Misconception(BaseModel):
     """Identified misconception in student's work."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str = Field(..., description="Human-readable label for this misconception")
     description: str = Field(
@@ -109,6 +134,8 @@ class ModelEvaluation(BaseModel):
 
     Contains model identity, configuration, scores, feedback, and misconceptions.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     model_name: str = Field(..., description="Human-readable model name/alias")
     provider: str = Field(..., description="Who provides this model (for analysis across vendors)")

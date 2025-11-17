@@ -1,6 +1,6 @@
 """Context models for course, assignment, and question metadata."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Context(BaseModel):
@@ -9,6 +9,8 @@ class Context(BaseModel):
 
     Ties the evaluation record to the course, assignment, question, and rubric used.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     course_id: str = Field(..., description="Machine-friendly ID to group evaluations by course")
     course_name: str = Field(..., description="Human-readable course title")

@@ -1,6 +1,8 @@
 """Models for score comparison and agreement analysis."""
 
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ScoreSummary(BaseModel):
@@ -9,6 +11,8 @@ class ScoreSummary(BaseModel):
 
     Provides measures of central tendency and spread for model scores.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     per_model_percentage: dict[str, float] = Field(
         ..., description="Map of model name to percentage score"
@@ -29,6 +33,8 @@ class ScoreSummary(BaseModel):
 class CategoryDifference(BaseModel):
     """Difference in scores for a specific category between two models."""
 
+    model_config = ConfigDict(extra="forbid")
+
     category_id: str = Field(..., description="Rubric category ID")
     category_name: str = Field(..., description="Human-readable category name")
     model_a_points: int = Field(..., description="Points awarded by model A")
@@ -43,6 +49,8 @@ class CategoryDifference(BaseModel):
 class LargestCategoryDisagreement(BaseModel):
     """Identifies the category with the largest disagreement."""
 
+    model_config = ConfigDict(extra="forbid")
+
     category_id: str = Field(..., description="Rubric category ID with largest disagreement")
     difference_percent: float = Field(
         ..., description="Highest percent_of_category_max among all categories"
@@ -55,6 +63,8 @@ class PairwiseComparison(BaseModel):
 
     Scales to N models by creating pairwise comparisons.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     model_a: str = Field(..., description="First model name")
     model_b: str = Field(..., description="Second model name")
@@ -74,6 +84,8 @@ class PairwiseComparison(BaseModel):
 class CategoryStatistics(BaseModel):
     """Statistical measures for a category."""
 
+    model_config = ConfigDict(extra="forbid")
+
     mean: float = Field(..., description="Mean score across models")
     median: float = Field(..., description="Median score across models")
     std_dev: float = Field(..., description="Standard deviation")
@@ -84,6 +96,8 @@ class CategoryStatistics(BaseModel):
 
 class ConfidenceStats(BaseModel):
     """Confidence statistics for a category."""
+
+    model_config = ConfigDict(extra="forbid")
 
     mean_confidence: float = Field(
         ..., description="Mean confidence across models for this category"
@@ -100,6 +114,8 @@ class CategoryAgreement(BaseModel):
     Shows how models agree on specific grading categories.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     category_id: str = Field(..., description="Rubric category ID")
     category_name: str = Field(..., description="Human-readable category name")
     max_points: int = Field(..., description="Maximum points for this category")
@@ -109,7 +125,7 @@ class CategoryAgreement(BaseModel):
     statistics: CategoryStatistics = Field(
         ..., description="Statistical measures for this category"
     )
-    agreement_level: str = Field(
+    agreement_level: Literal["perfect", "high", "medium", "low"] = Field(
         ...,
         description="Categorization based on CV or std_dev: 'perfect' (std_dev=0), 'high' (CV<0.15), 'medium' (0.15≤CV<0.30), 'low' (CV≥0.30)",
     )
@@ -125,6 +141,8 @@ class CategoryAgreement(BaseModel):
 class MostControversialCategory(BaseModel):
     """Category with highest disagreement."""
 
+    model_config = ConfigDict(extra="forbid")
+
     category_id: str = Field(..., description="Category ID")
     category_name: str = Field(..., description="Category name")
     cv: float = Field(..., description="Coefficient of variation")
@@ -133,6 +151,8 @@ class MostControversialCategory(BaseModel):
 
 class MostAgreedCategory(BaseModel):
     """Category with highest agreement."""
+
+    model_config = ConfigDict(extra="forbid")
 
     category_id: str = Field(..., description="Category ID")
     category_name: str = Field(..., description="Category name")
@@ -143,6 +163,8 @@ class MostAgreedCategory(BaseModel):
 class LowestConfidenceCategory(BaseModel):
     """Category with lowest model confidence."""
 
+    model_config = ConfigDict(extra="forbid")
+
     category_id: str = Field(..., description="Category ID")
     mean_confidence: float = Field(..., description="Mean confidence across models")
     reason: str = Field(..., description="Why this category has lowest confidence")
@@ -152,6 +174,8 @@ class CategoryInsights(BaseModel):
     """
     High-level insights about category-level agreement and confidence.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     most_controversial: MostControversialCategory = Field(
         ..., description="Category with highest disagreement"

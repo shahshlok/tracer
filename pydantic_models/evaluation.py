@@ -2,8 +2,9 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from . import __version__ as MODELS_VERSION
 from .comparison import Comparison
 from .context import Context
 from .models import ModelEvaluation
@@ -18,6 +19,8 @@ class EvaluationDocument(BaseModel):
     One document represents one student's answer to one question, graded by 2+ models.
     Includes context, submission, rubric, per-model evaluations, and comparison analysis.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     # Top-level metadata
     evaluation_id: str = Field(
@@ -49,3 +52,18 @@ class EvaluationDocument(BaseModel):
     comparison: Comparison = Field(
         ..., description="Computed comparison and analysis across all model outputs"
     )
+
+    @model_validator(mode="after")
+    def validate_schema_version(self) -> "EvaluationDocument":
+        """
+        Ensure the document schema_version matches the library version.
+
+        This keeps stored data and code in sync; relax here if you
+        intentionally allow multiple schema versions per code version.
+        """
+        if self.schema_version != MODELS_VERSION:
+            raise ValueError(
+                f"schema_version {self.schema_version!r} does not match "
+                f"pydantic_models version {MODELS_VERSION!r}"
+            )
+        return self

@@ -1,10 +1,12 @@
 """Models for misconception detection analysis across models."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MisconceptionOverlap(BaseModel):
     """Pairwise overlap statistics for misconception detection."""
+
+    model_config = ConfigDict(extra="forbid")
 
     shared: int = Field(..., description="Number of misconceptions identified by both models")
     only_model_a: int = Field(..., description="Misconceptions found only by model A")
@@ -20,6 +22,8 @@ class MisconceptionSummary(BaseModel):
 
     Shows how models agree/disagree on identifying student misconceptions.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     total_by_model: dict[str, int] = Field(
         ..., description="Map of model name to total misconceptions detected"
