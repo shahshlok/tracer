@@ -46,7 +46,7 @@ Ensure you calculate the total points and percentage correctly."""
 # Request structured evaluation
 rsp = client.responses.parse(
     input=evaluation_prompt,
-    model="gpt-5-nano",
+    model="gpt-5-nano-2025-08-07",
     text_format=ModelEvaluationResponse,
 )
 
