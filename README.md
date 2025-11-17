@@ -82,6 +82,7 @@ EME_testing/
 ├── modes/                   # Grading strategies (direct / reverse / EME)
 ├── prompts/                 # Grading prompt templates
 ├── utils/                   # Shared utilities (models, evaluation, validation, display)
+├── pydantic_models/         # Structured output schemas for LLM responses
 ├── db/                      # SQLite schema + database manager
 ├── docs/                    # Documentation hub (see below)
 ├── data/                    # Temporary JSON workspace (results_*.json)
@@ -178,6 +179,64 @@ Access from the main menu (option 5) or when running benchmarks:
 **Options**:
 1. **Restore JSON from Database** - Export all evaluation results to `data/`
 2. **Back to Main Menu** - Return to benchmark selection
+
+---
+
+## Structured LLM Outputs
+
+The framework uses **Pydantic models** with OpenAI's structured outputs API to ensure reliable, schema-validated evaluations from language models.
+
+### Architecture
+
+**Location**: `pydantic_models/models.py`
+
+The models define the exact schema that LLMs should follow:
+
+```python
+from pydantic_models import ModelEvaluationResponse
+
+# Use with OpenAI's structured output
+rsp = client.responses.parse(
+    input=evaluation_prompt,
+    model="gpt-5-nano",
+    text_format=ModelEvaluationResponse,
+)
+
+# Access parsed response
+evaluation = rsp.output_parsed
+print(evaluation.scores.total_points_awarded)
+```
+
+### Evaluation Schema
+
+The `ModelEvaluationResponse` model captures:
+
+- **`scores`** - Overall scoring (total points, max points, percentage)
+- **`category_scores`** - Per-category breakdown with:
+  - Points awarded and max points
+  - Reasoning explaining the score
+  - Confidence (0-1) in the assessment
+- **`feedback`** - Overall comments with strengths and areas for improvement
+- **`misconceptions`** - Identified student misconceptions with:
+  - Description and confidence
+  - Evidence with exact code snippets and line numbers
+  - Model attribution and validation status
+
+### Integration Point
+
+The `utils/openai_client.py` script demonstrates:
+
+1. Reading assignment requirements (`question_cuboid.md`)
+2. Loading grading rubric (`rubric_cuboid.json`)
+3. Loading student submission (`.java` file)
+4. Building comprehensive evaluation prompt
+5. Requesting structured output from OpenAI
+6. Returning validated JSON
+
+**Example usage**:
+```bash
+uv run utils/openai_client.py
+```
 
 ---
 
