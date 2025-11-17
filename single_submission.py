@@ -13,7 +13,7 @@ from typing import Any, Dict
 from dotenv import load_dotenv
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
 
-from main import _load_question_and_rubric  # reuse existing helper
+from cli import _load_question_and_rubric  # reuse existing helper
 from utils.evaluator import evaluate_submission
 from utils.display import display_results
 

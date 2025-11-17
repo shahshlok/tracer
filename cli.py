@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -12,7 +13,7 @@ import typer
 from dotenv import load_dotenv
 from rich import box
 from rich.console import Console
-from rich.panel import Panel
+
 from rich.progress import (
     BarColumn,
     Progress,
@@ -26,9 +27,13 @@ from rich.table import Table
 from modes.direct_grading import run_direct_grading
 from modes.eme_grading import run_eme_grading
 from modes.reverse_grading import run_reverse_grading
+from db import manager as db_manager
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 logger = logging.getLogger(__name__)
+
+# Default database path
+DB_PATH = "evaluations.db"
 
 app = typer.Typer(help="EduBench: Unified AI Grading Benchmark")
 console = Console()
@@ -64,6 +69,9 @@ def benchmark(
     # Interactive mode selection if not provided
     if mode is None:
         mode = _prompt_mode_selection()
+        # If mode is still None, it means analysis was selected (no benchmark to run)
+        if mode is None:
+            return
 
     # Run the selected mode
     asyncio.run(_run_benchmark_async(mode, advanced))
@@ -71,7 +79,7 @@ def benchmark(
 
 async def _run_benchmark_async(mode: str, advanced: bool) -> None:
     """Async main pipeline for running benchmarks."""
-    load_dotenv()
+    load_dotenv(override=True)
 
     # Load question and rubric
     question, rubric = _load_question_and_rubric()
@@ -177,8 +185,8 @@ def _display_banner() -> None:
     """Display the EduBench banner."""
     banner = """
 
-   [bold]EduBench: AI Grading Benchmark[/bold]  
-   Compare GPT-5 & EduAI grading strategies     
+   [bold]EduBench: AI Grading Benchmark[/bold]
+   Compare GPT-5 Nano & GPT-OSS 120B grading strategies
 
 """
     console.print(banner)
@@ -219,11 +227,21 @@ def _prompt_mode_selection() -> str:
         "Run All",
         "Compare all three strategies side-by-side"
     )
+    options_table.add_row(
+        "[5]",
+        "Analysis",
+        "Restore JSON files from database and analyze results"
+    )
 
     console.print(options_table)
     console.print()
 
-    choice = Prompt.ask("Enter choice", choices=["1", "2", "3", "4"], default="1")
+    choice = Prompt.ask("Enter choice", choices=["1", "2", "3", "4", "5"])
+
+    # Handle analysis separately
+    if choice == "5":
+        _run_analysis_menu()
+        return None  # Signal that no benchmark should run
 
     mode_map = {
         "1": "direct",
@@ -235,19 +253,273 @@ def _prompt_mode_selection() -> str:
     return mode_map[choice]
 
 
-def _load_question_and_rubric() -> tuple[str, Dict[str, Any]]:
-    """Load question and rubric from environment."""
-    question = os.getenv("QUESTION")
-    rubric_raw = os.getenv("RUBRIC")
-    if not question:
-        raise RuntimeError("QUESTION is not set in the environment")
-    if not rubric_raw:
-        raise RuntimeError("RUBRIC is not set in the environment")
+def _run_analysis_menu() -> None:
+    """Display and run the analysis menu."""
+    console.print("\n[bold cyan]Analysis Options[/bold cyan]\n")
+
+    # Create analysis options table
+    options_table = Table(
+        show_header=False,
+        box=None,
+        padding=(0, 2),
+        collapse_padding=True,
+    )
+    options_table.add_column("Choice", style="cyan", width=3)
+    options_table.add_column("Action", style="bold", width=30)
+    options_table.add_column("Description", style="dim")
+
+    options_table.add_row(
+        "[1]",
+        "Restore JSON from Database",
+        "Export all evaluation results from DB to data/ directory"
+    )
+    options_table.add_row(
+        "[2]",
+        "Back to Main Menu",
+        "Return to benchmark selection"
+    )
+
+    console.print(options_table)
+    console.print()
+
+    choice = Prompt.ask("Enter choice", choices=["1", "2"])
+
+    if choice == "1":
+        _restore_json_from_db()
+    elif choice == "2":
+        # Return to main menu by recursively calling the mode selection
+        console.print("\n[dim]Returning to main menu...[/dim]\n")
+        from cli import benchmark
+        benchmark()
+
+
+def _restore_json_from_db() -> None:
+    """Restore JSON files from the database to the data/ directory."""
+    console.print("\n[bold cyan]Restoring JSON files from database...[/bold cyan]\n")
 
     try:
-        rubric = json.loads(rubric_raw)
+        data_dir = Path("data")
+        files_restored = db_manager.restore_json_files(DB_PATH, data_dir, validate=False)
+
+        console.print(f"[green]✓[/green] Successfully restored {files_restored} file(s) to {data_dir}/")
+        console.print(f"[dim]All evaluation results have been exported from the database.[/dim]\n")
+
+    except FileNotFoundError:
+        console.print("[yellow]No database found. Run a benchmark first to create the database.[/yellow]\n")
+    except Exception as e:
+        console.print(f"[red]Error restoring files: {e}[/red]\n")
+        logger.exception("Failed to restore JSON files from database")
+
+
+def _discover_question_files() -> List[Path]:
+    """Discover all question_*.md files in the root directory."""
+    root = Path(".")
+    question_files = sorted(root.glob("question_*.md"))
+    return question_files
+
+
+def _discover_rubric_files() -> List[Path]:
+    """Discover all rubric_*.json files in the root directory."""
+    root = Path(".")
+    rubric_files = sorted(root.glob("rubric_*.json"))
+    return rubric_files
+
+
+def _validate_rubric_structure(rubric: Dict[str, Any]) -> None:
+    """Validate that rubric has required structure.
+
+    Expected structure:
+    {
+        "totalPoints": <number>,
+        "categories": [
+            {
+                "name": <string>,
+                "points": <number>,
+                "description": <string>
+            },
+            ...
+        ]
+    }
+    """
+    # Check top-level required fields
+    if "totalPoints" not in rubric:
+        raise ValueError("Rubric missing required field: 'totalPoints'")
+    if "categories" not in rubric:
+        raise ValueError("Rubric missing required field: 'categories'")
+
+    # Validate totalPoints is a number
+    if not isinstance(rubric["totalPoints"], (int, float)):
+        raise ValueError("Rubric 'totalPoints' must be a number")
+
+    # Validate categories is a list
+    if not isinstance(rubric["categories"], list):
+        raise ValueError("Rubric 'categories' must be a list")
+
+    if len(rubric["categories"]) == 0:
+        raise ValueError("Rubric 'categories' cannot be empty")
+
+    # Validate each category
+    for i, category in enumerate(rubric["categories"]):
+        if not isinstance(category, dict):
+            raise ValueError(f"Category {i} must be a dictionary")
+
+        required_fields = ["name", "points", "description"]
+        for field in required_fields:
+            if field not in category:
+                raise ValueError(f"Category {i} missing required field: '{field}'")
+
+        if not isinstance(category["name"], str):
+            raise ValueError(f"Category {i} 'name' must be a string")
+        if not isinstance(category["points"], (int, float)):
+            raise ValueError(f"Category {i} 'points' must be a number")
+        if not isinstance(category["description"], str):
+            raise ValueError(f"Category {i} 'description' must be a string")
+
+    # Validate that category points sum to totalPoints
+    total_category_points = sum(cat["points"] for cat in rubric["categories"])
+    if abs(total_category_points - rubric["totalPoints"]) > 0.01:  # Allow small floating point errors
+        raise ValueError(
+            f"Category points ({total_category_points}) do not sum to totalPoints ({rubric['totalPoints']})"
+        )
+
+
+def _load_question_from_file(file_path: Path) -> str:
+    """Load question text from a markdown file."""
+    if not file_path.exists():
+        raise FileNotFoundError(f"Question file not found: {file_path}")
+
+    question = file_path.read_text(encoding="utf-8").strip()
+    if not question:
+        raise ValueError(f"Question file is empty: {file_path}")
+
+    return question
+
+
+def _load_rubric_from_file(file_path: Path) -> Dict[str, Any]:
+    """Load and validate rubric from a JSON file."""
+    if not file_path.exists():
+        raise FileNotFoundError(f"Rubric file not found: {file_path}")
+
+    try:
+        rubric_text = file_path.read_text(encoding="utf-8")
+        rubric = json.loads(rubric_text)
     except json.JSONDecodeError as exc:
-        raise RuntimeError("RUBRIC must be valid JSON") from exc
+        raise ValueError(f"Rubric file contains invalid JSON: {file_path}") from exc
+
+    # Validate structure
+    try:
+        _validate_rubric_structure(rubric)
+    except ValueError as exc:
+        raise ValueError(f"Invalid rubric structure in {file_path}: {exc}") from exc
+
+    return rubric
+
+
+def _extract_identifier(file_path: Path, prefix: str) -> str:
+    """Extract identifier from filename (e.g., 'question_foo.md' -> 'foo')."""
+    name = file_path.stem  # Remove extension
+    if name.startswith(prefix):
+        return name[len(prefix):]
+    return name
+
+
+def _prompt_question_selection() -> tuple[str, str]:
+    """Prompt user to select a question and rubric.
+
+    Returns:
+        Tuple of (question_identifier, rubric_identifier)
+    """
+    question_files = _discover_question_files()
+    rubric_files = _discover_rubric_files()
+
+    if not question_files:
+        raise RuntimeError(
+            "No question files found. Please create a question_*.md file in the root directory."
+        )
+
+    if not rubric_files:
+        raise RuntimeError(
+            "No rubric files found. Please create a rubric_*.json file in the root directory."
+        )
+
+    console.print("\n[bold]Select a question:[/bold]\n")
+
+    # Create question selection table
+    question_table = Table(
+        show_header=False,
+        box=None,
+        padding=(0, 2),
+        collapse_padding=True,
+    )
+    question_table.add_column("Choice", style="cyan", width=3)
+    question_table.add_column("Question File", style="bold")
+
+    question_map = {}
+    for i, qfile in enumerate(question_files, 1):
+        question_table.add_row(f"[{i}]", qfile.name)
+        question_map[str(i)] = qfile
+
+    console.print(question_table)
+    console.print()
+
+    question_choice = Prompt.ask(
+        "Enter question choice",
+        choices=[str(i) for i in range(1, len(question_files) + 1)]
+    )
+
+    selected_question_file = question_map[question_choice]
+    question_id = _extract_identifier(selected_question_file, "question_")
+
+    console.print("\n[bold]Select a rubric:[/bold]\n")
+
+    # Create rubric selection table
+    rubric_table = Table(
+        show_header=False,
+        box=None,
+        padding=(0, 2),
+        collapse_padding=True,
+    )
+    rubric_table.add_column("Choice", style="cyan", width=3)
+    rubric_table.add_column("Rubric File", style="bold")
+
+    rubric_map = {}
+    for i, rfile in enumerate(rubric_files, 1):
+        rubric_table.add_row(f"[{i}]", rfile.name)
+        rubric_map[str(i)] = rfile
+
+    console.print(rubric_table)
+    console.print()
+
+    rubric_choice = Prompt.ask(
+        "Enter rubric choice",
+        choices=[str(i) for i in range(1, len(rubric_files) + 1)]
+    )
+
+    selected_rubric_file = rubric_map[rubric_choice]
+    rubric_id = _extract_identifier(selected_rubric_file, "rubric_")
+
+    return question_id, rubric_id
+
+
+def _load_question_and_rubric() -> tuple[str, Dict[str, Any]]:
+    """Load question and rubric from files.
+
+    Prompts user to select from available question_*.md and rubric_*.json files
+    in the root directory, validates the rubric structure, and returns both.
+    """
+    # Prompt for selection
+    question_id, rubric_id = _prompt_question_selection()
+
+    # Load files
+    question_file = Path(f"question_{question_id}.md")
+    rubric_file = Path(f"rubric_{rubric_id}.json")
+
+    console.print(f"\n[cyan]Loading question from: {question_file}[/cyan]")
+    console.print(f"[cyan]Loading rubric from: {rubric_file}[/cyan]\n")
+
+    question = _load_question_from_file(question_file)
+    rubric = _load_rubric_from_file(rubric_file)
+
     return question, rubric
 
 
@@ -274,8 +546,8 @@ def _display_mode_results(mode: str, results: List[Dict[str, Any]]) -> None:
         border_style="dim",
     )
     table.add_column("Student")
-    table.add_column("GPT-5", justify="right")
-    table.add_column("EduAI", justify="right")
+    table.add_column("GPT-5 Nano", justify="right")
+    table.add_column("GPT-OSS 120B", justify="right")
     table.add_column("Avg %", justify="right")
     table.add_column("Diff %", justify="right")
     table.add_column("Flag", justify="center")
@@ -294,8 +566,8 @@ def _display_mode_results(mode: str, results: List[Dict[str, Any]]) -> None:
 
         table.add_row(
             result.get("student", "Unknown"),
-            _fmt_score(metrics.get("gpt5", {})),
-            _fmt_score(metrics.get("eduai", {})),
+            _fmt_score(metrics.get("gpt5_nano", {})),
+            _fmt_score(metrics.get("gpt_oss_120b", {})),
             _fmt_pct(metrics.get("avg_pct")),
             diff_str,
             flag,
@@ -343,8 +615,8 @@ def _display_cross_paradigm_comparison(all_results: Dict[str, List[Dict[str, Any
     table.add_column("Mean Diff %", justify="right")
     table.add_column("Flagged", justify="right")
     table.add_column("Agreement Rate", justify="right")
-    table.add_column("GPT-5 Stricter", justify="right")
-    table.add_column("EduAI Stricter", justify="right")
+    table.add_column("GPT-5 Nano Stricter", justify="right")
+    table.add_column("GPT-OSS 120B Stricter", justify="right")
 
     for mode, summary in stats.items():
         total = summary.get("total", 0)
@@ -353,17 +625,17 @@ def _display_cross_paradigm_comparison(all_results: Dict[str, List[Dict[str, Any
 
         # Count which model is stricter
         results = all_results[mode]
-        gpt5_stricter = sum(
+        gpt5_nano_stricter = sum(
             1
             for r in results
-            if r.get("metrics", {}).get("gpt5", {}).get("pct", 0)
-            < r.get("metrics", {}).get("eduai", {}).get("pct", 0)
+            if r.get("metrics", {}).get("gpt5_nano", {}).get("pct", 0)
+            < r.get("metrics", {}).get("gpt_oss_120b", {}).get("pct", 0)
         )
-        eduai_stricter = sum(
+        gpt_oss_120b_stricter = sum(
             1
             for r in results
-            if r.get("metrics", {}).get("eduai", {}).get("pct", 0)
-            < r.get("metrics", {}).get("gpt5", {}).get("pct", 0)
+            if r.get("metrics", {}).get("gpt_oss_120b", {}).get("pct", 0)
+            < r.get("metrics", {}).get("gpt5_nano", {}).get("pct", 0)
         )
 
         table.add_row(
@@ -371,8 +643,8 @@ def _display_cross_paradigm_comparison(all_results: Dict[str, List[Dict[str, Any
             _fmt_pct(summary.get("mean_diff_pct")),
             f"{flagged}/{total}",
             f"{agreement_rate:.1f}%",
-            str(gpt5_stricter),
-            str(eduai_stricter),
+            str(gpt5_nano_stricter),
+            str(gpt_oss_120b_stricter),
         )
 
     console.print(table)
@@ -382,23 +654,23 @@ def _display_cross_paradigm_comparison(all_results: Dict[str, List[Dict[str, Any
     best_mode = min(stats.items(), key=lambda x: x[1].get("mean_diff_pct", float("inf")))
     console.print(f"  • Lowest variance: {best_mode[0].upper()} ({_fmt_pct(best_mode[1].get('mean_diff_pct'))})")
 
-    overall_gpt5 = sum(
+    overall_gpt5_nano = sum(
         1
         for mode_results in all_results.values()
         for r in mode_results
-        if r.get("metrics", {}).get("gpt5", {}).get("pct", 0)
-        < r.get("metrics", {}).get("eduai", {}).get("pct", 0)
+        if r.get("metrics", {}).get("gpt5_nano", {}).get("pct", 0)
+        < r.get("metrics", {}).get("gpt_oss_120b", {}).get("pct", 0)
     )
-    overall_eduai = sum(
+    overall_gpt_oss_120b = sum(
         1
         for mode_results in all_results.values()
         for r in mode_results
-        if r.get("metrics", {}).get("eduai", {}).get("pct", 0)
-        < r.get("metrics", {}).get("gpt5", {}).get("pct", 0)
+        if r.get("metrics", {}).get("gpt_oss_120b", {}).get("pct", 0)
+        < r.get("metrics", {}).get("gpt5_nano", {}).get("pct", 0)
     )
 
-    console.print(f"  • GPT-5 stricter in {overall_gpt5} evaluations across all modes")
-    console.print(f"  • EduAI stricter in {overall_eduai} evaluations across all modes")
+    console.print(f"  • GPT-5 Nano stricter in {overall_gpt5_nano} evaluations across all modes")
+    console.print(f"  • GPT-OSS 120B stricter in {overall_gpt_oss_120b} evaluations across all modes")
 
 
 def _build_summary(results: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -444,24 +716,34 @@ def _fmt_pct(value: Any) -> str:
 
 
 def _save_results(mode: str, results: List[Dict[str, Any]]) -> None:
-    """Save results to a JSON file."""
+    """Save results to a JSON file with ISO date timestamp and ingest into database."""
     data_dir = Path("data")
     data_dir.mkdir(parents=True, exist_ok=True)
-    output_path = data_dir / f"results_{mode}.json"
+    iso_date = datetime.now().isoformat(timespec="seconds").replace(":", "-")
+    output_path = data_dir / f"results_{mode}_{iso_date}.json"
 
     # Strip down to essentials
     cleaned_results = []
     for result in results:
         cleaned = {
             "student": result.get("student"),
-            "gpt5_result": _clean_response(result.get("gpt5_result")),
-            "eduai_result": _clean_response(result.get("eduai_result")),
+            "gpt5_nano_result": _clean_response(result.get("gpt5_nano_result")),
+            "gpt_oss_120b_result": _clean_response(result.get("gpt_oss_120b_result")),
             "metrics": result.get("metrics"),
         }
         cleaned_results.append(cleaned)
 
     output_path.write_text(json.dumps(cleaned_results, indent=2), encoding="utf-8")
     logger.info("Saved %s results to %s", mode.upper(), output_path)
+
+    # Automatically ingest into database
+    try:
+        db_manager.init_db(DB_PATH)
+        db_manager.ingest_results_file(DB_PATH, output_path)
+        logger.info("Ingested results into database")
+    except Exception as e:
+        logger.error(f"Failed to ingest results into database: {e}")
+        console.print(f"[yellow]Warning: Could not save to database: {e}[/yellow]")
 
 
 def _clean_response(response: Any) -> Any:
