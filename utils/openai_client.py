@@ -1,7 +1,9 @@
-import os
 import json
+import os
+
 from dotenv import load_dotenv
 from openai import OpenAI
+
 from pydantic_models import ModelEvaluationResponse
 
 load_dotenv()
@@ -11,13 +13,13 @@ client = OpenAI(
 )
 
 # Read the question, rubric, and student submission
-with open("question_cuboid.md", "r") as f:
+with open("question_cuboid.md") as f:
     question = f.read()
 
-with open("rubric_cuboid.json", "r") as f:
+with open("rubric_cuboid.json") as f:
     rubric = f.read()
 
-with open("student_submissions/Johnson_Natalie_100010/Cuboid.java", "r") as f:
+with open("student_submissions/Johnson_Natalie_100010/Cuboid.java") as f:
     student_code = f.read()
 
 # Build the evaluation prompt

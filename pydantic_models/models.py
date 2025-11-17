@@ -1,4 +1,3 @@
-from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -42,21 +41,21 @@ class MisconceptionModel(BaseModel):
     name: str = Field(..., description="Human-readable label for this misconception")
     description: str = Field(..., description="Description of what behavior/understanding this misconception reflects")
     confidence: float = Field(..., description="Model's confidence that this misconception applies (0-1)")
-    evidence: List[EvidenceModel] = Field(..., description="Evidence supporting this misconception")
+    evidence: list[EvidenceModel] = Field(..., description="Evidence supporting this misconception")
     generated_by: str = Field(..., description="Which model produced this misconception annotation")
-    validated_by: Optional[str] = Field(None, description="Optional human rater ID when a TA confirms this")
+    validated_by: str | None = Field(None, description="Optional human rater ID when a TA confirms this")
 
 
 class FeedbackModel(BaseModel):
     """Feedback on the submission."""
     overall_comment: str = Field(..., description="Overall assessment of the submission")
-    strengths: List[str] = Field(..., description="List of strengths in the submission")
-    areas_for_improvement: List[str] = Field(..., description="List of areas that need improvement")
+    strengths: list[str] = Field(..., description="List of strengths in the submission")
+    areas_for_improvement: list[str] = Field(..., description="List of areas that need improvement")
 
 
 class ModelEvaluationResponse(BaseModel):
     """Complete evaluation response from a model."""
     scores: ScoresModel = Field(..., description="Overall scoring information")
-    category_scores: List[CategoryScoreModel] = Field(..., description="Scores for each category")
+    category_scores: list[CategoryScoreModel] = Field(..., description="Scores for each category")
     feedback: FeedbackModel = Field(..., description="Feedback on the submission")
-    misconceptions: List[MisconceptionModel] = Field(..., description="Identified misconceptions in the work")
+    misconceptions: list[MisconceptionModel] = Field(..., description="Identified misconceptions in the work")

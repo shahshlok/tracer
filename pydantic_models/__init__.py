@@ -1,11 +1,11 @@
 from .models import (
-    ConfigModel,
-    ScoresModel,
     CategoryScoreModel,
+    ConfigModel,
     EvidenceModel,
-    MisconceptionModel,
     FeedbackModel,
+    MisconceptionModel,
     ModelEvaluationResponse,
+    ScoresModel,
 )
 
 __all__ = [
