@@ -9,7 +9,8 @@ from .context import Context
 from .models import ModelEvaluation
 from .rubric import Rubric
 from .submission import Submission
-# Gotta put the comparison pydantic model here too but later
+
+# TODO:Gotta put the comparison pydantic model here too but later
 
 class EvaluationDocument(BaseModel):
     """
