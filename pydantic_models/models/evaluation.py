@@ -1,12 +1,58 @@
-"""Models for individual model evaluation results."""
+"""Models for individual model evaluation results.
+
+Top‑down structure of the final model:
+
+    ModelEvaluation
+    ├─ model_name: str
+    ├─ provider: str
+    ├─ run_id: str
+    ├─ config: Config
+    │   ├─ system_prompt_id: str
+    │   └─ rubric_prompt_id: str
+--- Everything from here is from the LLMEvaluationResponse model ---
+    ├─ scores: Scores
+    │   ├─ total_points_awarded: int
+    │   ├─ max_points: int
+    │   └─ percentage: float
+    ├─ category_scores: list[CategoryScore]
+    │   └─ CategoryScore
+    │       ├─ category_id: str
+    │       ├─ category_name: str
+    │       ├─ points_awarded: int
+    │       ├─ max_points: int
+    │       ├─ reasoning: str
+    │       ├─ confidence: float
+    │       └─ reasoning_tokens: int
+    ├─ feedback: Feedback
+    │   ├─ overall_comment: str
+    │   ├─ strengths: list[str]
+    │   └─ areas_for_improvement: list[str]
+    └─ misconceptions: list[Misconception]
+        └─ Misconception
+            ├─ name: str
+            ├─ description: str
+            ├─ confidence: float
+            ├─ evidence: list[Evidence]
+            │   └─ Evidence
+            │       ├─ source: str
+            │       ├─ file_path: str
+            │       ├─ language: str
+            │       ├─ snippet: str
+            │       ├─ line_start: int
+            │       ├─ line_end: int
+            │       └─ note: str
+            ├─ generated_by: str
+            └─ validated_by: str | None
+"""
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class Config(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     """Configuration settings for model evaluation."""
+
+    # extra="forbid" means that bad keys trigger validation errors instead of being dropped silently
+    model_config = ConfigDict(extra="forbid")
 
     system_prompt_id: str = Field(..., description="ID of system prompt template used")
     rubric_prompt_id: str = Field(
@@ -118,6 +164,8 @@ class Misconception(BaseModel):
         le=1.0,
         description="Model's confidence (0-1) that this misconception truly applies",
     )
+
+    # Check the Evidence Pydantic Model
     evidence: list[Evidence] = Field(
         ...,
         description="Evidence showing exactly where this misconception appears in the submission",
@@ -141,29 +189,26 @@ class LLMEvaluationResponse(BaseModel):
         ..., description="Per-category rubric scores with justification"
     )
     feedback: Feedback = Field(..., description="Human-readable feedback bundle for this model")
+
+    # Misconceptions has the Evidence model nested in it
     misconceptions: list[Misconception] = Field(
         ..., description="Misconceptions for this submission according to this model"
     )
 
 
-class ModelEvaluation(BaseModel):
+class ModelEvaluation(LLMEvaluationResponse):
     """
     Complete evaluation result from a single grading model.
 
-    Contains model identity, configuration, scores, feedback, and misconceptions.
+    See the module docstring at the top of this file for
+    a full ASCII diagram of the JSON structure.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    model_name: str = Field(..., description="Human-readable model name with version (e.g., gpt-5-nano-2025-08-07)")
+    model_name: str = Field(
+        ..., description="Human-readable model name with version (e.g., gpt-5-nano-2025-08-07)"
+    )
     provider: str = Field(..., description="Who provides this model (for analysis across vendors)")
     run_id: str = Field(..., description="ID of this model invocation for traceability in logs")
     config: Config = Field(..., description="Configuration settings for this model run")
-    scores: Scores = Field(..., description="Aggregate score for this model")
-    category_scores: list[CategoryScore] = Field(
-        ..., description="Per-category rubric scores with justification"
-    )
-    feedback: Feedback = Field(..., description="Human-readable feedback bundle for this model")
-    misconceptions: list[Misconception] = Field(
-        ..., description="Misconceptions for this submission according to this model"
-    )
