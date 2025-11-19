@@ -13,38 +13,49 @@ def build_prompt(question: str, rubric_json: Dict[str, Any], student_code: str) 
     """Build a direct grading prompt.
 
     The model is instructed to evaluate the student's code strictly according to
-    the rubric and return structured JSON feedback.
+    the rubric and return structured JSON feedback matching the LLMEvaluationResponse schema.
     """
     rubric_block = json.dumps(rubric_json, indent=2)
 
     prompt = f"""
-You are a teaching assistant grading a student's program according to the provided rubric.
-Evaluate the student's code strictly and return VALID JSON only.
+You are an expert code evaluator. Evaluate the following student submission against the assignment requirements and rubric.
 
-Problem:
+## Assignment Requirements:
 {question}
 
-Rubric:
+## Grading Rubric:
 {rubric_block}
 
-Student Code:
+## Student Submission:
+```java
 {student_code}
+```
 
-STRICT INSTRUCTIONS:
-1) Score ONLY according to the rubric criteria above.
-2) For each criterion, provide: criterion name, awarded score, max score, and concise feedback.
-3) total_score MUST equal the sum of all criterion scores.
-4) max_possible_score MUST match the rubric total.
-5) Return ONLY JSON with EXACTLY these top-level keys:
-   {{
-     "criteria_scores": [
-       {{"criterion": "<name>", "score": <int>, "max_score": <int>, "feedback": "<brief>"}},
-       ...
-     ],
-     "total_score": <number>,
-     "max_possible_score": <number>,
-     "overall_feedback": "<2-3 sentences summarizing the evaluation>"
-   }}
-6) Do NOT include markdown fences, explanations, or any text outside the JSON.
+Please evaluate this submission and provide a structured response containing:
+
+1. **Scores**:
+   - Total points awarded
+   - Max possible points (must match rubric total)
+   - Percentage score
+
+2. **Category Scores** (for each rubric category):
+   - Points awarded and max points
+   - Reasoning for the score
+   - Confidence score (0-1)
+   - Reasoning tokens (estimate)
+
+3. **Feedback**:
+   - Overall comment
+   - List of strengths
+   - List of areas for improvement
+
+4. **Misconceptions**:
+   - Identify any specific misconceptions about the requirements or programming concepts.
+   - For each misconception, provide:
+     - Name and description
+     - Confidence (0-1)
+     - Evidence (code snippet, file path, line numbers)
+
+Ensure you calculate the total points and percentage correctly.
 """.strip()
     return prompt

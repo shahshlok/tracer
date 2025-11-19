@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 from pydantic_models import Config, LLMEvaluationResponse, ModelEvaluation
+from prompts import direct_prompt
 
 load_dotenv()
 
@@ -45,25 +46,11 @@ def evaluate_with_openai(
         Complete ModelEvaluation with LLM-generated content and metadata
     """
     # Build the evaluation prompt
-    evaluation_prompt = f"""You are an expert code evaluator. Evaluate the following student submission against the assignment requirements and rubric.
-
-## Assignment Requirements:
-{question}
-
-## Grading Rubric:
-{rubric}
-
-## Student Submission ({file_name}):
-```java
-{student_code}
-```
-
-Please evaluate this submission and provide:
-1. Overall scores for each category based on the rubric
-2. Detailed feedback with strengths and areas for improvement
-3. Any identified misconceptions about the requirements
-
-Ensure you calculate the total points and percentage correctly."""
+    evaluation_prompt = direct_prompt.build_prompt(
+        question=question,
+        rubric_json=json.loads(rubric) if isinstance(rubric, str) else rubric,
+        student_code=student_code,
+    )
 
     # Request structured evaluation from OpenAI
     rsp = client.responses.parse(

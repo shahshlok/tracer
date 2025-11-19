@@ -415,6 +415,19 @@ Each evaluation file (`data/results_{strategy}_{timestamp}.json`) contains an ar
 
 ---
 
+## Roadmap
+
+### Current Limitations
+- **Single-file submissions only**: Currently supports one code file per student submission
+
+### Planned Enhancements
+- **Multi-file submission support**: Handle assignments where students submit multiple files (e.g., main class + test files)
+  - Concatenate all files with clear delimiters for LLM evaluation
+  - Track individual file metadata in submission structure
+  - Support for different file types within a single submission
+
+---
+
 ## Future Enhancements (Legacy)
 
 Potential features for current CLI (see [DATABASE.md](docs/DATABASE.md#future-enhancements) for details):
