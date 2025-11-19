@@ -5,19 +5,18 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import __version__ as MODELS_VERSION
-from .comparison import Comparison
 from .context import Context
 from .models import ModelEvaluation
 from .rubric import Rubric
 from .submission import Submission
-
+# Gotta put the comparison pydantic model here too but later
 
 class EvaluationDocument(BaseModel):
     """
     Complete evaluation document.
 
     One document represents one student's answer to one question, graded by 2+ models.
-    Includes context, submission, rubric, per-model evaluations, and comparison analysis.
+    Includes context, submission, rubric, and per-model evaluations.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -46,11 +45,6 @@ class EvaluationDocument(BaseModel):
     # Per-model evaluations
     models: dict[str, ModelEvaluation] = Field(
         ..., description="Per-model grading results. Key: model name/alias"
-    )
-
-    # Comparison and ensemble analysis
-    comparison: Comparison = Field(
-        ..., description="Computed comparison and analysis across all model outputs"
     )
 
     @model_validator(mode="after")

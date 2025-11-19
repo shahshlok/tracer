@@ -11,7 +11,6 @@ class StudentFile(BaseModel):
     model_config = ConfigDict(extra="forbid")
     path: str = Field(..., description="Path/name exactly as in the submission")
     language: str = Field(..., description="Programming language of this specific file")
-    content: str = Field(..., description="Full source code of the file")
 
 
 class Submission(BaseModel):

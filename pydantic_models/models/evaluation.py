@@ -170,7 +170,6 @@ class Misconception(BaseModel):
         ...,
         description="Evidence showing exactly where this misconception appears in the submission",
     )
-    generated_by: str = Field(..., description="Which model produced this misconception annotation")
     validated_by: str | None = Field(
         None, description="Optional human rater ID when a TA confirms this annotation"
     )
