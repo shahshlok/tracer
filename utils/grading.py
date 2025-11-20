@@ -15,7 +15,10 @@ from pydantic_models import (
     Submission,
 )
 from pydantic_models.comparison.models import Comparison
-from utils.comparison_generator import generate_score_summary
+from utils.comparison_generator import (
+    generate_pairwise_differences,
+    generate_score_summary,
+)
 from utils.openrouter_sdk import get_structured_response
 
 
@@ -155,5 +158,8 @@ def create_evaluation_document(
         submission=submission,
         rubric=rubric,
         models=model_evals,
-        comparison=Comparison(score_summary=generate_score_summary(model_evals)),
+        comparison=Comparison(
+            score_summary=generate_score_summary(model_evals),
+            pairwise_differences=generate_pairwise_differences(model_evals),
+        ),
     )

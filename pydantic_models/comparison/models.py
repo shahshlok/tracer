@@ -28,8 +28,8 @@ class Comparison(BaseModel):
     score_summary: ScoreSummary = Field(
         ..., description="Aggregate statistics across all grading models"
     )
-    pairwise_differences: list[PairwiseComparison] | None = Field(
-        default=None, description="Detailed model-vs-model differences (scales to N models)"
+    pairwise_differences: list[PairwiseComparison] = Field(
+        ..., description="Detailed model-vs-model differences (scales to N models)"
     )
     category_agreement: list[CategoryAgreement] | None = Field(
         default=None, description="Per-rubric-category statistics and agreement levels"
