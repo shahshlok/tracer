@@ -15,7 +15,7 @@ from pydantic_models import (
     StudentFile,
     Submission,
 )
-from utils.openrouter_structured_client import get_gemini_structured_response
+from utils.openrouter_sdk import get_structured_response
 
 load_dotenv()
 
@@ -63,7 +63,7 @@ Provide a structured output containing:
 
     # 3. Get LLM Response
     print("Calling OpenRouter (Gemini)...")
-    llm_response = get_gemini_structured_response(messages, LLMEvaluationResponse)
+    llm_response = get_structured_response(messages, LLMEvaluationResponse)
     print("Received response from LLM.")
 
     # 4. Construct EvaluationDocument components
