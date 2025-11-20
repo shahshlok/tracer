@@ -1,263 +1,80 @@
 # Documentation Index
 
-Welcome to the Ensemble Model Evaluation Framework documentation! This index helps you find what you need.
+The Ensemble Model Evaluation (EME) documentation is organized as a compact technical manual for instructors, applied ML engineers, and researchers. This index lists the primary entry points and how they relate.
 
-## Quick Navigation
+## Overview
 
-### I'm New to This Project
+| Document | Primary audience | Purpose |
+|----------|------------------|---------|
+| [`00-QUICK-START.md`](00-QUICK-START.md) | All users | Install, configure, run the reference workflow |
+| [`01-GETTING-STARTED.md`](01-GETTING-STARTED.md) | All users | Conceptual model, terminology, evaluation lifecycle |
+| [`02-PROJECT-STRUCTURE.md`](02-PROJECT-STRUCTURE.md) | Developers | Codebase layout and module responsibilities |
+| [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md) | Practitioners | End-to-end usage, single/batch evaluation, configuration |
+| [`04-API-REFERENCE.md`](04-API-REFERENCE.md) | Developers | Pydantic models, utility functions, prompt builders |
+| [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md) | Advanced | System design, data flow, extension patterns, testing |
 
-**Start here:** [`00-QUICK-START.md`](00-QUICK-START.md)
-- 5-minute installation and first run
-- Minimal setup required
-- See immediate results
-
-**Then read:** [`01-GETTING-STARTED.md`](01-GETTING-STARTED.md)
-- Understand key concepts (models, evaluations, misconceptions)
-- Learn how the system works
-- Get terminology down
-
-### I Want to Use This for My Assignment
-
-**Go to:** [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md)
-- Step-by-step evaluation instructions
-- Evaluate one student
-- Evaluate entire class
-- Choose different AI models
-- Understand results
-
-### I Want to Understand How It's Built
-
-**Start with:** [`02-PROJECT-STRUCTURE.md`](02-PROJECT-STRUCTURE.md)
-- Where every file is located
-- What each directory does
-- How files relate to each other
-
-**Then read:** [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md)
-- System design and data flow
-- Design patterns used
-- How to extend the system
-- Performance considerations
-
-### I Need Technical Reference
-
-**See:** [`04-API-REFERENCE.md`](04-API-REFERENCE.md)
-- Complete API documentation
-- All functions and parameters
-- Data model reference
-- Error handling
-- Code examples
+All documents assume familiarity with Python, JSON, and basic LLM API concepts.
 
 ---
 
-## Document Overview
+## Task-Oriented Map
 
-| Document | Length | Audience | Content |
-|----------|--------|----------|---------|
-| [`00-QUICK-START.md`](00-QUICK-START.md) | 10 min | Everyone | Install, configure, run |
-| [`01-GETTING-STARTED.md`](01-GETTING-STARTED.md) | 20 min | Everyone | Concepts, terminology, workflows |
-| [`02-PROJECT-STRUCTURE.md`](02-PROJECT-STRUCTURE.md) | 30 min | Developers | File organization, module responsibilities |
-| [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md) | 45 min | Users | How to evaluate students, examples |
-| [`04-API-REFERENCE.md`](04-API-REFERENCE.md) | 30 min | Developers | Function signatures, parameters, types |
-| [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md) | 45 min | Advanced | System design, extension guide, performance |
+### Setup and First Run
 
----
+- Install and run the reference example: [`00-QUICK-START.md`](00-QUICK-START.md)
+- Understand what the system is computing: [`01-GETTING-STARTED.md`](01-GETTING-STARTED.md)
 
-## By Task
+### Using the Evaluation Pipeline
 
-### Getting Started
+- Evaluate a single student: [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md) — “Evaluating Your First Student”
+- Evaluate a full cohort: [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md) — “Evaluating Multiple Students”
+- Switch and tune models: [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md) — “Choosing Different AI Models”
+- Interpret the JSON output: [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md) — “Understanding Your Results”
 
-**"I want to try the system right now"**
-→ [`00-QUICK-START.md`](00-QUICK-START.md) (5 minutes)
+### CLI and Automation
 
-**"I want to understand what this does"**
-→ [`01-GETTING-STARTED.md`](01-GETTING-STARTED.md) (20 minutes)
+- Async batch CLI (Typer + Rich): `README.md` and [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md)
+- Orchestration helpers for grading: [`02-PROJECT-STRUCTURE.md`](02-PROJECT-STRUCTURE.md) (root files, `utils/grading.py`)
 
-### Using the System
+### Codebase and Architecture
 
-**"How do I evaluate a single student?"**
-→ [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md) - Section "Evaluating Your First Student"
+- File-level organization and responsibilities: [`02-PROJECT-STRUCTURE.md`](02-PROJECT-STRUCTURE.md)
+- Pipeline and data flow diagrams: [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md) — “Data Flow Pipeline”
+- Extension patterns (providers, prompts, comparison): [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md) — “Extension Guide”
 
-**"How do I evaluate an entire class?"**
-→ [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md) - Section "Evaluating Multiple Students"
+### Data Models and APIs
 
-**"How do I use different AI models?"**
-→ [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md) - Section "Choosing Different AI Models"
+- Pydantic model reference: [`04-API-REFERENCE.md`](04-API-REFERENCE.md) — “Data Models”
+- LLM integration helpers: [`04-API-REFERENCE.md`](04-API-REFERENCE.md) — “Utility Functions”
+- Prompt construction strategies: [`04-API-REFERENCE.md`](04-API-REFERENCE.md) and [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md)
 
-**"How do I understand my results?"**
-→ [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md) - Section "Understanding Your Results"
+### Troubleshooting and Testing
 
-### Understanding the Code
-
-**"Where is file X located?"**
-→ [`02-PROJECT-STRUCTURE.md`](02-PROJECT-STRUCTURE.md)
-
-**"What does module Y do?"**
-→ [`02-PROJECT-STRUCTURE.md`](02-PROJECT-STRUCTURE.md) - Section "Understanding Each Directory"
-
-**"How does the system work internally?"**
-→ [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md) - Section "Data Flow Pipeline"
-
-### Development
-
-**"How do I add a new LLM provider?"**
-→ [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md) - Section "Adding a New LLM Provider"
-
-**"How do I add a new grading strategy?"**
-→ [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md) - Section "Adding a New Prompting Strategy"
-
-**"What are all the function signatures?"**
-→ [`04-API-REFERENCE.md`](04-API-REFERENCE.md)
-
-**"What data structures exist?"**
-→ [`04-API-REFERENCE.md`](04-API-REFERENCE.md) - Section "Data Models"
-
-### Troubleshooting
-
-**"It says API key not found"**
-→ [`00-QUICK-START.md`](00-QUICK-START.md) - Section "Troubleshooting"
-
-**"What do the evaluation scores mean?"**
-→ [`01-GETTING-STARTED.md`](01-GETTING-STARTED.md) - Section "Key Concepts"
-
-**"How do I interpret the JSON results?"**
-→ [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md) - Section "Understanding Your Results"
+- Installation and environment issues: [`00-QUICK-START.md`](00-QUICK-START.md) — “Troubleshooting”
+- Validation and schema errors: [`04-API-REFERENCE.md`](04-API-REFERENCE.md) — “Error Handling”
+- Testing strategy and patterns: [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md) — “Testing Strategy”
 
 ---
 
-## By User Role
+## Quick “Where Do I Read?” Guide
 
-### I'm a Teacher/Instructor
-
-**Goal:** Grade student code using AI
-
-**Suggested reading order:**
-1. [`00-QUICK-START.md`](00-QUICK-START.md) - Get it running (5 min)
-2. [`01-GETTING-STARTED.md`](01-GETTING-STARTED.md) - Understand concepts (20 min)
-3. [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md) - Learn how to evaluate (45 min)
-
-**Key sections to bookmark:**
-- "Evaluating Your First Student"
-- "Evaluating Multiple Students"
-- "Understanding Your Results"
-
----
-
-### I'm a Developer/Researcher
-
-**Goal:** Understand system, extend functionality, contribute
-
-**Suggested reading order:**
-1. [`00-QUICK-START.md`](00-QUICK-START.md) - Get it running (5 min)
-2. [`01-GETTING-STARTED.md`](01-GETTING-STARTED.md) - Understand purpose (20 min)
-3. [`02-PROJECT-STRUCTURE.md`](02-PROJECT-STRUCTURE.md) - Learn file organization (30 min)
-4. [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md) - Understand design (45 min)
-5. [`04-API-REFERENCE.md`](04-API-REFERENCE.md) - Reference as needed (30 min)
-
-**Key sections to bookmark:**
-- Architecture: Data Flow Pipeline
-- Architecture: Module Architecture
-- Architecture: Extension Guide
-
----
-
-### I'm New to Programming
-
-**Goal:** Learn how to use the system
-
-**Suggested reading order:**
-1. [`00-QUICK-START.md`](00-QUICK-START.md) - Get running (5 min)
-2. [`01-GETTING-STARTED.md`](01-GETTING-STARTED.md) - Learn concepts (20 min)
-3. [`02-PROJECT-STRUCTURE.md`](02-PROJECT-STRUCTURE.md) - See how things are organized (30 min)
-4. [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md) - Follow step-by-step instructions (45 min)
-
-**Key tip:** Don't worry about the architecture initially. Focus on using the system.
-
----
-
-## Common Questions
-
-### "How long will this take to set up?"
-
-**Quick setup:** 10-15 minutes
-- Install dependencies
-- Create `.env` file
-- Run example
-
-**Full learning:** 1-2 hours
-- Read getting started guide
-- Understand the system
-- Try evaluating a student
-
-### "Do I need to know Python?"
-
-**For basic usage:** No
-- Just copy the example script
-- Modify student names/files
-- Run it
-
-**For custom development:** Yes
-- Understanding Python basics helpful
-- Pydantic knowledge useful
-- API documentation in Python
-
-### "Which documents should I read?"
-
-**Minimum:** [`00-QUICK-START.md`](00-QUICK-START.md) + [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md)
-
-**Recommended:** Add [`01-GETTING-STARTED.md`](01-GETTING-STARTED.md)
-
-**Complete:** Add [`02-PROJECT-STRUCTURE.md`](02-PROJECT-STRUCTURE.md) + [`04-API-REFERENCE.md`](04-API-REFERENCE.md)
-
-### "Can I extend the system?"
-
-**Yes!** See [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md) - Section "Extension Guide"
-
-You can:
-- Add new LLM providers (OpenAI, Claude, custom)
-- Add new grading strategies (different prompt types)
-- Add new comparison metrics
-- Modify existing components
-
-### "What if I get stuck?"
-
-**Step 1:** Check the relevant section above
-**Step 2:** Search in the appropriate document
-**Step 3:** See "Troubleshooting" in [`00-QUICK-START.md`](00-QUICK-START.md)
-**Step 4:** Create an issue on GitHub
+- Minimal to run and inspect an evaluation: `00-QUICK-START.md` → `03-USAGE-GUIDE.md`
+- Minimal to understand the data structures: `01-GETTING-STARTED.md` → `04-API-REFERENCE.md`
+- Minimal to extend or integrate into your own tooling: `02-PROJECT-STRUCTURE.md` → `05-ARCHITECTURE.md`
 
 ---
 
 ## Search Guide
 
-**Looking for... → Go to...**
+Looking for a specific topic:
 
-API functions → [`04-API-REFERENCE.md`](04-API-REFERENCE.md)
-Architecture → [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md)
-Beginner concepts → [`01-GETTING-STARTED.md`](01-GETTING-STARTED.md)
-Data models → [`04-API-REFERENCE.md`](04-API-REFERENCE.md) or [`02-PROJECT-STRUCTURE.md`](02-PROJECT-STRUCTURE.md)
-Error messages → [`00-QUICK-START.md`](00-QUICK-START.md)
-File locations → [`02-PROJECT-STRUCTURE.md`](02-PROJECT-STRUCTURE.md)
-How to evaluate students → [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md)
-How to extend system → [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md)
-How to install → [`00-QUICK-START.md`](00-QUICK-START.md)
-Module responsibilities → [`02-PROJECT-STRUCTURE.md`](02-PROJECT-STRUCTURE.md)
-Performance tips → [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md)
-Prompt strategies → [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md) or [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md)
-Results interpretation → [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md)
+- API functions and signatures → [`04-API-REFERENCE.md`](04-API-REFERENCE.md)
+-,Data models and schema semantics → [`04-API-REFERENCE.md`](04-API-REFERENCE.md)
+- Architecture and design decisions → [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md)
+- File locations and module boundaries → [`02-PROJECT-STRUCTURE.md`](02-PROJECT-STRUCTURE.md)
+- Evaluation workflows and examples → [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md)
+- Installation, environment, and keys → [`00-QUICK-START.md`](00-QUICK-START.md)
 
----
-
-## Document Features
-
-All documents include:
-
-✅ **Clear structure** with table of contents
-✅ **Beginner-friendly explanations** (not too technical)
-✅ **Practical examples** with code
-✅ **Visual diagrams** where helpful
-✅ **Navigation links** between documents
-✅ **Quick reference** sections
-✅ **Common questions** addressed
 
 ---
 

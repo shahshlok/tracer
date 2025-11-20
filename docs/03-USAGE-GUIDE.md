@@ -1,6 +1,6 @@
-# Usage Guide: Step-by-Step Instructions
+# Usage Guide
 
-This guide shows you exactly how to use the EME Framework for your own evaluations.
+This guide describes how to use the EME Framework for concrete workflows: single-student evaluation, batch evaluation (via script or CLI), model configuration, and interpreting results.
 
 ## Table of Contents
 
@@ -35,7 +35,7 @@ Step 4: Analyze        → Look at the results
 
 ---
 
-## Evaluating Your First Student
+## Evaluating Your First Student (Scripted)
 
 ### Step 1: Create Assignment Files
 
@@ -383,15 +383,17 @@ anthropic/claude-3-sonnet:
 
 ### Step 5: View Your Results
 
-Open **student_evals/Johnson_Alice_100042_eval.json** to see the complete evaluation in JSON format.
+Open `student_evals/Johnson_Alice_100042_eval.json` to inspect the full evaluation document.
 
 ---
 
 ## Evaluating Multiple Students
 
-To grade a whole class, create a loop:
+You can grade multiple students either with a custom loop or via the async CLI. This section shows both patterns.
 
-**evaluate_all_students.py:**
+### Option A: Custom batch script
+
+`evaluate_all_students.py`:
 
 ```python
 import json
@@ -541,10 +543,32 @@ print("\n" + "="*60)
 print("All evaluations complete!")
 ```
 
-**Run it:**
+Run it:
 ```bash
 uv run python evaluate_all_students.py
 ```
+
+### Option B: Async batch CLI
+
+The repository includes an async CLI built with Typer and Rich (`cli.py`) that performs parallel grading and summarizes cross-model behaviour.
+
+From the project root:
+
+```bash
+uv run python cli.py bench
+```
+
+This command:
+- Enumerates student directories under `student_submissions/`
+- Loads `question_cuboid.md` and `rubric_cuboid.json`
+- Uses `utils/grading.py` to construct prompts and assemble `EvaluationDocument` instances
+- Calls the configured models in parallel using an asyncio semaphore
+- Writes `{student_id}_eval.json` for each student under `student_evals/`
+- Prints a table with per-model scores, average, disagreement magnitude, average confidence, and flags
+
+To adapt the CLI:
+- Adjust `MODELS`, `MAX_CONCURRENT_STUDENTS`, and `BATCH_LIMIT` in `cli.py`
+- Modify resource paths or grading semantics in `utils/grading.py`
 
 ---
 

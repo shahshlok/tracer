@@ -1,30 +1,30 @@
 # Ensemble Model Evaluation (EME) Framework
 
-A research tool for grading student code submissions using multiple LLM models, discovering misconception patterns, and evaluating ensemble grading strategies through comprehensive cross-model analytics.
+Research-grade harness for grading student code submissions with multiple LLMs, analyzing misconception patterns, and evaluating ensemble grading strategies via structured cross-model analytics.
 
-## Status: Schema Complete, Implementation In Progress (v1.0.0)
+## Status
 
-The evaluation schema has been completely redesigned and finalized to support research-grade ensemble analysis and misconception pattern discovery. The schema is implemented using Pydantic models with comprehensive validation.
-
----
-
-## 📚 Documentation
-
-**All documentation is in the [`docs/`](docs/) directory.**
-
-Start here based on your needs:
-
-- **New to the project?** → Read [`docs/00-QUICK-START.md`](docs/00-QUICK-START.md) (5 minutes)
-- **Want to understand how it works?** → Read [`docs/01-GETTING-STARTED.md`](docs/01-GETTING-STARTED.md)
-- **Ready to evaluate students?** → Read [`docs/03-USAGE-GUIDE.md`](docs/03-USAGE-GUIDE.md)
-- **Need technical reference?** → Read [`docs/04-API-REFERENCE.md`](docs/04-API-REFERENCE.md)
-- **Want to understand the architecture?** → Read [`docs/05-ARCHITECTURE.md`](docs/05-ARCHITECTURE.md)
-
-**📖 Full documentation index:** [`docs/INDEX.md`](docs/INDEX.md)
+**Schema:** v1.0.0 (stable, Pydantic-based)  
+**Implementation:** Evaluation pipeline + async batch CLI implemented; comparison/DB/analytics layers in progress.
 
 ---
 
-### What's Implemented ✅
+## Documentation
+
+All project documentation lives in `docs/`. The docs are written for instructors, applied ML practitioners, and researchers comfortable with Python and LLM APIs.
+
+- Overview & installation: `docs/00-QUICK-START.md`
+- Conceptual model and workflows: `docs/01-GETTING-STARTED.md`
+- Codebase layout: `docs/02-PROJECT-STRUCTURE.md`
+- End-to-end usage: `docs/03-USAGE-GUIDE.md`
+- Data/API reference: `docs/04-API-REFERENCE.md`
+- Architecture and extension: `docs/05-ARCHITECTURE.md`
+
+Documentation index: `docs/INDEX.md`
+
+---
+
+### Implemented
 - **Complete Pydantic schema**: All data models for evaluations, submissions, rubrics, and comparisons
 - **Multi-model evaluation support**: OpenAI and OpenRouter SDK integration with Instructor
 - **Structured LLM outputs**: Enforced JSON schema validation for all model responses
@@ -32,11 +32,11 @@ Start here based on your needs:
 - **Comprehensive comparison models**: Score analysis, reliability metrics, ensemble decisions, and quality assessment
 - **Three grading strategies**: Direct, Reverse, and Ensemble Method Evaluation (EME) prompts
 
-### In Development 🚧
-- **Comparison computation engine**: Logic to calculate score statistics, ICC, Krippendorff's alpha, and ensemble decisions
-- **Database persistence**: SQLite integration for historical evaluation storage
-- **CLI interface**: Interactive menu system for running evaluations and analysis
-- **Visualization tools**: Dashboards for instructors to review ensemble results
+### In Development
+- **Comparison computation engine**: Score statistics, agreement metrics (ICC, Krippendorff's alpha, etc.), ensemble decisions
+- **Database persistence**: SQLite-backed storage and query interface for historical evaluations
+- **CLI extensions**: Additional commands for loading, validating, and analyzing evaluation corpora
+- **Visualization tools**: Dashboards for ensemble behaviour, agreement heatmaps, and misconception distributions
 
 ### Architecture Overview
 
@@ -81,7 +81,7 @@ JSON Output (student_evals/*.json)
 
 ## Quick Start
 
-**⏱️ Get up and running in 5 minutes:**
+Minimal setup to execute the provided example workflow:
 
 ```bash
 # 1. Clone repository
@@ -96,13 +96,35 @@ uv sync
 echo "OPENAI_API_KEY=sk-..." > .env
 echo "OPENROUTER_API_KEY=sk-or-..." >> .env
 
-# 4. Run the example
+# 4. Run the example script
 uv run python grade_sergio.py
 ```
 
 **Results saved to:** `student_evals/sergio_eval.json`
 
-**👉 For detailed setup:** See [`docs/00-QUICK-START.md`](docs/00-QUICK-START.md)
+For a more detailed description of the pipeline and configuration options, see `docs/00-QUICK-START.md` and `docs/03-USAGE-GUIDE.md`.
+
+---
+
+## Batch CLI (Async Benchmark Harness)
+
+An async batch CLI is provided for running ensemble evaluations over a cohort of students and summarizing cross-model behaviour.
+
+From the project root:
+
+```bash
+# Grade a batch of students using the async CLI
+uv run python cli.py bench
+```
+
+The CLI:
+- Discovers student IDs under `student_submissions/`
+- Loads `question_cuboid.md` and `rubric_cuboid.json`
+- Evaluates each student against the configured models in parallel
+- Writes one `*_eval.json` per student under `student_evals/`
+- Renders a comparative table (per-model scores, average, disagreement flags, confidence)
+
+See `cli.py` and `utils/grading.py` for the orchestration logic, and `docs/03-USAGE-GUIDE.md` for integrating the CLI into your own assignment/rubric layouts.
 
 ---
 
@@ -180,20 +202,21 @@ ensemble-eval-cli/
 │
 ├── pydantic_models/             # Data definitions (Pydantic v2)
 ├── prompts/                     # Grading strategies
-├── utils/                       # LLM integrations
+├── utils/                       # LLM integrations and grading helpers
 ├── tests/                       # Test suite
 │
-├── student_submissions/         # Input: Student code
-├── student_evals/              # Output: Evaluation results
+├── student_submissions/         # Input: student code (one folder per student)
+├── student_evals/               # Output: evaluation results (one JSON per eval)
 │
-├── grade_sergio.py             # Example evaluation script
-├── question_cuboid.md          # Example assignment
-├── rubric_cuboid.json          # Example grading rubric
-├── pyproject.toml              # Project configuration
-└── .env                        # API keys (not in repo)
+├── cli.py                       # Async batch CLI (Typer + Rich)
+├── grade_sergio.py              # Single-student example workflow
+├── question_cuboid.md           # Example assignment
+├── rubric_cuboid.json           # Example grading rubric
+├── pyproject.toml               # Project configuration
+└── .env                         # API keys (not in repo)
 ```
 
-**📖 For detailed structure:** [`docs/02-PROJECT-STRUCTURE.md`](docs/02-PROJECT-STRUCTURE.md)
+For a complete walkthrough of the directory layout and model dependencies, see `docs/02-PROJECT-STRUCTURE.md`.
 
 ---
 
@@ -325,11 +348,10 @@ Each file contains:
 ## Current Limitations & Future Work
 
 ### Known Limitations
-- **Single-file submissions**: Currently supports one code file per student
-- **No CLI**: Evaluation requires running Python scripts directly
-- **No database**: Evaluations stored as individual JSON files
-- **Comparison logic not implemented**: Models defined but computation not yet built
-- **Manual model configuration**: Must edit code to change models/parameters
+- Single-file submissions: current workflow assumes one code file per student
+- No database: evaluations are stored as individual JSON files
+- Comparison logic not implemented: comparison models exist, but computation is not wired
+- Manual model configuration: model lists and parameters are edited in code/CLI config
 
 ### Planned Enhancements
 1. **Multi-file submission support**

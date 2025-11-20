@@ -1,6 +1,6 @@
 # Pydantic Models for Ensemble Evaluation
 
-This package provides a complete set of Pydantic models for representing student evaluations graded by multiple LLMs, along with comprehensive comparison and ensemble analysis.
+This package provides a complete, schema-first set of Pydantic models for representing student evaluations graded by multiple LLMs, together with comparison and ensemble analysis structures.
 
 ## Structure
 

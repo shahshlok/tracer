@@ -1,17 +1,17 @@
 # Quick Start Guide
 
-Welcome to the Ensemble Model Evaluation (EME) Framework! This guide will help you get up and running in just a few minutes.
+This document is a succinct path from a blank environment to a working evaluation run. It assumes familiarity with Python tooling, virtual environments, and environment variables.
 
-## What is this project?
+## Overview
 
-The EME Framework automatically grades student code submissions using multiple AI models (like ChatGPT, Claude, Gemini). It compares how different models evaluate the same code, helping discover misconceptions and analyze grading patterns.
+The Ensemble Model Evaluation (EME) Framework grades student code with multiple LLMs (OpenAI, Anthropic, Gemini, etc.), produces structured evaluation documents, and enables cross-model comparison and ensemble strategies.
 
-**Simple workflow:**
+High-level workflow:
 ```
-Student Code → Multiple AI Models → Compare Results → Analyze Patterns
+Student Code → Multiple LLMs → Structured Evaluations → Comparison / Analysis
 ```
 
-## Installation (5 minutes)
+## Installation
 
 ### Step 1: Clone the repository
 
@@ -20,23 +20,23 @@ git clone https://github.com/shahshlok/ensemble-eval-cli
 cd ensemble-eval-cli
 ```
 
-### Step 2: Install dependencies
+### Step 2: Install dependencies (uv or pip)
 
-We recommend using `uv` (a fast Python package manager):
+Using `uv` (recommended):
 
 ```bash
 uv sync
 ```
 
-Or with pip:
+Or with pip in an existing environment:
 
 ```bash
 pip install -e .
 ```
 
-### Step 3: Set up API keys
+### Step 3: Configure API keys
 
-The system needs keys to access AI models. Create a `.env` file in the project root:
+The framework reads API keys from environment variables (via `python-dotenv`). Create a `.env` file in the project root:
 
 ```bash
 # Required: Get from https://platform.openai.com/api-keys
@@ -46,61 +46,54 @@ OPENAI_API_KEY=sk-...
 OPENROUTER_API_KEY=sk-or-...
 ```
 
-**Don't have API keys?**
-- OpenAI: Sign up at https://platform.openai.com (includes free credits)
-- OpenRouter: Sign up at https://openrouter.ai (routes to multiple models)
+## Run the reference evaluation
 
-## Run Your First Evaluation (2 minutes)
-
-Once installed, run the example:
+From the project root:
 
 ```bash
 uv run python grade_sergio.py
 ```
 
-This will:
-1. Load an example assignment (Cuboid class design)
-2. Load example student code (Java)
-3. Ask multiple AI models to grade the code
-4. Save results to `student_evals/sergio_eval.json`
-
-**Expected output:** A JSON file with scores from multiple models and identified misconceptions.
-
-## What happens next?
-
-After running the evaluation, you'll have:
+This script:
+1. Loads the example assignment (`question_cuboid.md`) and rubric (`rubric_cuboid.json`)
+2. Loads a sample Java submission under `student_submissions/Diaz_Sergio_100029/`
+3. Evaluates the submission with one or more configured LLMs
+4. Writes a fully-populated `EvaluationDocument` JSON file:
 
 ```
 student_evals/
 └── sergio_eval.json          ← Results file with all grading data
 ```
 
-This JSON file contains:
-- Student info
-- Scores from each AI model
-- Feedback and misconceptions
-- Confidence levels
+The resulting JSON contains:
+- Course/assignment context
+- Submission metadata and file list
+- Rubric definition
+- Per-model scores, breakdowns, feedback, and misconceptions
 
-## Next steps
+For a detailed breakdown of the schema, see `docs/04-API-REFERENCE.md`.
 
-- **👉 Learn the basics**: Read [`01-GETTING-STARTED.md`](01-GETTING-STARTED.md)
-- **🏗️ Understand the structure**: Read [`02-PROJECT-STRUCTURE.md`](02-PROJECT-STRUCTURE.md)
-- **📚 Complete reference**: Read [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md)
-- **🔧 API details**: Read [`04-API-REFERENCE.md`](04-API-REFERENCE.md)
-- **🏛️ Architecture**: Read [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md)
+## Recommended next reads
+
+- Conceptual model and terminology: `01-GETTING-STARTED.md`
+- Project layout and root scripts (including CLI): `02-PROJECT-STRUCTURE.md`
+- Custom evaluations and batch workflows: `03-USAGE-GUIDE.md`
+- Architecture and extension points: `05-ARCHITECTURE.md`
 
 ## Troubleshooting
 
 **Error: "OpenAI API key not found"**
-- Make sure your `.env` file has `OPENAI_API_KEY=sk-...`
-- Check the file is in the project root (same directory as `README.md`)
+- Ensure `.env` exists in the project root and defines `OPENAI_API_KEY=...`
+- Confirm your shell is not overriding the variable with a different value
 
-**Error: "Module not found"**
-- Run `uv sync` again to make sure dependencies are installed
+**Error: "OPENROUTER_API_KEY not set"**
+- Ensure the key is present in `.env` and formatted correctly
 
-**Error: "Rate limit exceeded"**
-- You're making too many API requests. Wait a few seconds and try again.
+**Import / module errors**
+- Re-run `uv sync` (or `pip install -e .`) from the project root
+- Verify that you are invoking Python from the environment where dependencies are installed
 
----
+**API rate limiting**
+- Back off and retry; consider reducing the number of models or concurrent requests
 
-**Need help?** Check the [documentation index](@docs/INDEX.md) or create an issue on GitHub.
+For a broader troubleshooting view and error-handling patterns, see `docs/04-API-REFERENCE.md` and `docs/05-ARCHITECTURE.md`.

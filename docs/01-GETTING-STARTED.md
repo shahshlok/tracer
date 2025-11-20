@@ -1,10 +1,10 @@
-# Getting Started: The Basics
+# Getting Started
 
-This guide explains what the EME Framework does and the key concepts you need to understand.
+This guide describes the conceptual model of the Ensemble Model Evaluation (EME) Framework: what an evaluation is, how models and rubrics interact, and how the pipeline is structured.
 
 ## The Big Picture
 
-The Ensemble Model Evaluation Framework helps educators grade student code using AI. Here's how it works:
+At a high level, the framework takes an assignment specification, a grading rubric, and one or more student submissions, and produces structured, per-model evaluations suitable for downstream analysis.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -49,13 +49,13 @@ An **evaluation** is the complete grade for one student's submission. It include
 
 ### 2. Models
 
-A **model** is an AI system that grades code. The framework supports:
+A **model** is an LLM configuration that grades code. The framework supports:
 - **OpenAI models**: GPT-4, GPT-3.5-turbo
 - **Anthropic Claude**: Claude 3 Opus, Sonnet
 - **Google Gemini**: Multiple versions
 - **And many more via OpenRouter**
 
-You can evaluate the same code with multiple models and compare their results.
+The same submission can be evaluated by multiple models, enabling comparison and ensemble strategies.
 
 ### 3. Rubric
 
@@ -78,7 +78,7 @@ Categories:
 
 ### 4. Misconceptions
 
-A **misconception** is when a student shows a misunderstanding of a concept. The framework identifies these automatically by analyzing the code.
+A **misconception** is a structured representation of a student misunderstanding. The framework expects models to surface these explicitly and to attach evidence.
 
 Example misconception:
 ```
@@ -90,15 +90,9 @@ Explanation: Default arguments are evaluated once at class definition time.
 
 ### 5. Confidence
 
-**Confidence** is how sure the AI model is about its evaluation. It ranges from 0 to 1:
-- 0.9+ = Very sure
-- 0.7-0.9 = Fairly sure
-- 0.5-0.7 = Somewhat sure
-- Below 0.5 = Uncertain
+**Confidence** represents the model’s self-reported certainty on a [0, 1] scale; it is useful for weighting ensemble decisions and identifying low-certainty evaluations, but is not itself a guarantee of correctness.
 
-High confidence doesn't always mean the evaluation is correct—it's the model's opinion about its own certainty.
-
-## The Evaluation Process
+## Evaluation Lifecycle
 
 Here's what happens when you run an evaluation:
 
@@ -145,44 +139,32 @@ Here's what happens when you run an evaluation:
 
 ## Core Components
 
-The system has four main parts:
+The system has four main technical components:
 
 ### 1. Pydantic Models (`pydantic_models/`)
 
-**What it is:** Strict definitions of data structures
-
-**Why it matters:** Ensures all data is valid and consistent. No surprises!
-
-**Example:** The `Scores` model says "percentage must be 0-100". If something tries to set percentage to 150, it gets rejected immediately.
+- Define the schema for all evaluation artefacts (`EvaluationDocument`, `ModelEvaluation`, `Scores`, `Misconception`, etc.)
+- Enforce constraints (e.g. percentages in [0, 100], confidence in [0, 1], required fields present)
+- Provide consistent JSON serialization/deserialization semantics for downstream tools
 
 ### 2. LLM Utilities (`utils/`)
 
-**What it is:** Code that talks to AI services (OpenAI, OpenRouter, etc.)
-
-**Why it matters:** Handles all the complex API requests and responses
-
-**Two main functions:**
-- `utils/openai_client.py` - For OpenAI models only
-- `utils/openrouter_sdk.py` - For many models via OpenRouter
+- Implement provider-specific clients (`openai_client.py`, `openrouter_sdk.py`)
+- Encapsulate authentication, request construction, and error handling
+- Return validated Pydantic instances rather than ad-hoc dictionaries
 
 ### 3. Prompt Templates (`prompts/`)
 
-**What it is:** Instructions sent to the AI model
+- Provide reusable prompt builders for Direct, Reverse, and EME strategies
+- Take assignment text, rubric JSON, and student code as inputs and emit a single prompt string
+- Allow experiments with different prompting strategies without altering the rest of the pipeline
 
-**Why it matters:** Different prompt styles get different results
+### 4. Orchestration Scripts and CLI
 
-**Three strategies:**
-- **Direct**: "Grade this code against the rubric"
-- **Reverse**: "First write ideal code, then compare to this submission"
-- **EME**: "Use ensemble method to evaluate systematically"
+- `grade_sergio.py`: a complete, single-student example of the evaluation lifecycle
+- `cli.py` + `utils/grading.py`: async batch evaluation and summarization over multiple students
 
-### 4. Example Script (`grade_sergio.py`)
-
-**What it is:** A complete example showing how to use the system
-
-**Why it matters:** You can copy and modify this for your own evaluations
-
-## Working with Files
+## Files and Directories
 
 The project organizes files into clear directories:
 
@@ -205,14 +187,12 @@ ensemble-eval-cli/
 
 ### Adding Your Own Student
 
-To grade your own student:
+To evaluate your own student, either:
 
-1. Create a folder: `student_submissions/{student_id}/`
-2. Put their code files in that folder
-3. Create an evaluation script (copy from `grade_sergio.py`)
-4. Change the student ID and run it
+- Copy `grade_sergio.py`, point it at a new `student_submissions/{student_id}/` directory and corresponding assignment/rubric; or
+- Use the batch CLI (`uv run python cli.py bench`) after placing student folders under `student_submissions/`.
 
-## Output Format: Understanding JSON Results
+## Output Format
 
 When you run an evaluation, you get a JSON file. Here's what it contains:
 
@@ -276,7 +256,7 @@ When you run an evaluation, you get a JSON file. Here's what it contains:
 
 ## Common Workflows
 
-### Workflow 1: Grade One Student
+### Workflow 1: Grade one student via script
 
 ```bash
 # 1. Prepare student code in student_submissions/{id}/
@@ -287,18 +267,15 @@ uv run python grade_sergio.py
 # 4. Results in student_evals/
 ```
 
-### Workflow 2: Grade Multiple Students
+### Workflow 2: Grade multiple students (CLI)
 
-Create a script that loops through student IDs:
+See `docs/03-USAGE-GUIDE.md` for a full batch example and the CLI workflow. At a high level:
 
-```python
-for student_id in ["Student_A", "Student_B", "Student_C"]:
-    # Load their code
-    # Create evaluation
-    # Save results
-```
+- Place one folder per student under `student_submissions/`
+- Ensure `question_cuboid.md` and `rubric_cuboid.json` (or your equivalents) are present
+- Run `uv run python cli.py bench`
 
-### Workflow 3: Try Different Models
+### Workflow 3: Try different models
 
 Change the models list in your script:
 
@@ -310,7 +287,7 @@ models_to_test = [
 ]
 ```
 
-### Workflow 4: Use Different Grading Strategies
+### Workflow 4: Use different grading strategies
 
 Choose which prompt template to use:
 
@@ -324,14 +301,11 @@ prompt = direct_prompt.build_direct_prompt(question, rubric, code)
 prompt = reverse_prompt.build_reverse_prompt(question, rubric, code)
 ```
 
-## What's Next?
+## Next Steps
 
-Now that you understand the basics:
-
-1. **Quick test**: Run `uv run python grade_sergio.py` to see it in action
-2. **Learn structure**: Read [`02-PROJECT-STRUCTURE.md`](02-PROJECT-STRUCTURE.md)
-3. **Practical guide**: Read [`03-USAGE-GUIDE.md`](03-USAGE-GUIDE.md) for step-by-step instructions
-4. **Deep dive**: Read [`05-ARCHITECTURE.md`](05-ARCHITECTURE.md) for technical details
+- For a detailed view of the directory tree and where to plug in new components, see `02-PROJECT-STRUCTURE.md`.
+- For step-by-step usage (including the batch CLI and more advanced patterns), see `03-USAGE-GUIDE.md`.
+- For system design and extension guidance, see `05-ARCHITECTURE.md`.
 
 ## Quick Reference
 
@@ -342,9 +316,5 @@ Now that you understand the basics:
 | **Rubric** | The grading scale with categories |
 | **Misconception** | A mistake or misunderstanding by the student |
 | **Confidence** | How sure the AI is (0-1 scale) |
-| **JSON** | Text format storing the results |
-| **Pydantic** | System ensuring data is always valid |
-
----
-
-**Next:** Read [`02-PROJECT-STRUCTURE.md`](02-PROJECT-STRUCTURE.md) to understand where everything is located.
+| **JSON** | Serialization format for evaluation artefacts |
+| **Pydantic** | Validation and serialization layer for all models |

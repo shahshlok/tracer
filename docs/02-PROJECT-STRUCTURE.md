@@ -52,9 +52,10 @@ ensemble-eval-cli/
 │  ├─ reverse_prompt.py            ← Reverse grading strategy
 │  └─ eme_prompt.py                ← Ensemble method strategy
 │
-├─ utils/                          ← AI service integrations
+├─ utils/                          ← AI service integrations and helpers
 │  ├─ openai_client.py             ← OpenAI API wrapper
-│  └─ openrouter_sdk.py            ← OpenRouter API wrapper
+│  ├─ openrouter_sdk.py            ← OpenRouter API wrapper
+│  └─ grading.py                   ← Shared grading/orchestration helpers (CLI + scripts)
 │
 ├─ tests/                          ← Test suite
 │  ├─ __init__.py
@@ -67,7 +68,8 @@ ensemble-eval-cli/
 ├─ student_evals/                  ← OUTPUT: Evaluation results
 │  └─ sergio_eval.json             ← Results (one JSON per evaluation)
 │
-├─ grade_sergio.py                 ← Example: Complete workflow
+├─ cli.py                          ← Async batch CLI (Typer + Rich)
+├─ grade_sergio.py                 ← Example: Single-student workflow
 ├─ question_cuboid.md              ← Example: Assignment specification
 ├─ rubric_cuboid.json              ← Example: Grading rubric
 │
@@ -227,9 +229,9 @@ Now compare the student's code to your ideal."
 
 ---
 
-### `utils/` - AI Service Integration
+### `utils/` - AI Service Integration and Helpers
 
-**Purpose:** Code that talks to AI companies' APIs
+**Purpose:** Code that talks to LLM providers and centralizes grading orchestration logic
 
 **How it works:**
 1. Takes your data (code, question, rubric)
@@ -237,12 +239,12 @@ Now compare the student's code to your ideal."
 3. Gets the response back
 4. Validates and returns it
 
-**What's inside:**
+**Key modules:**
 
 #### `openai_client.py`
-**What it does:** Talks to OpenAI (GPT-4, GPT-3.5, etc.)
+Client for OpenAI models (GPT-4, GPT-4o, etc.).
 
-**Function:** `evaluation_with_openai()`
+Function: `evaluation_with_openai()`
 ```python
 from utils.openai_client import evaluation_with_openai
 
@@ -255,9 +257,9 @@ result = evaluation_with_openai(
 ```
 
 #### `openrouter_sdk.py`
-**What it does:** Talks to OpenRouter (routes to many models)
+Client for OpenRouter (multi-provider routing).
 
-**Function:** `get_structured_response()`
+Function: `get_structured_response()`
 ```python
 from utils.openrouter_sdk import get_structured_response
 from pydantic_models import LLMEvaluationResponse
@@ -277,9 +279,19 @@ result = get_structured_response(
 - Meta Llama
 - And more...
 
+#### `grading.py`
+Grading utilities shared between example scripts and the async CLI:
+
+- `load_question()` / `load_rubric()` / `load_student_submission()`
+- `construct_prompt()`
+- `grade_with_model()` (async LLM call returning a `ModelEvaluation`)
+- `create_evaluation_document()` (assembles a complete `EvaluationDocument`)
+
+This module is the recommended entry point for custom scripts that want to reuse the same evaluation semantics as the CLI.
+
 **When you use it:**
-- Import in your evaluation scripts
-- Or create a new one if you want to add another AI provider
+- In evaluation scripts that mirror the default Cuboid workflow
+- From `cli.py` for batch grading
 
 ---
 
@@ -364,20 +376,31 @@ student_evals/
 
 ### Root Level Files
 
-#### `grade_sergio.py`
-**What it is:** Complete example evaluation script
+#### `cli.py`
+**What it is:** Async batch CLI (Typer + Rich)
 
 **What it does:**
-1. Loads the Cuboid assignment question
-2. Loads Cuboid grading rubric
-3. Loads Sergio's Java code
-4. Evaluates with multiple models
-5. Saves results to JSON
+1. Discovers student IDs in `student_submissions/`
+2. Loads assignment and rubric resources
+3. Evaluates each student against the configured models in parallel
+4. Builds an `EvaluationDocument` per student via `utils/grading.py`
+5. Persists results and prints a comparative table (per-model scores, average, disagreement flags, confidence)
+
+**How to use it:**
+- From the project root: `uv run python cli.py bench`
+
+#### `grade_sergio.py`
+**What it is:** Single-student reference script
+
+**What it does:**
+1. Loads the Cuboid assignment question and rubric
+2. Loads Sergio's Java submission
+3. Evaluates with one or more models
+4. Saves a single `EvaluationDocument` to JSON
 
 **How to use it:**
 - Run directly: `uv run python grade_sergio.py`
-- Copy and modify for your own evaluations
-- Use as a template for your scripts
+- Copy and adapt to your own assignment/rubric/student layout
 
 #### `question_cuboid.md`
 **What it is:** Example assignment specification
