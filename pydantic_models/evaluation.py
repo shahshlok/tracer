@@ -10,7 +10,7 @@ from .models import ModelEvaluation
 from .rubric import Rubric
 from .submission import Submission
 
-# TODO:Gotta put the comparison pydantic model here too but later
+from .comparison.models import Comparison
 
 
 class EvaluationDocument(BaseModel):
@@ -47,6 +47,11 @@ class EvaluationDocument(BaseModel):
     # Per-model evaluations
     models: dict[str, ModelEvaluation] = Field(
         ..., description="Per-model grading results. Key: model name/alias"
+    )
+
+    # Comparison and analysis
+    comparison: Comparison | None = Field(
+        default=None, description="Cross-model analysis and ensemble decision"
     )
 
     @model_validator(mode="after")

@@ -28,34 +28,36 @@ class Comparison(BaseModel):
     score_summary: ScoreSummary = Field(
         ..., description="Aggregate statistics across all grading models"
     )
-    pairwise_differences: list[PairwiseComparison] = Field(
-        ..., description="Detailed model-vs-model differences (scales to N models)"
+    pairwise_differences: list[PairwiseComparison] | None = Field(
+        default=None, description="Detailed model-vs-model differences (scales to N models)"
     )
-    category_agreement: list[CategoryAgreement] = Field(
-        ..., description="Per-rubric-category statistics and agreement levels"
+    category_agreement: list[CategoryAgreement] | None = Field(
+        default=None, description="Per-rubric-category statistics and agreement levels"
     )
-    category_insights: CategoryInsights = Field(
-        ..., description="High-level insights about category-level agreement and confidence"
+    category_insights: CategoryInsights | None = Field(
+        default=None, description="High-level insights about category-level agreement and confidence"
     )
-    misconception_summary: MisconceptionSummary = Field(
-        ..., description="Compare misconception detection across models"
+    misconception_summary: MisconceptionSummary | None = Field(
+        default=None, description="Compare misconception detection across models"
     )
-    confidence_analysis: ConfidenceAnalysis = Field(
-        ..., description="Examine model confidence patterns and confidence-score relationships"
+    confidence_analysis: ConfidenceAnalysis | None = Field(
+        default=None, description="Examine model confidence patterns and confidence-score relationships"
     )
-    model_characteristics: ModelCharacteristics = Field(
-        ..., description="Understanding grading tendencies and behavior patterns"
+    model_characteristics: ModelCharacteristics | None = Field(
+        default=None, description="Understanding grading tendencies and behavior patterns"
     )
-    reliability_metrics: ReliabilityMetrics = Field(
-        ..., description="Statistical measures of agreement (critical for publication)"
+    reliability_metrics: ReliabilityMetrics | None = Field(
+        default=None, description="Statistical measures of agreement (critical for publication)"
     )
-    ensemble_decision: EnsembleDecision = Field(
-        ..., description="Final grade recommendation using ensemble strategies"
+    ensemble_decision: EnsembleDecision | None = Field(
+        default=None, description="Final grade recommendation using ensemble strategies"
     )
-    ensemble_quality: EnsembleQuality = Field(
-        ..., description="Assess the value and effectiveness of this ensemble"
+    ensemble_quality: EnsembleQuality | None = Field(
+        default=None, description="Assess the value and effectiveness of this ensemble"
     )
-    flags: Flags = Field(
-        ..., description="Automated decision support for human review and research"
+    flags: Flags | None = Field(
+        default=None, description="Automated decision support for human review and research"
     )
-    metadata: ComparisonMetadata = Field(..., description="Tracking and versioning information")
+    metadata: ComparisonMetadata | None = Field(
+        default=None, description="Tracking and versioning information"
+    )
