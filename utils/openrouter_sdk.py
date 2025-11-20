@@ -1,5 +1,5 @@
 import os
-from typing import TypeVar, Type, List, Dict
+from typing import TypeVar
 
 import instructor
 from dotenv import load_dotenv
@@ -28,8 +28,8 @@ client = instructor.from_openai(
 
 
 def get_structured_response(
-    messages: List[Dict[str, str]],
-    response_model: Type[T],
+    messages: list[dict[str, str]],
+    response_model: type[T],
     model: str = DEFAULT_MODEL,
 ) -> T:
     """
@@ -44,7 +44,7 @@ def get_structured_response(
         Instance of response_model populated with the LLM's response
     """
     print(f"🤖 Querying {model} via OpenRouter...")
-    
+
     try:
         response = client.chat.completions.create(
             model=model,
