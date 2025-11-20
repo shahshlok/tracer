@@ -78,7 +78,6 @@ def get_structured_response(
     Returns:
         Instance of response_model populated with the LLM's response
     """
-    print(f"🤖 Querying {model} via OpenRouter...")
 
     try:
         response = client.chat.completions.create(
