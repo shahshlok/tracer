@@ -113,14 +113,18 @@ Provide a structured output containing:
     for model_name in models_to_test:
         print(f"Calling OpenRouter ({model_name})...")
         try:
-            llm_response = get_structured_response(messages, LLMEvaluationResponse, model=model_name)
+            llm_response = get_structured_response(
+                messages, LLMEvaluationResponse, model=model_name
+            )
             print(f"Received response from {model_name}.")
 
             model_eval = ModelEvaluation(
                 model_name=model_name,
                 provider="openrouter",
                 run_id=f"run_{uuid.uuid4().hex[:8]}",
-                config=Config(system_prompt_id="simple_direct_prompt", rubric_prompt_id="rubric_v1"),
+                config=Config(
+                    system_prompt_id="simple_direct_prompt", rubric_prompt_id="rubric_v1"
+                ),
                 scores=llm_response.scores,
                 category_scores=llm_response.category_scores,
                 feedback=llm_response.feedback,
