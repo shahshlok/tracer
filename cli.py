@@ -134,6 +134,7 @@ async def process_student_wrapper(
                 
                 progress.advance(task_id)
                 return {
+                    "status": "success",
                     "student": student_id,
                     "evals": valid_evals
                 }
@@ -141,12 +142,20 @@ async def process_student_wrapper(
                 # Both models failed
                 progress.console.print(f"[red]All models failed for {student_id}[/red]")
                 progress.advance(task_id)
-                return None
+                return {
+                    "status": "error",
+                    "student": student_id,
+                    "error": "All models failed"
+                }
 
         except Exception as e:
             progress.console.print(f"[red]Error processing {student_id}: {e}[/red]")
             progress.advance(task_id) # Advance anyway to not hang the bar
-            return None
+            return {
+                "status": "error",
+                "student": student_id,
+                "error": str(e)
+            }
 
 async def batch_grade_students(students: List[str], question_text: str, rubric_data: Dict[str, Any]) -> List[Dict]:
     """
@@ -178,11 +187,10 @@ async def batch_grade_students(students: List[str], question_text: str, rubric_d
         
         # Fire them all!
         # returns a list of results in the same order as tasks
-        raw_results = await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks)
         
-        # Filter out Nones (failed students)
-        results = [r for r in raw_results if r is not None]
-
+        # No filtering needed anymore, we want to see failures
+        
     return results
 
 # --- Main Command ---
@@ -235,6 +243,22 @@ def main():
 
     for res in results:
         student = res["student"]
+        
+        if res.get("status") == "error":
+            # Render Error Row
+            table.add_row(
+                student,
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                "❌",
+                f"[red]{res.get('error', 'Unknown Error')}[/red]"
+            )
+            continue
+
+        # Success Case
         evals = res["evals"]
         
         gemini_eval = evals.get("google/gemini-2.5-flash-lite")

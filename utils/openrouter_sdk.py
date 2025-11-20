@@ -4,7 +4,7 @@ import instructor
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 from pydantic import BaseModel
-from tenacity import retry, stop_after_attempt, wait_exponential # <--- NEW
+from tenacity import retry, stop_after_attempt, wait_exponential, wait_random
 
 load_dotenv()
 
@@ -22,7 +22,7 @@ client = instructor.from_openai(
 # Add automatic retries for rate limits (429) and server errors (5xx)
 @retry(
     stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=4, max=10)
+    wait=wait_exponential(multiplier=1, min=4, max=10) + wait_random(0, 0.4)
 )
 async def get_structured_response(
     messages: list[dict[str, str]],
@@ -32,15 +32,10 @@ async def get_structured_response(
     """
     Get a structured response with automatic retries.
     """
-    try:
-        # No extra try/catch here, let Tenacity handle the exceptions
-        return await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            response_model=response_model,
-            extra_body={"provider": {"allow_fallbacks": False}},
-        )
-    except Exception as e:
-        # Print only serves for debugging, re-raise so tenacity catches it
-        print(f"⚠️ Retry triggered for {model}: {e}")
-        raise e
+    # No extra try/catch here, let Tenacity handle the exceptions
+    return await client.chat.completions.create(
+        model=model,
+        messages=messages,
+        response_model=response_model,
+        extra_body={"provider": {"allow_fallbacks": False}},
+    )
