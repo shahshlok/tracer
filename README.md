@@ -1,12 +1,30 @@
 # Ensemble Model Evaluation (EME) Framework
 
-A research tool for grading student code submissions using multiple LLM models, discovering misconception patterns, and evaluating ensemble grading strategies through comprehensive cross-model analytics.
+Research-grade harness for grading student code submissions with multiple LLMs, analyzing misconception patterns, and evaluating ensemble grading strategies via structured cross-model analytics.
 
-## Status: Schema Complete, Implementation In Progress (v1.0.0)
+## Status
 
-The evaluation schema has been completely redesigned and finalized to support research-grade ensemble analysis and misconception pattern discovery. The schema is implemented using Pydantic models with comprehensive validation.
+**Schema:** v1.0.0 (stable, Pydantic-based)  
+**Implementation:** Evaluation pipeline + async batch CLI implemented; comparison/DB/analytics layers in progress.
 
-### What's Implemented ✅
+---
+
+## Documentation
+
+All project documentation lives in `docs/`. The docs are written for instructors, applied ML practitioners, and researchers comfortable with Python and LLM APIs.
+
+- Overview & installation: `docs/00-QUICK-START.md`
+- Conceptual model and workflows: `docs/01-GETTING-STARTED.md`
+- Codebase layout: `docs/02-PROJECT-STRUCTURE.md`
+- End-to-end usage: `docs/03-USAGE-GUIDE.md`
+- Data/API reference: `docs/04-API-REFERENCE.md`
+- Architecture and extension: `docs/05-ARCHITECTURE.md`
+
+Documentation index: `docs/INDEX.md`
+
+---
+
+### Implemented
 - **Complete Pydantic schema**: All data models for evaluations, submissions, rubrics, and comparisons
 - **Multi-model evaluation support**: OpenAI and OpenRouter SDK integration with Instructor
 - **Structured LLM outputs**: Enforced JSON schema validation for all model responses
@@ -14,11 +32,11 @@ The evaluation schema has been completely redesigned and finalized to support re
 - **Comprehensive comparison models**: Score analysis, reliability metrics, ensemble decisions, and quality assessment
 - **Three grading strategies**: Direct, Reverse, and Ensemble Method Evaluation (EME) prompts
 
-### In Development 🚧
-- **Comparison computation engine**: Logic to calculate score statistics, ICC, Krippendorff's alpha, and ensemble decisions
-- **Database persistence**: SQLite integration for historical evaluation storage
-- **CLI interface**: Interactive menu system for running evaluations and analysis
-- **Visualization tools**: Dashboards for instructors to review ensemble results
+### In Development
+- **Comparison computation engine**: Score statistics, agreement metrics (ICC, Krippendorff's alpha, etc.), ensemble decisions
+- **Database persistence**: SQLite-backed storage and query interface for historical evaluations
+- **CLI extensions**: Additional commands for loading, validating, and analyzing evaluation corpora
+- **Visualization tools**: Dashboards for ensemble behaviour, agreement heatmaps, and misconception distributions
 
 ### Architecture Overview
 
@@ -63,49 +81,50 @@ JSON Output (student_evals/*.json)
 
 ## Quick Start
 
-### Installation
+Minimal setup to execute the provided example workflow:
 
 ```bash
-# Clone repository
-git clone https://github.com/yourusername/ensemble-eval-cli
+# 1. Clone repository
+git clone https://github.com/shahshlok/ensemble-eval-cli
 cd ensemble-eval-cli
 
-# Install dependencies using uv (recommended)
+# 2. Install dependencies
 uv sync
 
-# Or using pip
-pip install -e .
+# 3. Create .env file with your API keys
+# (See docs/00-QUICK-START.md for details)
+echo "OPENAI_API_KEY=sk-..." > .env
+echo "OPENROUTER_API_KEY=sk-or-..." >> .env
+
+# 4. Run the example script
+uv run python grade_sergio.py
 ```
 
-### Environment Setup
+**Results saved to:** `student_evals/sergio_eval.json`
 
-Create a `.env` file in the project root:
+For a more detailed description of the pipeline and configuration options, see `docs/00-QUICK-START.md` and `docs/03-USAGE-GUIDE.md`.
 
-```env
-# Required: API keys for LLM providers
-OPENAI_API_KEY=sk-...
-OPENROUTER_API_KEY=sk-or-...
+---
 
-# Optional: OpenRouter analytics (leave blank if not needed)
-# OPENROUTER_SITE_URL=https://your-app-url.com
-# OPENROUTER_SITE_NAME=Your App Name
-```
+## Batch CLI (Async Benchmark Harness)
 
-### Run Your First Evaluation
+An async batch CLI is provided for running ensemble evaluations over a cohort of students and summarizing cross-model behaviour.
+
+From the project root:
 
 ```bash
-# Run the example evaluation script for student Sergio
-uv run python grade_sergio.py
-
-# Output will be saved to: student_evals/sergio_eval.json
+# Grade a batch of students using the async CLI
+uv run python cli.py bench
 ```
 
-This will:
-1. Load the Cuboid assignment question and rubric
-2. Load Sergio's Java submission
-3. Evaluate using multiple LLM models (Gemini 2.5 Flash Lite, Kimi K2)
-4. Generate a complete evaluation document with scores, feedback, and misconceptions
-5. Save the structured JSON output
+The CLI:
+- Discovers student IDs under `student_submissions/`
+- Loads `question_cuboid.md` and `rubric_cuboid.json`
+- Evaluates each student against the configured models in parallel
+- Writes one `*_eval.json` per student under `student_evals/`
+- Renders a comparative table (per-model scores, average, disagreement flags, confidence)
+
+See `cli.py` and `utils/grading.py` for the orchestration logic, and `docs/03-USAGE-GUIDE.md` for integrating the CLI into your own assignment/rubric layouts.
 
 ---
 
@@ -170,455 +189,104 @@ This will:
 
 ## Project Structure
 
-```text
+```
 ensemble-eval-cli/
-├── grade_sergio.py              # Example: Complete evaluation workflow for one student
-├── tests/
-│   └── simple_openai_test.py   # Unit test for OpenAI client evaluation
+├── docs/                        # 📚 Complete documentation
+│   ├── 00-QUICK-START.md
+│   ├── 01-GETTING-STARTED.md
+│   ├── 02-PROJECT-STRUCTURE.md
+│   ├── 03-USAGE-GUIDE.md
+│   ├── 04-API-REFERENCE.md
+│   ├── 05-ARCHITECTURE.md
+│   └── INDEX.md
 │
-├── prompts/                     # Grading prompt builders
-│   ├── direct_prompt.py        # Direct grading against rubric
-│   ├── reverse_prompt.py       # Generate ideal solution → compare
-│   └── eme_prompt.py           # Ensemble method with 100-pt rubric
+├── pydantic_models/             # Data definitions (Pydantic v2)
+├── prompts/                     # Grading strategies
+├── utils/                       # LLM integrations and grading helpers
+├── tests/                       # Test suite
 │
-├── utils/                       # LLM integration utilities
-│   ├── openai_client.py        # OpenAI structured outputs wrapper
-│   └── openrouter_sdk.py       # OpenRouter + Instructor integration
+├── student_submissions/         # Input: student code (one folder per student)
+├── student_evals/               # Output: evaluation results (one JSON per eval)
 │
-├── pydantic_models/             # Complete schema (v1.0.0)
-│   ├── evaluation.py           # Root EvaluationDocument model
-│   ├── README.md               # Model usage documentation
-│   ├── context/                # Course, assignment, question metadata
-│   │   └── models.py
-│   ├── submission/             # Student files and submission data
-│   │   └── models.py
-│   ├── rubric/                 # Grading criteria and categories
-│   │   └── models.py
-│   ├── models/                 # Per-model evaluation results
-│   │   └── evaluation.py      # Scores, feedback, misconceptions
-│   └── comparison/             # Multi-model analysis (schema complete)
-│       ├── models.py           # Main Comparison model
-│       ├── score_analysis.py  # Score statistics and pairwise comparisons
-│       ├── misconception_analysis.py  # Misconception overlap
-│       ├── confidence_analysis.py     # Confidence patterns
-│       ├── reliability.py      # ICC, Pearson, Spearman, Krippendorff's α
-│       └── ensemble.py         # Ensemble decisions and quality
-│
-├── student_submissions/         # Input: Student code organized by ID
-│   └── Diaz_Sergio_100029/
-│       └── Cuboid.java
-│
-├── student_evals/              # Output: Generated evaluation JSON files
-│   └── sergio_eval.json
-│
-├── question_cuboid.md          # Example: Assignment specification
-├── rubric_cuboid.json          # Example: Grading rubric (100 points)
-├── pyproject.toml              # Project configuration and dependencies
-└── .env                        # API keys (not in repo)
+├── cli.py                       # Async batch CLI (Typer + Rich)
+├── grade_sergio.py              # Single-student example workflow
+├── question_cuboid.md           # Example assignment
+├── rubric_cuboid.json           # Example grading rubric
+├── pyproject.toml               # Project configuration
+└── .env                         # API keys (not in repo)
 ```
 
-### Key Directories Explained
-
-- **`pydantic_models/`**: Complete v1.0.0 schema implementation
-  - All models use Pydantic v2 with comprehensive field descriptions
-  - Enables type-safe LLM outputs and JSON validation
-  - Models are fully documented in `pydantic_models/README.md`
-
-- **`prompts/`**: Three distinct grading strategies
-  - Each prompt builder returns a formatted string for LLM evaluation
-  - Can be extended with additional strategies
-
-- **`utils/`**: LLM provider integrations
-  - `openai_client.py`: Uses OpenAI's `responses.parse()` API for structured outputs
-  - `openrouter_sdk.py`: Uses Instructor library with `Mode.JSON` for multi-provider support
-
-- **`student_submissions/`**: Organized by student ID
-  - Each student gets a subdirectory with their code files
-  - Currently supports single-file submissions (e.g., one `.java` file)
-
-- **`student_evals/`**: Output directory for evaluation JSON
-  - Each file represents a complete `EvaluationDocument`
-  - Includes context, submission, rubric, and all model evaluations
+For a complete walkthrough of the directory layout and model dependencies, see `docs/02-PROJECT-STRUCTURE.md`.
 
 ---
 
 ## Usage Guide
 
-### Basic Evaluation Workflow
+**Full usage guide with step-by-step examples:** [`docs/03-USAGE-GUIDE.md`](docs/03-USAGE-GUIDE.md)
 
-The main evaluation script `grade_sergio.py` demonstrates the complete workflow:
-
-```python
-from pydantic_models import (
-    Context, Submission, Rubric, EvaluationDocument,
-    ModelEvaluation, Config, LLMEvaluationResponse
-)
-from utils.openrouter_sdk import get_structured_response
-
-# 1. Load assignment materials
-with open("question_cuboid.md") as f:
-    question_text = f.read()
-
-with open("rubric_cuboid.json") as f:
-    rubric_data = json.load(f)
-
-# 2. Load student submission
-student_id = "Diaz_Sergio_100029"
-with open(f"student_submissions/{student_id}/Cuboid.java") as f:
-    student_code = f.read()
-
-# 3. Construct evaluation prompt
-prompt = f"""
-You are an expert grader for a Computer Science assignment.
-
-**Question:**
-{question_text}
-
-**Rubric:**
-{json.dumps(rubric_data)}
-
-**Student Submission:**
-```java
-{student_code}
-```
-
-Evaluate the student's submission based on the provided rubric.
-"""
-
-# 4. Get structured LLM responses from multiple models
-models_to_test = ["google/gemini-2.5-flash-lite", "moonshotai/kimi-k2-0905"]
-model_evals = {}
-
-for model_name in models_to_test:
-    # Get structured response matching LLMEvaluationResponse schema
-    llm_response = get_structured_response(
-        messages=[{"role": "user", "content": prompt}],
-        response_model=LLMEvaluationResponse,
-        model=model_name
-    )
-
-    # Wrap in ModelEvaluation with metadata
-    model_eval = ModelEvaluation(
-        model_name=model_name,
-        provider="openrouter",
-        run_id=f"run_{uuid.uuid4().hex[:8]}",
-        config=Config(system_prompt_id="simple_direct_prompt", rubric_prompt_id="rubric_v1"),
-        scores=llm_response.scores,
-        category_scores=llm_response.category_scores,
-        feedback=llm_response.feedback,
-        misconceptions=llm_response.misconceptions,
-    )
-    model_evals[model_name.split("/")[-1]] = model_eval
-
-# 5. Assemble complete evaluation document
-eval_doc = EvaluationDocument(
-    evaluation_id=f"eval_{uuid.uuid4()}",
-    schema_version="1.0.0",
-    created_at=datetime.now(timezone.utc),
-    created_by="grade_sergio.py",
-    context=Context(...),        # Course/assignment metadata
-    submission=Submission(...),  # Student info and files
-    rubric=Rubric(...),          # Grading criteria
-    models=model_evals,          # All model evaluations
-)
-
-# 6. Save to JSON
-with open("student_evals/sergio_eval.json", "w") as f:
-    f.write(eval_doc.model_dump_json(indent=2))
-```
-
-### Working with Evaluation Results
-
-```python
-# Load evaluation from JSON
-with open("student_evals/sergio_eval.json") as f:
-    eval_data = json.load(f)
-
-evaluation = EvaluationDocument(**eval_data)
-
-# Access student info
-print(f"Student: {evaluation.submission.student_name}")
-print(f"Assignment: {evaluation.context.assignment_title}")
-
-# Compare scores across models
-for model_name, model_eval in evaluation.models.items():
-    print(f"{model_name}: {model_eval.scores.percentage}%")
-    print(f"  Confidence: {model_eval.scores.confidence}")
-
-# Review misconceptions
-for model_name, model_eval in evaluation.models.items():
-    print(f"\n{model_name} identified {len(model_eval.misconceptions)} misconceptions:")
-    for misc in model_eval.misconceptions:
-        print(f"  - {misc.description} (confidence: {misc.confidence})")
-        for evidence in misc.evidence:
-            print(f"    Line {evidence.line_number}: {evidence.code_snippet}")
-```
+Topics covered:
+- Evaluating your first student
+- Batch evaluating entire classes
+- Choosing different AI models
+- Understanding evaluation results
+- Advanced usage patterns
 
 ---
 
 ## Structured LLM Outputs
 
-The framework uses **Pydantic models** to ensure reliable, schema-validated evaluations from language models. This eliminates parsing errors and guarantees consistent output structure.
+The framework uses **Pydantic models** to ensure reliable, schema-validated evaluations from language models.
 
-### How It Works
+**For complete details:** [`docs/04-API-REFERENCE.md`](docs/04-API-REFERENCE.md#structured-lllm-outputs)
 
-1. **Define the schema** using Pydantic models (`pydantic_models/`)
-2. **LLM generates response** matching the schema structure
-3. **Automatic validation** ensures all fields are present and correctly typed
-4. **Type-safe access** to all evaluation data
-
-### Evaluation Schema
-
-The `LLMEvaluationResponse` model captures everything a grading model provides:
-
-```python
-class LLMEvaluationResponse(BaseModel):
-    scores: Scores  # Overall score, max points, percentage, confidence
-    category_scores: list[CategoryScore]  # Per-rubric-category breakdown
-    feedback: Feedback  # Strengths and areas for improvement
-    misconceptions: list[Misconception]  # Identified misconceptions with evidence
-```
-
-#### Scores
-- `total_points_awarded`: Sum across all categories
-- `max_points`: Total possible points
-- `percentage`: Calculated percentage score
-- `confidence`: Model's confidence in the overall evaluation (0-1)
-
-#### CategoryScore
-- `category_id`: Links to rubric category
-- `points_awarded`: Score for this category
-- `max_points`: Maximum possible for this category
-- `reasoning`: Explanation of the score
-- `confidence`: Model's confidence in this category assessment
-
-#### Feedback
-- `strengths`: List of positive aspects in the student's submission
-- `areas_for_improvement`: List of constructive feedback points
-
-#### Misconception
-- `description`: What the misconception is
-- `confidence`: How confident the model is (0-1)
-- `evidence`: List of Evidence objects with:
-  - `code_snippet`: Exact code demonstrating the misconception
-  - `line_number`: Where it occurs
-  - `explanation`: Why this demonstrates the misconception
-- `identified_by_model`: Which model identified this (for multi-model comparison)
-- `validated`: Whether a human has confirmed this misconception
-
-### Provider Integrations
-
-**OpenAI** (`utils/openai_client.py`):
-```python
-from utils.openai_client import evaluation_with_openai
-
-result = evaluation_with_openai(
-    question="Assignment question text",
-    rubric="Rubric as JSON string",
-    student_code="Student's code",
-    model="gpt-4o"
-)
-# Returns validated ModelEvaluation instance
-```
-
-**OpenRouter** (`utils/openrouter_sdk.py`):
-```python
-from utils.openrouter_sdk import get_structured_response
-from pydantic_models import LLMEvaluationResponse
-
-response = get_structured_response(
-    messages=[{"role": "user", "content": prompt}],
-    response_model=LLMEvaluationResponse,
-    model="google/gemini-2.5-flash-lite"
-)
-# Returns validated LLMEvaluationResponse instance
-```
-
-### Validation Benefits
-
-- **Type Safety**: IDE autocomplete and type checking
-- **No Parsing Errors**: Pydantic handles all validation
-- **Clear Error Messages**: Know exactly what's wrong if validation fails
-- **Schema Versioning**: Track schema evolution over time
-- **JSON Round-Trip**: Serialize to JSON and back without data loss
-
-```python
-# Validation example
-try:
-    eval_doc = EvaluationDocument(**json_data)
-except ValidationError as e:
-    print(f"Validation failed: {e}")
-    # Detailed error messages show exactly which fields failed
-```
+Key features:
+- Type-safe evaluation responses
+- Automatic validation
+- Clear error messages on invalid data
+- No parsing errors or data loss
 
 ---
 
 ## Testing
 
-### Running Tests
-
 ```bash
 # Run all tests
 uv run pytest
-
-# Run specific test file
-uv run pytest tests/simple_openai_test.py
 
 # Run with verbose output
 uv run pytest -v
 ```
 
-### Current Test Coverage
+**Current coverage:** ~5-10%
 
-The project currently has minimal test coverage (~5-10%):
-
-**Tested**:
-- `tests/simple_openai_test.py`: Basic OpenAI client evaluation test
-  - Tests `evaluation_with_openai` function
-  - Validates ModelEvaluation structure
-  - Skips if OPENAI_API_KEY not set
-
-**Not Yet Tested**:
-- OpenRouter integration
-- Comparison and ensemble analysis logic (not yet implemented)
-- Score calculation accuracy
-- Misconception detection
-- Prompt builders
-- Error handling scenarios
-
-### Contributing Tests
-
-When adding features, please:
-1. Write unit tests for new functions
-2. Add integration tests for end-to-end workflows
-3. Test validation logic with invalid data
-4. Verify error handling edge cases
+**For testing best practices:** [`docs/05-ARCHITECTURE.md`](docs/05-ARCHITECTURE.md#testing-strategy)
 
 ---
 
 ## Configuration
 
-### Supported LLM Models
+**For configuration details:** [`docs/03-USAGE-GUIDE.md`](docs/03-USAGE-GUIDE.md#choosing-different-ai-models)
 
-**OpenAI Models** (via `utils/openai_client.py`):
-- GPT-4o
-- GPT-4
-- GPT-3.5-turbo
-- Any model supporting OpenAI's structured outputs API
-
-**OpenRouter Models** (via `utils/openrouter_sdk.py`):
-- Google Gemini models (e.g., `google/gemini-2.5-flash-lite`)
-- Anthropic Claude models (e.g., `anthropic/claude-3-opus`)
-- Moonshot AI models (e.g., `moonshotai/kimi-k2-0905`)
-- Meta Llama models
-- Many more providers (see [OpenRouter documentation](https://openrouter.ai/docs))
-
-### Customizing Evaluation
-
-**Modify models in `grade_sergio.py`**:
-```python
-models_to_test = [
-    "google/gemini-2.5-flash-lite",
-    "anthropic/claude-3-sonnet",
-    "openai/gpt-4o"
-]
-```
-
-**Choose prompting strategy**:
-- `prompts/direct_prompt.py`: Direct evaluation
-- `prompts/reverse_prompt.py`: Generate ideal solution first
-- `prompts/eme_prompt.py`: Ensemble method with enforced structure
-
-**Customize rubric** (`rubric_cuboid.json`):
-```json
-{
-  "totalPoints": 100,
-  "categories": [
-    {
-      "name": "Correctness",
-      "points": 40,
-      "description": "Code produces correct output"
-    },
-    {
-      "name": "Code Quality",
-      "points": 30,
-      "description": "Code is well-structured and readable"
-    }
-  ]
-}
-```
+Supported models:
+- **OpenAI:** GPT-4, GPT-4o, GPT-3.5-turbo
+- **Anthropic:** Claude 3 Opus, Sonnet
+- **Google:** Gemini models
+- **Others:** Via OpenRouter (Moonshot, Llama, etc.)
 
 ---
 
 ## Output Format
 
-### Evaluation JSON Structure
+Evaluation results are saved as JSON files in `student_evals/`.
 
-Each evaluation file (e.g., `student_evals/sergio_eval.json`) is a complete `EvaluationDocument`:
+**For output format details:** [`docs/03-USAGE-GUIDE.md`](docs/03-USAGE-GUIDE.md#understanding-your-results)
 
-```json
-{
-  "evaluation_id": "eval_a1b2c3d4",
-  "schema_version": "1.0.0",
-  "created_at": "2025-11-19T10:30:00Z",
-  "created_by": "grade_sergio.py",
-  "context": {
-    "course_id": "CS101",
-    "course_name": "Intro to CS",
-    "assignment_id": 1,
-    "assignment_title": "Cuboid",
-    "question_id": "q1",
-    "question_title": "Cuboid Class"
-  },
-  "submission": {
-    "student_id": "Diaz_Sergio_100029",
-    "student_name": "Sergio Diaz",
-    "submitted_at": "2025-11-19T09:00:00Z",
-    "programming_language": "Java",
-    "files": [
-      {"path": "Cuboid.java", "language": "Java"}
-    ]
-  },
-  "rubric": {
-    "rubric_id": "rubric_cuboid_v1",
-    "title": "Cuboid Assignment Rubric",
-    "total_points": 100,
-    "categories": [...]
-  },
-  "models": {
-    "gemini-2.5-flash-lite": {
-      "model_name": "google/gemini-2.5-flash-lite",
-      "provider": "openrouter",
-      "run_id": "run_abc123",
-      "scores": {
-        "total_points_awarded": 85,
-        "max_points": 100,
-        "percentage": 85.0,
-        "confidence": 0.9
-      },
-      "category_scores": [...],
-      "feedback": {
-        "strengths": ["Clear variable naming", "Proper encapsulation"],
-        "areas_for_improvement": ["Missing input validation"]
-      },
-      "misconceptions": [...]
-    },
-    "kimi-k2-0905": {...}
-  }
-}
-```
-
-### JSON Schema
-
-All models are self-documenting via Pydantic. To view the full JSON schema:
-
-```python
-from pydantic_models import EvaluationDocument
-
-# Get JSON Schema
-schema = EvaluationDocument.model_json_schema()
-print(json.dumps(schema, indent=2))
-```
+Each file contains:
+- Student information
+- Scores from each AI model
+- Feedback (strengths and areas for improvement)
+- Identified misconceptions with evidence
+- Metadata (timestamps, model versions, etc.)
 
 ---
 
@@ -680,11 +348,10 @@ print(json.dumps(schema, indent=2))
 ## Current Limitations & Future Work
 
 ### Known Limitations
-- **Single-file submissions**: Currently supports one code file per student
-- **No CLI**: Evaluation requires running Python scripts directly
-- **No database**: Evaluations stored as individual JSON files
-- **Comparison logic not implemented**: Models defined but computation not yet built
-- **Manual model configuration**: Must edit code to change models/parameters
+- Single-file submissions: current workflow assumes one code file per student
+- No database: evaluations are stored as individual JSON files
+- Comparison logic not implemented: comparison models exist, but computation is not wired
+- Manual model configuration: model lists and parameters are edited in code/CLI config
 
 ### Planned Enhancements
 1. **Multi-file submission support**
@@ -713,31 +380,13 @@ print(json.dumps(schema, indent=2))
 
 ## Contributing
 
+**For detailed development guidance:** [`docs/05-ARCHITECTURE.md`](docs/05-ARCHITECTURE.md#extension-guide)
+
 When adding features:
-
-1. **Follow architectural patterns**:
-   - Pydantic models in `pydantic_models/`
-   - LLM integrations in `utils/`
-   - Prompt templates in `prompts/`
-   - Evaluation workflows as standalone scripts (like `grade_sergio.py`)
-
-2. **Maintain schema integrity**:
-   - All changes to data models must update Pydantic schemas
-   - Preserve backward compatibility with schema versioning
-   - Add comprehensive field descriptions
-   - Include validation logic where appropriate
-
-3. **Document thoroughly**:
-   - Update README.md for user-facing changes
-   - Add docstrings to all functions and classes
-   - Include usage examples in docstrings
-   - Update `pydantic_models/README.md` for schema changes
-
-4. **Write tests**:
-   - Unit tests for new functions
-   - Integration tests for workflows
-   - Validation tests for edge cases
-   - Mock LLM responses for deterministic testing
+1. Follow architectural patterns
+2. Maintain schema integrity with Pydantic
+3. Document thoroughly
+4. Write tests with good coverage
 
 ---
 
