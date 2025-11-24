@@ -1,3 +1,4 @@
+import re
 import json
 import os
 import uuid
@@ -17,12 +18,76 @@ from sandbox.pydantic_models import (
 from sandbox.utils.openrouter_sdk import get_structured_response
 
 
+def parse_markdown_rubric(md_content: str) -> dict[str, Any]:
+    """
+    Parses a markdown table rubric into a dictionary.
+    Expected columns: Tasks, Marks Assigned, Bloom's Level, Why?
+    """
+    lines = md_content.splitlines()
+    categories = []
+    total_points = 0.0
+
+    # Skip header and separator lines
+    # Find the start of the table
+    start_index = 0
+    for i, line in enumerate(lines):
+        if line.strip().startswith("|") and "Tasks" in line:
+            start_index = i + 2  # Skip header and separator
+            break
+    
+    for line in lines[start_index:]:
+        if not line.strip().startswith("|"):
+            continue
+            
+        parts = [p.strip() for p in line.split("|")]
+        # parts[0] is empty string before first |
+        # parts[1] is Task
+        # parts[2] is Marks
+        # parts[3] is Bloom's Level
+        # parts[4] is Why?
+        
+        if len(parts) < 6:
+            continue
+            
+        task = parts[1]
+        marks_str = parts[2].replace("+", "").strip()
+        try:
+            points = float(marks_str)
+        except ValueError:
+            continue # Skip if marks not parseable
+            
+        bloom_level_full = parts[3]
+        # Extract "Understand" from "Level 2: Understand"
+        if ":" in bloom_level_full:
+            bloom_level = bloom_level_full.split(":", 1)[1].strip()
+        else:
+            bloom_level = bloom_level_full
+            
+        description = parts[4]
+        
+        categories.append({
+            "task": task,
+            "points": points,
+            "bloom_level": bloom_level,
+            "description": description
+        })
+        total_points += points
+
+    return {
+        "totalPoints": total_points,
+        "categories": categories
+    }
+
+
 def load_question(file_path: str) -> str:
     with open(file_path) as f:
         return f.read()
 
 
 def load_rubric(file_path: str) -> dict[str, Any]:
+    if file_path.endswith(".md"):
+        with open(file_path) as f:
+            return parse_markdown_rubric(f.read())
     with open(file_path) as f:
         return json.load(f)
 
@@ -130,19 +195,24 @@ def create_evaluation_document(
     # Rubric
     rubric_categories = []
     for cat in rubric_data["categories"]:
+        # Handle both old JSON format (name) and new MD format (task)
+        task_name = cat.get("task", cat.get("name", "Unknown Task"))
+        points = cat.get("points", cat.get("max_points", 0.0))
+        
         rubric_categories.append(
             {
-                "category_id": cat["name"].lower().replace(" ", "_").replace("&", "and"),
-                "name": cat["name"],
-                "max_points": cat["points"],
+                "category_id": task_name.lower().replace(" ", "_").replace("&", "and")[:50], # Truncate id
+                "task": task_name,
+                "points": float(points),
+                "bloom_level": cat.get("bloom_level", "Unspecified"),
                 "description": cat["description"],
             }
         )
 
     rubric = Rubric(
         rubric_id="rubric_cuboid_v1",
-        title="Cuboid Assignment Rubric",
-        total_points=rubric_data["totalPoints"],
+        title="Assignment Rubric",
+        total_points=float(rubric_data["totalPoints"]),
         categories=rubric_categories,
     )
 

@@ -65,10 +65,10 @@ class Scores(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    total_points_awarded: int = Field(
+    total_points_awarded: float = Field(
         ..., description="Sum of all category_scores[*].points_awarded"
     )
-    max_points: int = Field(
+    max_points: float = Field(
         ..., description="Maximum possible points (should match rubric.total_points)"
     )
     percentage: float = Field(
@@ -95,9 +95,9 @@ class CategoryScore(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     category_id: str = Field(..., description="Links to rubric.categories[*].category_id")
-    category_name: str = Field(..., description="Human-readable name of the category")
-    points_awarded: int = Field(..., description="Points this model gave in this category")
-    max_points: int = Field(..., description="Maximum possible points in this category")
+    task: str = Field(..., description="The task name from the rubric")
+    points_awarded: float = Field(..., description="Points this model gave in this category")
+    max_points: float = Field(..., description="Maximum possible points in this category")
     reasoning: str = Field(..., description="Category-specific reasoning for the score")
     confidence: float = Field(
         ..., ge=0.0, le=1.0, description="Model's confidence in this category score (0-1)"
