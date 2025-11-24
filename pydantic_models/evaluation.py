@@ -5,12 +5,11 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import __version__ as MODELS_VERSION
+from .comparison.models import Comparison
 from .context import Context
 from .models import ModelEvaluation
 from .rubric import Rubric
 from .submission import Submission
-
-from .comparison.models import Comparison
 
 
 class EvaluationDocument(BaseModel):

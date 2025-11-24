@@ -2,27 +2,26 @@
 Utility functions for generating comparison sections of the EvaluationDocument.
 """
 
-import statistics
 import itertools
-from typing import Dict, List
+import statistics
 
 from pydantic_models.comparison.score_analysis import (
-    CategoryDifference,
-    LargestCategoryDisagreement,
-    PairwiseComparison,
-    ScoreSummary,
     CategoryAgreement,
+    CategoryDifference,
     CategoryInsights,
     CategoryStatistics,
     ConfidenceStats,
-    MostControversialCategory,
-    MostAgreedCategory,
+    LargestCategoryDisagreement,
     LowestConfidenceCategory,
+    MostAgreedCategory,
+    MostControversialCategory,
+    PairwiseComparison,
+    ScoreSummary,
 )
 from pydantic_models.models import ModelEvaluation
 
 
-def generate_score_summary(models: Dict[str, ModelEvaluation]) -> ScoreSummary:
+def generate_score_summary(models: dict[str, ModelEvaluation]) -> ScoreSummary:
     """
     Generate the ScoreSummary section of the comparison.
 
@@ -88,7 +87,7 @@ def generate_score_summary(models: Dict[str, ModelEvaluation]) -> ScoreSummary:
     )
 
 
-def generate_pairwise_differences(models: Dict[str, ModelEvaluation]) -> List[PairwiseComparison]:
+def generate_pairwise_differences(models: dict[str, ModelEvaluation]) -> list[PairwiseComparison]:
     """
     Generate pairwise comparisons between all models.
 
@@ -186,7 +185,7 @@ def generate_pairwise_differences(models: Dict[str, ModelEvaluation]) -> List[Pa
     return comparisons
 
 
-def generate_category_agreement(models: Dict[str, ModelEvaluation]) -> List[CategoryAgreement]:
+def generate_category_agreement(models: dict[str, ModelEvaluation]) -> list[CategoryAgreement]:
     """
     Generate agreement statistics for each rubric category.
     """
@@ -307,7 +306,7 @@ def generate_category_agreement(models: Dict[str, ModelEvaluation]) -> List[Cate
     return agreement_list
 
 
-def generate_category_insights(agreement_list: List[CategoryAgreement]) -> CategoryInsights:
+def generate_category_insights(agreement_list: list[CategoryAgreement]) -> CategoryInsights:
     """
     Derive high-level insights from category agreement data.
     """

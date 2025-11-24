@@ -1,7 +1,7 @@
-import unittest
 import json
 import os
-from pydantic_models.evaluation import EvaluationDocument
+import unittest
+
 from utils.comparison_generator import (
     generate_category_agreement,
     generate_category_insights,
@@ -17,7 +17,7 @@ class TestComparisonGenerator(unittest.TestCase):
         if not os.path.exists(file_path):
             self.skipTest(f"File {file_path} not found")
 
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             data = json.load(f)
 
         # Extract models directly to avoid validation errors on stale JSON
@@ -49,7 +49,7 @@ class TestComparisonGenerator(unittest.TestCase):
         if not os.path.exists(file_path):
             self.skipTest(f"File {file_path} not found")
 
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             data = json.load(f)
 
         # Extract models directly
@@ -102,7 +102,7 @@ class TestComparisonGenerator(unittest.TestCase):
         if not os.path.exists(file_path):
             self.skipTest(f"File {file_path} not found")
 
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             data = json.load(f)
 
         # Extract models directly
