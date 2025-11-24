@@ -17,7 +17,7 @@ from sandbox.utils.grading import (
 load_dotenv()
 console = Console()
 
-MODELS = ["google/gemini-2.5-flash-lite", "openai/gpt-5-nano"]
+MODELS = ["google/gemini-2.5-flash", "openai/gpt-5.1", "google/gemini-2.5-flash-lite", "openai/gpt-5-nano"]
 
 
 async def grade_single_student():
