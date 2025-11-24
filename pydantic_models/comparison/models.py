@@ -41,7 +41,8 @@ class Comparison(BaseModel):
         default=None, description="Compare misconception detection across models"
     )
     confidence_analysis: ConfidenceAnalysis | None = Field(
-        default=None, description="Examine model confidence patterns and confidence-score relationships"
+        default=None,
+        description="Examine model confidence patterns and confidence-score relationships",
     )
     model_characteristics: ModelCharacteristics | None = Field(
         default=None, description="Understanding grading tendencies and behavior patterns"

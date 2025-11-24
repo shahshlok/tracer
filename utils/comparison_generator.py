@@ -36,9 +36,7 @@ def generate_score_summary(models: Dict[str, ModelEvaluation]) -> ScoreSummary:
         A ScoreSummary object containing the calculated statistics.
     """
     # Extract percentage scores from all models
-    model_scores = {
-        name: eval_data.scores.percentage for name, eval_data in models.items()
-    }
+    model_scores = {name: eval_data.scores.percentage for name, eval_data in models.items()}
     scores = list(model_scores.values())
 
     if not scores:
@@ -58,7 +56,7 @@ def generate_score_summary(models: Dict[str, ModelEvaluation]) -> ScoreSummary:
     # Calculate statistics
     mean_val = statistics.mean(scores)
     median_val = statistics.median(scores)
-    
+
     if len(scores) > 1:
         std_dev_val = statistics.stdev(scores)
         variance_val = statistics.variance(scores)
@@ -90,9 +88,7 @@ def generate_score_summary(models: Dict[str, ModelEvaluation]) -> ScoreSummary:
     )
 
 
-def generate_pairwise_differences(
-    models: Dict[str, ModelEvaluation]
-) -> List[PairwiseComparison]:
+def generate_pairwise_differences(models: Dict[str, ModelEvaluation]) -> List[PairwiseComparison]:
     """
     Generate pairwise comparisons between all models.
 
@@ -116,7 +112,7 @@ def generate_pairwise_differences(
         max_points = model_a.scores.max_points  # Assuming max points are same for both
 
         total_diff = score_a - score_b
-        
+
         # Avoid division by zero
         if max_points > 0:
             percent_diff = (total_diff / max_points) * 100
@@ -125,7 +121,7 @@ def generate_pairwise_differences(
 
         # 2. Category Differences
         category_diffs = []
-        
+
         # Create a map for model B's categories for easy lookup
         # Index by both ID and Name to handle model inconsistencies
         cats_b_by_id = {c.category_id: c for c in model_b.category_scores}
@@ -134,17 +130,17 @@ def generate_pairwise_differences(
         for cat_a in model_a.category_scores:
             # Try exact ID match first
             cat_b = cats_b_by_id.get(cat_a.category_id)
-            
+
             # Fallback to Name match
             if not cat_b:
                 cat_b = cats_b_by_name.get(cat_a.category_name.lower().strip())
-            
+
             if not cat_b:
                 # Should not happen if models follow same rubric, but handle gracefully
                 continue
 
             cat_diff = cat_a.points_awarded - cat_b.points_awarded
-            
+
             if cat_a.max_points > 0:
                 cat_percent_max = (cat_diff / cat_a.max_points) * 100
             else:
@@ -164,9 +160,7 @@ def generate_pairwise_differences(
         # 3. Find Largest Disagreement
         if category_diffs:
             # Find category with max absolute percent difference
-            largest_disagreement = max(
-                category_diffs, key=lambda x: abs(x.percent_of_category_max)
-            )
+            largest_disagreement = max(category_diffs, key=lambda x: abs(x.percent_of_category_max))
             largest_cat_disagreement = LargestCategoryDisagreement(
                 category_id=largest_disagreement.category_id,
                 difference_percent=largest_disagreement.percent_of_category_max,
@@ -192,9 +186,7 @@ def generate_pairwise_differences(
     return comparisons
 
 
-def generate_category_agreement(
-    models: Dict[str, ModelEvaluation]
-) -> List[CategoryAgreement]:
+def generate_category_agreement(models: Dict[str, ModelEvaluation]) -> List[CategoryAgreement]:
     """
     Generate agreement statistics for each rubric category.
     """
@@ -220,14 +212,12 @@ def generate_category_agreement(
         # Create lookup for this model
         model_cats = {c.category_id: c for c in eval_data.category_scores}
         # Fallback lookup by name
-        model_cats_by_name = {
-            c.category_name.lower().strip(): c for c in eval_data.category_scores
-        }
+        model_cats_by_name = {c.category_name.lower().strip(): c for c in eval_data.category_scores}
 
         for cat_id, cat_data in categories.items():
             # Try ID match
             cat_score = model_cats.get(cat_id)
-            
+
             # Try Name match
             if not cat_score:
                 cat_score = model_cats_by_name.get(cat_data["name"].lower().strip())
@@ -251,7 +241,7 @@ def generate_category_agreement(
         # Statistics
         mean_val = statistics.mean(scores)
         median_val = statistics.median(scores)
-        
+
         if len(scores) > 1:
             std_dev_val = statistics.stdev(scores)
             variance_val = statistics.variance(scores)
@@ -279,7 +269,7 @@ def generate_category_agreement(
 
         # Normalized Variance
         if max_points > 0:
-            norm_var = variance_val / (max_points ** 2)
+            norm_var = variance_val / (max_points**2)
         else:
             norm_var = 0.0
 
@@ -317,9 +307,7 @@ def generate_category_agreement(
     return agreement_list
 
 
-def generate_category_insights(
-    agreement_list: List[CategoryAgreement]
-) -> CategoryInsights:
+def generate_category_insights(agreement_list: List[CategoryAgreement]) -> CategoryInsights:
     """
     Derive high-level insights from category agreement data.
     """
@@ -342,10 +330,12 @@ def generate_category_insights(
     # Filter out categories with mean=0 (CV=0) but high range? No, CV handles variability relative to mean.
     # If mean is 0, CV is 0, but disagreement might exist if scores are all 0? No, if all 0, std_dev is 0.
     # If some 0 some 10, mean 5, std_dev ~5, CV ~1. High.
-    
-    sorted_by_cv = sorted(agreement_list, key=lambda x: x.statistics.coefficient_of_variation, reverse=True)
+
+    sorted_by_cv = sorted(
+        agreement_list, key=lambda x: x.statistics.coefficient_of_variation, reverse=True
+    )
     most_controversial = sorted_by_cv[0]
-    
+
     controversial_insight = MostControversialCategory(
         category_id=most_controversial.category_id,
         category_name=most_controversial.category_name,
@@ -356,7 +346,7 @@ def generate_category_insights(
     # 2. Most Agreed (Lowest CV)
     sorted_by_cv_asc = sorted(agreement_list, key=lambda x: x.statistics.coefficient_of_variation)
     most_agreed = sorted_by_cv_asc[0]
-    
+
     agreed_insight = MostAgreedCategory(
         category_id=most_agreed.category_id,
         category_name=most_agreed.category_name,
@@ -367,7 +357,7 @@ def generate_category_insights(
     # 3. Lowest Confidence
     sorted_by_conf = sorted(agreement_list, key=lambda x: x.confidence_stats.mean_confidence)
     lowest_conf = sorted_by_conf[0]
-    
+
     conf_insight = LowestConfidenceCategory(
         category_id=lowest_conf.category_id,
         mean_confidence=lowest_conf.confidence_stats.mean_confidence,
