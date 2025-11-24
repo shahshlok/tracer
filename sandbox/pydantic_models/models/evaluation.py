@@ -94,7 +94,6 @@ class CategoryScore(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    category_id: str = Field(..., description="Links to rubric.categories[*].category_id")
     task: str = Field(..., description="The task name from the rubric")
     points_awarded: float = Field(..., description="Points this model gave in this category")
     max_points: float = Field(..., description="Maximum possible points in this category")
@@ -157,6 +156,10 @@ class Misconception(BaseModel):
     bloom_level: str = Field(
         ...,
         description="Bloom's taxonomy level associated with this misconception (e.g., 'Understand', 'Apply', 'Analyze', 'Evaluate')"
+    )
+    task: str = Field(
+        ...,
+        description="The task name from the rubric category where this misconception appears"
     )
     name: str = Field(..., description="Human-readable label for this misconception")
     description: str = Field(

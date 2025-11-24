@@ -134,8 +134,9 @@ Provide a structured output containing:
 2. Specific feedback for each category.
 3. Identification of any misconceptions. For each misconception:
    - Include the Bloom's taxonomy level (from the rubric category where the misconception appears)
+   - Include the task name from the rubric category where the misconception appears
    - Consider that misconceptions at higher Bloom's levels (e.g., Analyze, Evaluate) may indicate deeper conceptual gaps
-   - If a misconception spans multiple categories, choose the highest Bloom's level among them
+   - If a misconception spans multiple categories, choose the highest Bloom's level and most relevant task among them
 4. Overall feedback.
 """
     return prompt
