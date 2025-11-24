@@ -13,7 +13,8 @@ class RubricCategory(BaseModel):
     task: str = Field(..., description="The task name for this rubric category")
     points: float = Field(..., description="Maximum points for this category")
     bloom_level: str = Field(
-        ..., description="Bloom's taxonomy level for this category (e.g., 'Understand', 'Apply', 'Analyze', 'Evaluate')"
+        ...,
+        description="Bloom's taxonomy level for this category (e.g., 'Understand', 'Apply', 'Analyze', 'Evaluate')",
     )
     description: str = Field(
         ..., description="Detailed explanation of what this category is assessing"

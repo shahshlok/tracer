@@ -279,7 +279,9 @@ def main():
         gpt5nano_eval = evals.get("openai/gpt-5-nano")
 
         # Get scores
-        gemini_flash_score = gemini_flash_eval.scores.total_points_awarded if gemini_flash_eval else 0
+        gemini_flash_score = (
+            gemini_flash_eval.scores.total_points_awarded if gemini_flash_eval else 0
+        )
         gpt51_score = gpt51_eval.scores.total_points_awarded if gpt51_eval else 0
         gemini_lite_score = gemini_lite_eval.scores.total_points_awarded if gemini_lite_eval else 0
         gpt5nano_score = gpt5nano_eval.scores.total_points_awarded if gpt5nano_eval else 0
