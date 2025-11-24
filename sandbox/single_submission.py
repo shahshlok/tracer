@@ -5,7 +5,7 @@ import random
 from dotenv import load_dotenv
 from rich.console import Console
 
-from experiment.sandbox.utils.grading import (
+from sandbox.utils.grading import (
     construct_prompt,
     create_evaluation_document,
     grade_with_model,
@@ -86,7 +86,7 @@ async def grade_single_student():
         rubric_source_path="data/rubric_cuboid.json",
     )
 
-    output_dir = "experiment/sandbox_output"
+    output_dir = "sandbox/evals"
     os.makedirs(output_dir, exist_ok=True)
     output_file = f"{output_dir}/{student_id}_eval.json"
 

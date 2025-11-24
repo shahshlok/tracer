@@ -5,7 +5,7 @@ import itertools
 import statistics
 from datetime import datetime
 
-from experiment.sandbox.pydantic_models.comparison.confidence_analysis import (
+from sandbox.pydantic_models.comparison.confidence_analysis import (
     ConfidenceAnalysis,
     ConfidenceRange,
     ConfidenceStatsPerCategory,
@@ -15,7 +15,7 @@ from experiment.sandbox.pydantic_models.comparison.confidence_analysis import (
     StrictnessRanking,
     ConsistencyScore,
 )
-from experiment.sandbox.pydantic_models.comparison.ensemble import (
+from sandbox.pydantic_models.comparison.ensemble import (
     AlternativeScores,
     ComparisonMetadata,
     EnsembleDecision,
@@ -23,15 +23,15 @@ from experiment.sandbox.pydantic_models.comparison.ensemble import (
     Flags,
     ThresholdsConfig,
 )
-from experiment.sandbox.pydantic_models.comparison.misconception_analysis import (
+from sandbox.pydantic_models.comparison.misconception_analysis import (
     MisconceptionOverlap,
     MisconceptionSummary,
 )
-from experiment.sandbox.pydantic_models.comparison.reliability import (
+from sandbox.pydantic_models.comparison.reliability import (
     ConfidenceInterval95,
     ReliabilityMetrics,
 )
-from experiment.sandbox.pydantic_models.comparison.score_analysis import (
+from sandbox.pydantic_models.comparison.score_analysis import (
     CategoryAgreement,
     CategoryDifference,
     CategoryInsights,
@@ -44,7 +44,7 @@ from experiment.sandbox.pydantic_models.comparison.score_analysis import (
     PairwiseComparison,
     ScoreSummary,
 )
-from experiment.sandbox.pydantic_models.models import ModelEvaluation
+from sandbox.pydantic_models.models import ModelEvaluation
 
 
 def generate_score_summary(models: dict[str, ModelEvaluation]) -> ScoreSummary:

@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from experiment.sandbox.pydantic_models import (
+from sandbox.pydantic_models import (
     Config,
     Context,
     EvaluationDocument,
@@ -14,8 +14,8 @@ from experiment.sandbox.pydantic_models import (
     StudentFile,
     Submission,
 )
-from experiment.sandbox.pydantic_models.comparison.models import Comparison
-from experiment.sandbox.utils.comparison_generator import (
+from sandbox.pydantic_models.comparison.models import Comparison
+from sandbox.utils.comparison_generator import (
     generate_category_agreement,
     generate_category_insights,
     generate_confidence_analysis,
@@ -29,7 +29,7 @@ from experiment.sandbox.utils.comparison_generator import (
     generate_reliability_metrics,
     generate_score_summary,
 )
-from experiment.sandbox.utils.openrouter_sdk import get_structured_response
+from sandbox.utils.openrouter_sdk import get_structured_response
 
 
 def load_question(file_path: str) -> str:
