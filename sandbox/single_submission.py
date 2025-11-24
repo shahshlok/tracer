@@ -36,12 +36,8 @@ async def grade_single_student():
         console.print("[red]No students found.[/red]")
         return
 
-    student_id = "Valdez_Diego_100046"
-
-    # Verify the student exists
-    if student_id not in students:
-        console.print(f"[yellow] student {student_id} not found, selecting random...[/yellow]")
-        student_id = random.choice(students)
+    console.print(f"[yellow] Selecting random student...[/yellow]")
+    student_id = random.choice(students)
 
     console.print(f"Selected Student: [cyan]{student_id}[/cyan]")
 
