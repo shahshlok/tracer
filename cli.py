@@ -33,7 +33,7 @@ console = Console()
 # Reduce this if you hit rate limits (429 errors), increase if your tier allows.
 MAX_CONCURRENT_STUDENTS = 5
 MODELS = ["google/gemini-2.5-flash-lite", "moonshotai/kimi-k2-0905"]
-BATCH_LIMIT = 10
+BATCH_LIMIT = 25  # Process all students
 
 # --- Helper Functions ---
 
