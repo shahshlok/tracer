@@ -154,6 +154,10 @@ class Misconception(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    bloom_level: str = Field(
+        ...,
+        description="Bloom's taxonomy level associated with this misconception (e.g., 'Understand', 'Apply', 'Analyze', 'Evaluate')"
+    )
     name: str = Field(..., description="Human-readable label for this misconception")
     description: str = Field(
         ..., description="Description of what behavior/understanding this misconception reflects"
