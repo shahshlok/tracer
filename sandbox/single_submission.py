@@ -47,8 +47,8 @@ async def grade_single_student():
 
     # 2. Load Resources
     try:
-        question_text = load_question("data/question_cuboid.md")
-        rubric_data = load_rubric("data/rubric_cuboid.json")
+        question_text = load_question("data/question_insurance.md")
+        rubric_data = load_rubric("data/rubric_insurance2.md")
         student_code, filename = load_student_submission(student_id)
     except Exception as e:
         console.print(f"[red]Error loading resources: {e}[/red]")

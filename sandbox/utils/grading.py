@@ -14,21 +14,6 @@ from sandbox.pydantic_models import (
     StudentFile,
     Submission,
 )
-from sandbox.pydantic_models.comparison.models import Comparison
-from sandbox.utils.comparison_generator import (
-    generate_category_agreement,
-    generate_category_insights,
-    generate_confidence_analysis,
-    generate_ensemble_decision,
-    generate_ensemble_quality,
-    generate_flags,
-    generate_metadata,
-    generate_misconception_summary,
-    generate_model_characteristics,
-    generate_pairwise_differences,
-    generate_reliability_metrics,
-    generate_score_summary,
-)
 from sandbox.utils.openrouter_sdk import get_structured_response
 
 
@@ -170,18 +155,4 @@ def create_evaluation_document(
         submission=submission,
         rubric=rubric,
         models=model_evals,
-        comparison=Comparison(
-            score_summary=generate_score_summary(model_evals),
-            pairwise_differences=generate_pairwise_differences(model_evals),
-            category_agreement=(cat_agreement := generate_category_agreement(model_evals)),
-            category_insights=generate_category_insights(cat_agreement),
-            misconception_summary=generate_misconception_summary(model_evals),
-            confidence_analysis=generate_confidence_analysis(model_evals),
-            model_characteristics=generate_model_characteristics(model_evals),
-            reliability_metrics=generate_reliability_metrics(model_evals),
-            ensemble_decision=generate_ensemble_decision(model_evals),
-            ensemble_quality=generate_ensemble_quality(model_evals),
-            flags=generate_flags(model_evals),
-            metadata=generate_metadata(model_evals),
-        ),
     )
