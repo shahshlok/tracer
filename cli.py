@@ -118,7 +118,14 @@ async def process_student_wrapper(
 
             if valid_evals:
                 eval_doc = create_evaluation_document(
-                    student_id, student_name, question_text, rubric_data, filename, valid_evals
+                    student_id,
+                    student_name,
+                    question_text,
+                    rubric_data,
+                    filename,
+                    valid_evals,
+                    question_source_path="data/question_cuboid.md",
+                    rubric_source_path="data/rubric_cuboid.json",
                 )
 
                 output_dir = "student_evals"
@@ -212,8 +219,8 @@ def main():
         with console.status(
             "[bold yellow]Loading Assignment Resources...[/bold yellow]", spinner="dots"
         ):
-            question_text = load_question("question_cuboid.md")
-            rubric_data = load_rubric("rubric_cuboid.json")
+            question_text = load_question("data/question_cuboid.md")
+            rubric_data = load_rubric("data/rubric_cuboid.json")
     except Exception as e:
         console.print(f"[red]Error loading resources: {e}[/red]")
         return

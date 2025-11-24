@@ -110,6 +110,8 @@ def create_evaluation_document(
     rubric_data: dict[str, Any],
     filename: str,
     model_evals: dict[str, ModelEvaluation],
+    question_source_path: str = "data/question_cuboid.md",
+    rubric_source_path: str = "data/rubric_cuboid.json",
 ) -> EvaluationDocument:
     # Context
     context = Context(
@@ -117,10 +119,10 @@ def create_evaluation_document(
         course_name="Intro to CS",
         assignment_id=1,
         assignment_title="Cuboid",  # Hardcoded as per grade_sergio.py
-        question_source_path="question_cuboid.md",
+        question_source_path=question_source_path,
         question_id="q1",
         question_title="Cuboid Class",
-        rubric_source_path="rubric_cuboid.json",
+        rubric_source_path=rubric_source_path,
     )
 
     # Submission
