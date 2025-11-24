@@ -113,7 +113,7 @@ def load_student_submission(
 
 
 def construct_prompt(question_text: str, rubric_data: dict[str, Any], student_code: str) -> str:
-    rubric_str = json.dumps(rubric_data)
+    rubric_str = json.dumps(rubric_data, indent=2)
     prompt = f"""
 You are an expert grader for a Computer Science assignment.
 
@@ -132,7 +132,10 @@ Evaluate the student's submission based on the provided rubric.
 Provide a structured output containing:
 1. Scores for each category in the rubric.
 2. Specific feedback for each category.
-3. Identification of any misconceptions.
+3. Identification of any misconceptions. For each misconception:
+   - Include the Bloom's taxonomy level (from the rubric category where the misconception appears)
+   - Consider that misconceptions at higher Bloom's levels (e.g., Analyze, Evaluate) may indicate deeper conceptual gaps
+   - If a misconception spans multiple categories, choose the highest Bloom's level among them
 4. Overall feedback.
 """
     return prompt
