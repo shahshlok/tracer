@@ -25,24 +25,26 @@ MODELS = ["google/gemini-2.5-flash-lite", "openai/gpt-5-nano"]
 async def grade_single_student():
     # 1. Setup
     console.print("[bold blue]Experiment: Single Student Grading[/bold blue]")
-    
+
     submission_dir = "student_submissions"
     if not os.path.exists(submission_dir):
         console.print(f"[red]Submission directory '{submission_dir}' not found.[/red]")
         return
 
-    students = [d for d in os.listdir(submission_dir) if os.path.isdir(os.path.join(submission_dir, d))]
+    students = [
+        d for d in os.listdir(submission_dir) if os.path.isdir(os.path.join(submission_dir, d))
+    ]
     if not students:
         console.print("[red]No students found.[/red]")
         return
 
     student_id = "Valdez_Diego_100046"
-    
+
     # Verify the student exists
     if student_id not in students:
         console.print(f"[yellow] student {student_id} not found, selecting random...[/yellow]")
         student_id = random.choice(students)
-    
+
     console.print(f"Selected Student: [cyan]{student_id}[/cyan]")
 
     # 2. Load Resources
@@ -59,7 +61,7 @@ async def grade_single_student():
     messages = [{"role": "user", "content": prompt}]
 
     model_evals = {}
-    
+
     for model in MODELS:
         console.print(f"Grading with [magenta]{model}[/magenta]...")
         try:
@@ -89,7 +91,7 @@ async def grade_single_student():
     output_dir = "experiment"
     os.makedirs(output_dir, exist_ok=True)
     output_file = f"{output_dir}/{student_id}_eval.json"
-    
+
     with open(output_file, "w") as f:
         f.write(eval_doc.model_dump_json(indent=2))
 
