@@ -155,11 +155,10 @@ class Misconception(BaseModel):
 
     bloom_level: str = Field(
         ...,
-        description="Bloom's taxonomy level associated with this misconception (e.g., 'Understand', 'Apply', 'Analyze', 'Evaluate')"
+        description="Bloom's taxonomy level associated with this misconception (e.g., 'Understand', 'Apply', 'Analyze', 'Evaluate')",
     )
     task: str = Field(
-        ...,
-        description="The task name from the rubric category where this misconception appears"
+        ..., description="The task name from the rubric category where this misconception appears"
     )
     name: str = Field(..., description="Human-readable label for this misconception")
     description: str = Field(

@@ -1,4 +1,3 @@
-import re
 import json
 import os
 import uuid
@@ -34,49 +33,43 @@ def parse_markdown_rubric(md_content: str) -> dict[str, Any]:
         if line.strip().startswith("|") and "Tasks" in line:
             start_index = i + 2  # Skip header and separator
             break
-    
+
     for line in lines[start_index:]:
         if not line.strip().startswith("|"):
             continue
-            
+
         parts = [p.strip() for p in line.split("|")]
         # parts[0] is empty string before first |
         # parts[1] is Task
         # parts[2] is Marks
         # parts[3] is Bloom's Level
         # parts[4] is Why?
-        
+
         if len(parts) < 6:
             continue
-            
+
         task = parts[1]
         marks_str = parts[2].replace("+", "").strip()
         try:
             points = float(marks_str)
         except ValueError:
-            continue # Skip if marks not parseable
-            
+            continue  # Skip if marks not parseable
+
         bloom_level_full = parts[3]
         # Extract "Understand" from "Level 2: Understand"
         if ":" in bloom_level_full:
             bloom_level = bloom_level_full.split(":", 1)[1].strip()
         else:
             bloom_level = bloom_level_full
-            
+
         description = parts[4]
-        
-        categories.append({
-            "task": task,
-            "points": points,
-            "bloom_level": bloom_level,
-            "description": description
-        })
+
+        categories.append(
+            {"task": task, "points": points, "bloom_level": bloom_level, "description": description}
+        )
         total_points += points
 
-    return {
-        "totalPoints": total_points,
-        "categories": categories
-    }
+    return {"totalPoints": total_points, "categories": categories}
 
 
 def load_question(file_path: str) -> str:
@@ -180,7 +173,7 @@ def create_evaluation_document(
         course_id="COSC 111",
         course_name="Intro to Programming",
         assignment_id=1,
-        assignment_title="Insurance Compute",  
+        assignment_title="Insurance Compute",
         question_source_path=question_source_path,
         question_id="q1",
         question_title="Insurance Compute",
@@ -202,10 +195,12 @@ def create_evaluation_document(
         # Handle both old JSON format (name) and new MD format (task)
         task_name = cat.get("task", cat.get("name", "Unknown Task"))
         points = cat.get("points", cat.get("max_points", 0.0))
-        
+
         rubric_categories.append(
             {
-                "category_id": task_name.lower().replace(" ", "_").replace("&", "and")[:50], # Truncate id
+                "category_id": task_name.lower()
+                .replace(" ", "_")
+                .replace("&", "and")[:50],  # Truncate id
                 "task": task_name,
                 "points": float(points),
                 "bloom_level": cat.get("bloom_level", "Unspecified"),

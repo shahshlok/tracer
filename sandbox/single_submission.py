@@ -36,7 +36,7 @@ async def grade_single_student():
         console.print("[red]No students found.[/red]")
         return
 
-    console.print(f"[yellow] Selecting random student...[/yellow]")
+    console.print("[yellow] Selecting random student...[/yellow]")
     student_id = random.choice(students)
 
     console.print(f"Selected Student: [cyan]{student_id}[/cyan]")

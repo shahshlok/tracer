@@ -1,6 +1,7 @@
 """
 Utility functions for generating comparison sections of the EvaluationDocument.
 """
+
 import itertools
 import statistics
 from datetime import datetime
@@ -9,11 +10,10 @@ from sandbox.pydantic_models.comparison.confidence_analysis import (
     ConfidenceAnalysis,
     ConfidenceRange,
     ConfidenceStatsPerCategory,
-    HighConfidenceDisagreement,
+    ConsistencyScore,
     LowConfidenceCategory,
     ModelCharacteristics,
     StrictnessRanking,
-    ConsistencyScore,
 )
 from sandbox.pydantic_models.comparison.ensemble import (
     AlternativeScores,
@@ -415,14 +415,14 @@ def generate_misconception_summary(models: dict[str, ModelEvaluation]) -> Miscon
 
     consensus_count = 0
     unique_to_single_count = 0
-    
+
     for m_id in all_misconceptions:
         count = sum(1 for m_set in model_misconceptions.values() if m_id in m_set)
         if count >= 2:
             consensus_count += 1
         if count == 1:
             unique_to_single_count += 1
-            
+
     consensus_ratio = consensus_count / total_unique if total_unique > 0 else 0.0
     avg_per_model = sum(total_by_model.values()) / len(models) if models else 0.0
 
@@ -431,18 +431,18 @@ def generate_misconception_summary(models: dict[str, ModelEvaluation]) -> Miscon
     for name_a, name_b in itertools.combinations(model_names, 2):
         set_a = model_misconceptions[name_a]
         set_b = model_misconceptions[name_b]
-        
+
         shared = len(set_a.intersection(set_b))
         only_a = len(set_a - set_b)
         only_b = len(set_b - set_a)
         union = len(set_a.union(set_b))
         jaccard = shared / union if union > 0 else 0.0
-        
+
         overlap_matrix[f"{name_a}_vs_{name_b}"] = MisconceptionOverlap(
             shared=shared,
             only_model_a=only_a,
             only_model_b=only_b,
-            jaccard_similarity=round(jaccard, 3)
+            jaccard_similarity=round(jaccard, 3),
         )
 
     return MisconceptionSummary(
@@ -452,143 +452,148 @@ def generate_misconception_summary(models: dict[str, ModelEvaluation]) -> Miscon
         consensus_misconceptions=consensus_count,
         consensus_ratio=round(consensus_ratio, 2),
         average_misconceptions_per_model=round(avg_per_model, 2),
-        misconception_overlap_matrix=overlap_matrix
+        misconception_overlap_matrix=overlap_matrix,
     )
 
 
 def generate_confidence_analysis(models: dict[str, ModelEvaluation]) -> ConfidenceAnalysis:
     if not models:
         return None
-        
+
     all_confidences = []
-    per_cat_confidences = {} # cat_id -> list of confidences
-    
+    per_cat_confidences = {}  # cat_id -> list of confidences
+
     # Initialize categories from first model
     first_model = next(iter(models.values()))
     for cat in first_model.category_scores:
         per_cat_confidences[cat.category_id] = []
-        
+
     for eval_data in models.values():
         for cat in eval_data.category_scores:
             all_confidences.append(cat.confidence)
             if cat.category_id in per_cat_confidences:
                 per_cat_confidences[cat.category_id].append(cat.confidence)
-                
+
     # Overall stats
     mean_conf = statistics.mean(all_confidences) if all_confidences else 0.0
     std_conf = statistics.stdev(all_confidences) if len(all_confidences) > 1 else 0.0
-    
+
     overall_range = ConfidenceRange(
         mean=round(mean_conf, 2),
         std_dev=round(std_conf, 2),
         min=round(min(all_confidences), 2) if all_confidences else 0.0,
-        max=round(max(all_confidences), 2) if all_confidences else 0.0
+        max=round(max(all_confidences), 2) if all_confidences else 0.0,
     )
-    
+
     # Per category stats
     per_cat_stats = {}
     low_conf_cats = []
-    
+
     for cat_id, confs in per_cat_confidences.items():
         mean_c = statistics.mean(confs) if confs else 0.0
         std_c = statistics.stdev(confs) if len(confs) > 1 else 0.0
         per_cat_stats[cat_id] = ConfidenceStatsPerCategory(
-            mean=round(mean_c, 2),
-            std_dev=round(std_c, 2)
+            mean=round(mean_c, 2), std_dev=round(std_c, 2)
         )
-        
+
         # Check for low confidence
         min_c = min(confs) if confs else 0.0
         if min_c < 0.7:
             low_models = [
-                name for name, m in models.items() 
+                name
+                for name, m in models.items()
                 if any(c.confidence < 0.7 and c.category_id == cat_id for c in m.category_scores)
             ]
-            low_conf_cats.append(LowConfidenceCategory(
-                category_id=cat_id,
-                min_confidence=round(min_c, 2),
-                models_with_low_confidence=low_models
-            ))
-            
+            low_conf_cats.append(
+                LowConfidenceCategory(
+                    category_id=cat_id,
+                    min_confidence=round(min_c, 2),
+                    models_with_low_confidence=low_models,
+                )
+            )
+
     # High confidence disagreements
     high_conf_disagreements = []
-    
+
     return ConfidenceAnalysis(
         overall_misconception_confidence=overall_range,
         per_category_confidence=per_cat_stats,
         confidence_score_correlation=0.0,
         high_confidence_disagreements=high_conf_disagreements,
-        low_confidence_categories=low_conf_cats
+        low_confidence_categories=low_conf_cats,
     )
 
 
 def generate_model_characteristics(models: dict[str, ModelEvaluation]) -> ModelCharacteristics:
     if not models:
         return None
-        
+
     strictness = []
     consistency = {}
     misc_rate = {}
     avg_misc_conf = {}
     reasoning = {}
-    
+
     all_scores = []
     for name, eval_data in models.items():
         avg_score = eval_data.scores.percentage
         all_scores.append(avg_score)
-        
+
         # Consistency (CV of categories)
         cat_scores = [c.points_awarded for c in eval_data.category_scores]
         mean_cat = statistics.mean(cat_scores) if cat_scores else 0
         std_cat = statistics.stdev(cat_scores) if len(cat_scores) > 1 else 0
         cv = std_cat / mean_cat if mean_cat > 0 else 0
-        
+
         label = "moderate_consistency"
-        if cv < 0.1: label = "high_consistency"
-        elif cv > 0.3: label = "low_consistency"
-        
-        consistency[name] = ConsistencyScore(
-            category_cv=round(cv, 2),
-            label=label
-        )
-        
+        if cv < 0.1:
+            label = "high_consistency"
+        elif cv > 0.3:
+            label = "low_consistency"
+
+        consistency[name] = ConsistencyScore(category_cv=round(cv, 2), label=label)
+
         misc_rate[name] = len(eval_data.misconceptions)
-        
+
         # Average misconception confidence
         misc_confs = [m.confidence for m in eval_data.misconceptions]
         avg_misc_conf[name] = round(statistics.mean(misc_confs), 2) if misc_confs else 0.0
-        
+
         # Reasoning depth (approx tokens)
         reasoning[name] = len(eval_data.feedback.overall_comment.split())
-        
+
     mean_all = statistics.mean(all_scores) if all_scores else 0
-    
+
     for name, eval_data in models.items():
         avg = eval_data.scores.percentage
         diff = avg - mean_all
-        
+
         s_label = "moderate"
-        if diff < -5: s_label = "strict"
-        elif diff > 5: s_label = "lenient"
-        
-        strictness.append(StrictnessRanking(
-            rank=0,
-            model=name,
-            average_score=round(avg, 2),
-            strictness_label=s_label,
-            deviation_from_mean=round(diff, 2)
-        ))
-        
+        if diff < -5:
+            s_label = "strict"
+        elif diff > 5:
+            s_label = "lenient"
+
+        strictness.append(
+            StrictnessRanking(
+                rank=0,
+                model=name,
+                average_score=round(avg, 2),
+                strictness_label=s_label,
+                deviation_from_mean=round(diff, 2),
+            )
+        )
+
     strictness.sort(key=lambda x: x.average_score)
     for i, s in enumerate(strictness):
         s.rank = i + 1
-        
+
     return ModelCharacteristics(
         strictness_ranking=strictness,
         consistency_scores=consistency,
         misconception_detection_rate=misc_rate,
         average_misconception_confidence=avg_misc_conf,
-        reasoning_depth=reasoning
+        reasoning_depth=reasoning,
     )
 
 
@@ -601,7 +606,7 @@ def generate_reliability_metrics(models: dict[str, ModelEvaluation]) -> Reliabil
         krippendorff_alpha=0.70,
         reliability_interpretation="good",
         standard_error_of_measurement=2.5,
-        confidence_interval_95=ConfidenceInterval95(lower=80.0, upper=90.0)
+        confidence_interval_95=ConfidenceInterval95(lower=80.0, upper=90.0),
     )
 
 
@@ -609,7 +614,7 @@ def generate_ensemble_decision(models: dict[str, ModelEvaluation]) -> EnsembleDe
     scores = [m.scores.percentage for m in models.values()]
     mean_score = statistics.mean(scores) if scores else 0
     median_score = statistics.median(scores) if scores else 0
-    
+
     return EnsembleDecision(
         recommended_score=round(mean_score, 2),
         scoring_method="mean",
@@ -617,15 +622,15 @@ def generate_ensemble_decision(models: dict[str, ModelEvaluation]) -> EnsembleDe
             mean=round(mean_score, 2),
             median=round(median_score, 2),
             weighted_mean=round(mean_score, 2),
-            trimmed_mean=round(mean_score, 2)
+            trimmed_mean=round(mean_score, 2),
         ),
-        weights_used={name: 1.0 for name in models},
+        weights_used=dict.fromkeys(models, 1.0),
         weighting_rationale="equal",
         confidence_in_decision=0.9,
         decision_uncertainty=2.0,
         letter_grade="B",
         pass_fail="Pass",
-        consensus_level="strong"
+        consensus_level="strong",
     )
 
 
@@ -636,7 +641,7 @@ def generate_ensemble_quality(models: dict[str, ModelEvaluation]) -> EnsembleQua
         complementarity_score=0.2,
         overall_ensemble_value="high",
         recommendation="ensemble_reliable",
-        confidence_improvement_vs_single=0.15
+        confidence_improvement_vs_single=0.15,
     )
 
 
@@ -648,7 +653,7 @@ def generate_flags(models: dict[str, ModelEvaluation]) -> Flags:
         overall_agreement="high",
         interesting_for_research=False,
         research_interest_reasons=[],
-        recommended_actions=["accept_ensemble_grade"]
+        recommended_actions=["accept_ensemble_grade"],
     )
 
 
@@ -667,6 +672,6 @@ def generate_metadata(models: dict[str, ModelEvaluation]) -> ComparisonMetadata:
             cv_high_agreement_max=0.15,
             cv_medium_agreement_max=0.30,
             icc_excellent_min=0.9,
-            icc_good_min=0.75
-        )
+            icc_good_min=0.75,
+        ),
     )
