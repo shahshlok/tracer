@@ -550,9 +550,16 @@ def run_misconception_analysis():
     student_table.add_column("Top Topic", style="magenta")
     student_table.add_column("Top Task", style="dim", max_width=30)
 
-    for eval_doc in analyzer.evaluations:
-        student_analysis = analyzer.analyze_student(eval_doc.submission.student_id)
+    # Get unique student IDs (evaluations contains one entry per student×question)
+    unique_student_ids = sorted(set(e.submission.student_id for e in analyzer.evaluations))
+
+    for student_id in unique_student_ids:
+        student_analysis = analyzer.analyze_student(student_id)
         if student_analysis:
+            if student_analysis.total_misconceptions == 0:
+                # Skip students with no misconceptions to reduce noise
+                continue
+
             top_topic = (
                 max(student_analysis.misconceptions_by_topic.items(), key=lambda x: x[1])[0]
                 if student_analysis.misconceptions_by_topic
@@ -565,13 +572,13 @@ def run_misconception_analysis():
             )
             top_task_display = top_task[:27] + "..." if len(top_task) > 30 else top_task
 
-        student_table.add_row(
-            student_analysis.student_id,
-            str(student_analysis.total_misconceptions),
-            f"{student_analysis.avg_misconception_confidence:.2f}",
-            top_topic,
-            top_task_display,
-        )
+            student_table.add_row(
+                student_analysis.student_id,
+                str(student_analysis.total_misconceptions),
+                f"{student_analysis.avg_misconception_confidence:.2f}",
+                top_topic,
+                top_task_display,
+            )
 
     console.print(student_table)
     console.print()

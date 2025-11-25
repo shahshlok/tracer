@@ -214,6 +214,57 @@ class StudentAnalysis:
 
 
 @dataclass
+class ProgressionAnalysis:
+    """Analysis of student progression from Q3 to Q4.
+
+    Tracks whether students who struggled with Q3 also struggled with Q4,
+    helping identify persistent misconceptions vs learning/improvement.
+    """
+
+    # Students who had misconceptions in both Q3 and Q4
+    struggled_both: set = field(default_factory=set)
+    # Students who struggled in Q3 but improved in Q4 (no misconceptions)
+    improved: set = field(default_factory=set)
+    # Students who were fine in Q3 but struggled in Q4
+    regressed: set = field(default_factory=set)
+    # Students who had no misconceptions in either
+    consistent_good: set = field(default_factory=set)
+    # Students who only have data for one question
+    incomplete_data: set = field(default_factory=set)
+
+    # Common misconceptions that persisted from Q3 to Q4 (same student, both questions)
+    persistent_misconceptions: dict = field(
+        default_factory=dict
+    )  # {misconception_name: [student_ids]}
+
+    @property
+    def total_with_both(self) -> int:
+        """Total students with data for both Q3 and Q4."""
+        return (
+            len(self.struggled_both)
+            + len(self.improved)
+            + len(self.regressed)
+            + len(self.consistent_good)
+        )
+
+    @property
+    def persistence_rate(self) -> float:
+        """Percentage of Q3 strugglers who also struggled in Q4."""
+        q3_strugglers = len(self.struggled_both) + len(self.improved)
+        if q3_strugglers == 0:
+            return 0.0
+        return (len(self.struggled_both) / q3_strugglers) * 100
+
+    @property
+    def improvement_rate(self) -> float:
+        """Percentage of Q3 strugglers who improved in Q4."""
+        q3_strugglers = len(self.struggled_both) + len(self.improved)
+        if q3_strugglers == 0:
+            return 0.0
+        return (len(self.improved) / q3_strugglers) * 100
+
+
+@dataclass
 class ClassAnalysis:
     """Class-wide analysis results."""
 
@@ -222,6 +273,7 @@ class ClassAnalysis:
     topic_task_stats: list[TopicTaskStats] = field(default_factory=list)
     misconception_type_stats: list[MisconceptionTypeStats] = field(default_factory=list)
     question_stats: list[QuestionStats] = field(default_factory=list)
+    progression_analysis: ProgressionAnalysis = field(default_factory=ProgressionAnalysis)
     model_agreement_summary: dict = field(default_factory=dict)
     generated_at: datetime = field(default_factory=datetime.now)
 
@@ -290,7 +342,9 @@ class MisconceptionAnalyzer:
         return self.misconception_records
 
     def analyze_student(self, student_id: str) -> StudentAnalysis | None:
-        """Analyze misconceptions for a specific student.
+        """Analyze misconceptions for a specific student across all questions.
+
+        Uses pre-extracted misconception_records which have normalized topics.
 
         Args:
             student_id: The student identifier.
@@ -298,34 +352,33 @@ class MisconceptionAnalyzer:
         Returns:
             StudentAnalysis object or None if student not found.
         """
-        eval_doc = None
-        for e in self.evaluations:
-            if e.submission.student_id == student_id:
-                eval_doc = e
-                break
+        # Find ALL evaluations for this student (one per question)
+        student_evals = [e for e in self.evaluations if e.submission.student_id == student_id]
 
-        if not eval_doc:
+        if not student_evals:
             return None
 
+        # Use first eval for student name
         analysis = StudentAnalysis(
             student_id=student_id,
-            student_name=eval_doc.submission.student_name,
+            student_name=student_evals[0].submission.student_name,
         )
+
+        # Use misconception_records (already normalized) instead of raw eval data
+        student_records = [r for r in self.misconception_records if r.student_id == student_id]
 
         topic_counts: dict[str, int] = defaultdict(int)
         task_counts: dict[str, int] = defaultdict(int)
         misconception_by_name: dict[str, set[str]] = defaultdict(set)
         total_weighted_confidence = 0.0
-        total_count = 0
 
-        for model_name, model_eval in eval_doc.models.items():
-            for misconception in model_eval.misconceptions:
-                topic_counts[misconception.topic] += 1
-                task_counts[misconception.task] += 1
-                misconception_by_name[misconception.name].add(model_name)
-                total_weighted_confidence += misconception.confidence
-                total_count += 1
+        for record in student_records:
+            topic_counts[record.topic] += 1  # Already normalized
+            task_counts[record.task] += 1
+            misconception_by_name[record.name].add(record.model_name)
+            total_weighted_confidence += record.confidence
 
+        total_count = len(student_records)
         analysis.total_misconceptions = total_count
         analysis.misconceptions_by_topic = dict(topic_counts)
         analysis.misconceptions_by_task = dict(task_counts)
@@ -347,7 +400,9 @@ class MisconceptionAnalyzer:
         if not self.misconception_records:
             self.extract_misconceptions()
 
-        total_students = len(self.evaluations)
+        # Count unique students, not evaluations (each student has multiple question evaluations)
+        unique_student_ids = set(e.submission.student_id for e in self.evaluations)
+        total_students = len(unique_student_ids)
         analysis = ClassAnalysis(
             total_students=total_students,
             total_misconceptions=len(self.misconception_records),
@@ -490,6 +545,57 @@ class MisconceptionAnalyzer:
             )
             analysis.question_stats.append(stats)
 
+        # Progression Analysis: Q3 → Q4 correlation
+        progression = ProgressionAnalysis()
+
+        # Get students with misconceptions by question
+        q3_strugglers = question_data.get("q3", {}).get("students_with_misconceptions", set())
+        q4_strugglers = question_data.get("q4", {}).get("students_with_misconceptions", set())
+        q3_submissions = question_data.get("q3", {}).get("submissions", set())
+        q4_submissions = question_data.get("q4", {}).get("submissions", set())
+
+        # Students with data for both Q3 and Q4
+        students_with_both = q3_submissions & q4_submissions
+
+        for student_id in students_with_both:
+            in_q3 = student_id in q3_strugglers
+            in_q4 = student_id in q4_strugglers
+
+            if in_q3 and in_q4:
+                progression.struggled_both.add(student_id)
+            elif in_q3 and not in_q4:
+                progression.improved.add(student_id)
+            elif not in_q3 and in_q4:
+                progression.regressed.add(student_id)
+            else:
+                progression.consistent_good.add(student_id)
+
+        # Students with incomplete data (only Q3 or only Q4)
+        progression.incomplete_data = q3_submissions ^ q4_submissions
+
+        # Track persistent misconceptions (same misconception name in both Q3 and Q4 for same student)
+        # Build per-student misconception sets by question
+        student_q3_misconceptions: dict[str, set] = defaultdict(set)
+        student_q4_misconceptions: dict[str, set] = defaultdict(set)
+
+        for record in self.misconception_records:
+            if record.question_id == "q3":
+                student_q3_misconceptions[record.student_id].add(record.name)
+            elif record.question_id == "q4":
+                student_q4_misconceptions[record.student_id].add(record.name)
+
+        # Find misconceptions that appear in both Q3 and Q4 for the same student
+        persistent_misconceptions: dict[str, list] = defaultdict(list)
+        for student_id in progression.struggled_both:
+            q3_miscs = student_q3_misconceptions.get(student_id, set())
+            q4_miscs = student_q4_misconceptions.get(student_id, set())
+            common = q3_miscs & q4_miscs
+            for misc_name in common:
+                persistent_misconceptions[misc_name].append(student_id)
+
+        progression.persistent_misconceptions = dict(persistent_misconceptions)
+        analysis.progression_analysis = progression
+
         return analysis
 
     def generate_markdown_report(self, output_path: str = "misconception_report.md") -> str:
@@ -604,6 +710,75 @@ class MisconceptionAnalyzer:
 
             lines.append("")
 
+        # Progression Analysis: Q3 → Q4
+        progression = class_analysis.progression_analysis
+        if progression.total_with_both > 0:
+            lines.extend(
+                [
+                    "---",
+                    "",
+                    "## Progression Analysis: Q3 → Q4",
+                    "",
+                    "Tracks whether students who struggled with Q3 also struggled with Q4,",
+                    "helping identify persistent misconceptions vs learning/improvement.",
+                    "",
+                    "### Student Progression Summary",
+                    "",
+                    "| Category | Count | Percentage |",
+                    "|----------|-------|------------|",
+                ]
+            )
+
+            total = progression.total_with_both
+            lines.append(
+                f"| Struggled in both Q3 & Q4 | {len(progression.struggled_both)} | {len(progression.struggled_both) / total * 100:.0f}% |"
+            )
+            lines.append(
+                f"| Improved (Q3 issues → Q4 clean) | {len(progression.improved)} | {len(progression.improved) / total * 100:.0f}% |"
+            )
+            lines.append(
+                f"| Regressed (Q3 clean → Q4 issues) | {len(progression.regressed)} | {len(progression.regressed) / total * 100:.0f}% |"
+            )
+            lines.append(
+                f"| Consistent (no issues in either) | {len(progression.consistent_good)} | {len(progression.consistent_good) / total * 100:.0f}% |"
+            )
+            lines.append("")
+
+            # Key metrics
+            lines.extend(
+                [
+                    "### Key Metrics",
+                    "",
+                    f"- **Misconception Persistence Rate:** {progression.persistence_rate:.0f}% of Q3 strugglers also struggled in Q4",
+                    f"- **Improvement Rate:** {progression.improvement_rate:.0f}% of Q3 strugglers had no issues in Q4",
+                    f"- **Students with incomplete data:** {len(progression.incomplete_data)} (only Q3 or only Q4)",
+                    "",
+                ]
+            )
+
+            # Persistent misconceptions (same misconception in both Q3 and Q4)
+            if progression.persistent_misconceptions:
+                lines.extend(
+                    [
+                        "### Persistent Misconceptions",
+                        "",
+                        "Misconceptions that appeared in both Q3 and Q4 for the same student:",
+                        "",
+                        "| Misconception | Students Affected |",
+                        "|---------------|-------------------|",
+                    ]
+                )
+
+                sorted_persistent = sorted(
+                    progression.persistent_misconceptions.items(),
+                    key=lambda x: len(x[1]),
+                    reverse=True,
+                )
+                for misc_name, student_ids in sorted_persistent[:5]:
+                    lines.append(f"| {misc_name} | {len(student_ids)} |")
+
+                lines.append("")
+
         lines.extend(
             [
                 "---",
@@ -666,6 +841,18 @@ class MisconceptionAnalyzer:
                 "- **0.5 - 0.7**: Moderate confidence",
                 "- **0.7 - 0.9**: High confidence",
                 "- **0.9 - 1.0**: Very high confidence (strong evidence of misconception)",
+                "",
+                "### Progression Analysis Metrics",
+                "",
+                "- **Misconception Persistence Rate**: Percentage of students who had misconceptions in Q3 that also had misconceptions in Q4",
+                "",
+                "  $$\\text{Persistence Rate} = \\frac{\\text{struggled in both Q3 \\& Q4}}{\\text{struggled in Q3}} \\times 100\\%$$",
+                "",
+                "- **Improvement Rate**: Percentage of Q3 strugglers who had no misconceptions in Q4",
+                "",
+                "  $$\\text{Improvement Rate} = \\frac{\\text{improved (Q3 issues, Q4 clean)}}{\\text{struggled in Q3}} \\times 100\\%$$",
+                "",
+                "- **Persistent Misconceptions**: Same misconception name detected in both Q3 and Q4 for the same student",
                 "",
                 "---",
                 "",
