@@ -35,8 +35,8 @@ console = Console()
 # Reduce this if you hit rate limits (429 errors), increase if your tier allows.
 MAX_CONCURRENT_STUDENTS = 5
 MODELS = [
-    "google/gemini-2.5-flash",
-    "openai/gpt-5.1",
+    # "google/gemini-2.5-flash",
+    # "openai/gpt-5.1",
     "google/gemini-2.5-flash-lite",
     "openai/gpt-5-nano",
 ]
@@ -122,65 +122,125 @@ async def grade_student_with_models(
 async def process_student_wrapper(
     sem: asyncio.Semaphore,
     student_id: str,
-    question_text: str,
-    rubric_data: dict[str, Any],
     progress: Progress,
     task_id: TaskID,
-) -> dict[str, Any] | None:
+) -> list[dict[str, Any]]:
     """
     Worker function that processes one student within the semaphore limit.
+    Iterates through Questions 1-4.
     """
     student_name = student_id.replace("_", " ")
+    student_results = []
 
     # Wait here if we have reached MAX_CONCURRENT_STUDENTS
     async with sem:
         progress.update(task_id, description=f"Grading: [cyan]{student_id}[/cyan]")
 
-        try:
-            # 1. Load submission (Fast I/O)
-            student_code, filename = load_student_submission(student_id)
+        for q_num in range(1, 5):
+            q_id = f"q{q_num}"
+            try:
+                # 1. Load Resources for this question
+                question_file = f"data/a2/{q_id}.md"
+                rubric_file = f"data/a2/rubric_{q_id}.md"
 
-            # 2. Grade (Slow Network Call)
-            model_evals = await grade_student_with_models(student_code, question_text, rubric_data)
+                try:
+                    question_text = load_question(question_file)
+                    rubric_data = load_rubric(rubric_file)
+                except Exception as e:
+                    progress.console.print(f"[red]Error loading resources for {q_id}: {e}[/red]")
+                    student_results.append(
+                        {
+                            "status": "error",
+                            "student": student_id,
+                            "question": q_id,
+                            "error": f"Resource load failed: {e}",
+                        }
+                    )
+                    continue
 
-            # 3. Save Results (Fast I/O)
-            valid_evals = {k: v for k, v in model_evals.items() if v is not None}
+                # 2. Load submission (Fast I/O)
+                # We need to manually construct the path to find Q{q_num}.java
+                submission_dir = "student_submissions"
+                student_dir = os.path.join(submission_dir, student_id)
+                student_file_name = f"Q{q_num}.java"
+                student_file_path = os.path.join(student_dir, student_file_name)
 
-            if valid_evals:
-                eval_doc = create_evaluation_document(
-                    student_id,
-                    student_name,
-                    question_text,
-                    rubric_data,
-                    filename,
-                    valid_evals,
-                    question_source_path="data/question_insurance.md",
-                    rubric_source_path="data/rubric_insurance2.md",
+                if not os.path.exists(student_file_path):
+                    # progress.console.print(f"[yellow]File {student_file_name} not found for {student_id}. Skipping.[/yellow]")
+                    student_results.append(
+                        {
+                            "status": "skipped",
+                            "student": student_id,
+                            "question": q_id,
+                            "error": "File not found",
+                        }
+                    )
+                    continue
+
+                with open(student_file_path, "r") as f:
+                    student_code = f.read()
+
+                # 3. Grade (Slow Network Call)
+                model_evals = await grade_student_with_models(
+                    student_code, question_text, rubric_data
                 )
 
-                output_dir = "student_evals"
-                os.makedirs(output_dir, exist_ok=True)
-                output_file = f"{output_dir}/{student_id}_eval.json"
-                with open(output_file, "w") as f:
-                    f.write(eval_doc.model_dump_json(indent=2))
+                # 4. Save Results (Fast I/O)
+                valid_evals = {k: v for k, v in model_evals.items() if v is not None}
 
-                progress.advance(task_id)
-                return {"status": "success", "student": student_id, "evals": valid_evals}
-            else:
-                # Both models failed
-                progress.console.print(f"[red]All models failed for {student_id}[/red]")
-                progress.advance(task_id)
-                return {"status": "error", "student": student_id, "error": "All models failed"}
+                if valid_evals:
+                    eval_doc = create_evaluation_document(
+                        student_id,
+                        student_name,
+                        question_text,
+                        rubric_data,
+                        student_file_name,
+                        valid_evals,
+                        question_source_path=question_file,
+                        rubric_source_path=rubric_file,
+                    )
 
-        except Exception as e:
-            progress.console.print(f"[red]Error processing {student_id}: {e}[/red]")
-            progress.advance(task_id)  # Advance anyway to not hang the bar
-            return {"status": "error", "student": student_id, "error": str(e)}
+                    # Update context with correct question ID
+                    eval_doc.context.question_id = q_id
+                    eval_doc.context.question_title = f"Question {q_num}"
+
+                    output_dir = "student_evals"
+                    os.makedirs(output_dir, exist_ok=True)
+                    output_file = f"{output_dir}/{student_id}_{q_id}_eval.json"
+                    with open(output_file, "w") as f:
+                        f.write(eval_doc.model_dump_json(indent=2))
+
+                    student_results.append(
+                        {
+                            "status": "success",
+                            "student": student_id,
+                            "question": q_id,
+                            "evals": valid_evals,
+                        }
+                    )
+                else:
+                    # Both models failed
+                    progress.console.print(f"[red]All models failed for {student_id} {q_id}[/red]")
+                    student_results.append(
+                        {
+                            "status": "error",
+                            "student": student_id,
+                            "question": q_id,
+                            "error": "All models failed",
+                        }
+                    )
+
+            except Exception as e:
+                progress.console.print(f"[red]Error processing {student_id} {q_id}: {e}[/red]")
+                student_results.append(
+                    {"status": "error", "student": student_id, "question": q_id, "error": str(e)}
+                )
+
+        progress.advance(task_id)
+        return student_results
 
 
-async def batch_grade_students(
-    students: list[str], question_text: str, rubric_data: dict[str, Any]
-) -> list[dict]:
+async def batch_grade_students(students: list[str]) -> list[dict]:
     """
     Orchestrates the parallel grading of multiple students.
     """
@@ -201,17 +261,14 @@ async def batch_grade_students(
         # Create a list of pending coroutines
         tasks = []
         for student_id in students:
-            tasks.append(
-                process_student_wrapper(
-                    sem, student_id, question_text, rubric_data, progress, overall_task
-                )
-            )
+            tasks.append(process_student_wrapper(sem, student_id, progress, overall_task))
 
         # Fire them all!
-        # returns a list of results in the same order as tasks
-        results = await asyncio.gather(*tasks)
+        # returns a list of lists of results
+        nested_results = await asyncio.gather(*tasks)
 
-        # No filtering needed anymore, we want to see failures
+        # Flatten results
+        results = [item for sublist in nested_results for item in sublist]
 
     return results
 
@@ -225,6 +282,7 @@ def display_grading_results(results: list[dict]):
     table = Table(box=None, show_lines=False, pad_edge=False)
 
     table.add_column("Student", style="white")
+    table.add_column("Q", style="yellow")
     table.add_column("GemFlash", justify="right", style="cyan")
     table.add_column("GPT5.1", justify="right", style="green")
     table.add_column("GemLite", justify="right", style="magenta")
@@ -237,10 +295,11 @@ def display_grading_results(results: list[dict]):
     for res in results:
         student = res["student"]
 
-        if res.get("status") == "error":
-            # Render Error Row
+        if res.get("status") in ("error", "skipped"):
+            # Render Error/Skipped Row
             table.add_row(
                 student,
+                res.get("question", "-"),
                 "-",
                 "-",
                 "-",
@@ -248,12 +307,13 @@ def display_grading_results(results: list[dict]):
                 "-",
                 "-",
                 "-",
-                "X",
+                "[yellow]S[/yellow]" if res.get("status") == "skipped" else "[red]X[/red]",
             )
             continue
 
         # Success Case
         evals = res["evals"]
+        question = res.get("question", "?")
 
         # Get evaluations for each model
         gemini_flash_eval = evals.get("google/gemini-2.5-flash")
@@ -291,6 +351,7 @@ def display_grading_results(results: list[dict]):
 
         table.add_row(
             student,
+            question,
             f"{gemini_flash_score:.1f}" if gemini_flash_eval else "-",
             f"{gpt51_score:.1f}" if gpt51_eval else "-",
             f"{gemini_lite_score:.1f}" if gemini_lite_eval else "-",
@@ -330,18 +391,10 @@ def run_grading():
     console.print()
 
     # Setup Resources
-    try:
-        with console.status(
-            "[bold yellow]Loading Assignment Resources...[/bold yellow]", spinner="dots"
-        ):
-            question_text = load_question("data/question_insurance.md")
-            rubric_data = load_rubric("data/rubric_insurance2.md")
-    except Exception as e:
-        console.print(f"[red]Error loading resources: {e}[/red]")
-        return
+    # Resources are now loaded per-question inside the grading loop
 
     # Async Batch Execution
-    results = asyncio.run(batch_grade_students(students_to_grade, question_text, rubric_data))
+    results = asyncio.run(batch_grade_students(students_to_grade))
 
     # Display Results
     display_grading_results(results)
@@ -494,15 +547,15 @@ def run_misconception_analysis():
     student_table.add_column("Student", style="white")
     student_table.add_column("Total", justify="center", style="cyan")
     student_table.add_column("Avg Confidence", justify="right", style="yellow")
-    student_table.add_column("Top Bloom Level", style="magenta")
+    student_table.add_column("Top Topic", style="magenta")
     student_table.add_column("Top Task", style="dim", max_width=30)
 
     for eval_doc in analyzer.evaluations:
         student_analysis = analyzer.analyze_student(eval_doc.submission.student_id)
         if student_analysis:
-            top_bloom = (
-                max(student_analysis.misconceptions_by_bloom.items(), key=lambda x: x[1])[0]
-                if student_analysis.misconceptions_by_bloom
+            top_topic = (
+                max(student_analysis.misconceptions_by_topic.items(), key=lambda x: x[1])[0]
+                if student_analysis.misconceptions_by_topic
                 else "N/A"
             )
             top_task = (
@@ -516,7 +569,7 @@ def run_misconception_analysis():
             student_analysis.student_id,
             str(student_analysis.total_misconceptions),
             f"{student_analysis.avg_misconception_confidence:.2f}",
-            top_bloom,
+            top_topic,
             top_task_display,
         )
 
@@ -546,8 +599,24 @@ def run_misconception_analysis():
 # --- Main Command ---
 
 
-@app.command(name="bench")
-def main():
+@app.command()
+def grade():
+    """Directly run the grading workflow."""
+    run_grading()
+
+
+@app.command()
+def analyze():
+    """Directly run the misconception analysis workflow."""
+    run_misconception_analysis()
+
+
+@app.callback(invoke_without_command=True)
+def main(ctx: typer.Context):
+    # If a subcommand was invoked (like 'grade' or 'analyze'), don't run the interactive menu
+    if ctx.invoked_subcommand is not None:
+        return
+
     # 1. Header
     console.print(create_header())
     console.print()

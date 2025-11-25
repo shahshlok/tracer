@@ -3,7 +3,7 @@
 This module processes evaluation JSON files from student_evals/ directory and provides:
 - Per-student misconception analysis
 - Class-wide misconception aggregation
-- Bloom's taxonomy level difficulty analysis
+- Topic difficulty analysis
 - Task-based difficulty analysis
 - Model agreement metrics
 """
@@ -23,7 +23,7 @@ class MisconceptionRecord:
 
     student_id: str
     model_name: str
-    bloom_level: str
+    topic: str
     task: str
     name: str
     description: str
@@ -32,10 +32,10 @@ class MisconceptionRecord:
 
 
 @dataclass
-class BloomTaskStats:
-    """Statistics for a Bloom level + Task combination."""
+class TopicTaskStats:
+    """Statistics for a Topic + Task combination."""
 
-    bloom_level: str
+    topic: str
     task: str
     student_count: int = 0
     total_students: int = 0
@@ -56,7 +56,7 @@ class MisconceptionTypeStats:
     """Statistics for a specific misconception type/name."""
 
     name: str
-    bloom_level: str
+    topic: str
     task: str
     student_count: int = 0
     total_students: int = 0
@@ -82,7 +82,7 @@ class StudentAnalysis:
     student_id: str
     student_name: str
     total_misconceptions: int = 0
-    misconceptions_by_bloom: dict = field(default_factory=dict)
+    misconceptions_by_topic: dict = field(default_factory=dict)
     misconceptions_by_task: dict = field(default_factory=dict)
     model_agreement: dict = field(default_factory=dict)
     avg_misconception_confidence: float = 0.0
@@ -94,7 +94,7 @@ class ClassAnalysis:
 
     total_students: int = 0
     total_misconceptions: int = 0
-    bloom_task_stats: list[BloomTaskStats] = field(default_factory=list)
+    topic_task_stats: list[TopicTaskStats] = field(default_factory=list)
     misconception_type_stats: list[MisconceptionTypeStats] = field(default_factory=list)
     model_agreement_summary: dict = field(default_factory=dict)
     generated_at: datetime = field(default_factory=datetime.now)
@@ -147,7 +147,7 @@ class MisconceptionAnalyzer:
                     record = MisconceptionRecord(
                         student_id=student_id,
                         model_name=model_name,
-                        bloom_level=misconception.bloom_level,
+                        topic=misconception.topic,
                         task=misconception.task,
                         name=misconception.name,
                         description=misconception.description,
@@ -181,7 +181,7 @@ class MisconceptionAnalyzer:
             student_name=eval_doc.submission.student_name,
         )
 
-        bloom_counts: dict[str, int] = defaultdict(int)
+        topic_counts: dict[str, int] = defaultdict(int)
         task_counts: dict[str, int] = defaultdict(int)
         misconception_by_name: dict[str, set[str]] = defaultdict(set)
         total_weighted_confidence = 0.0
@@ -189,14 +189,14 @@ class MisconceptionAnalyzer:
 
         for model_name, model_eval in eval_doc.models.items():
             for misconception in model_eval.misconceptions:
-                bloom_counts[misconception.bloom_level] += 1
+                topic_counts[misconception.topic] += 1
                 task_counts[misconception.task] += 1
                 misconception_by_name[misconception.name].add(model_name)
                 total_weighted_confidence += misconception.confidence
                 total_count += 1
 
         analysis.total_misconceptions = total_count
-        analysis.misconceptions_by_bloom = dict(bloom_counts)
+        analysis.misconceptions_by_topic = dict(topic_counts)
         analysis.misconceptions_by_task = dict(task_counts)
         analysis.model_agreement = {
             name: len(models) for name, models in misconception_by_name.items()
@@ -222,7 +222,7 @@ class MisconceptionAnalyzer:
             total_misconceptions=len(self.misconception_records),
         )
 
-        bloom_task_data: dict[tuple[str, str], dict] = defaultdict(
+        topic_task_data: dict[tuple[str, str], dict] = defaultdict(
             lambda: {
                 "students": set(),
                 "misconceptions": [],
@@ -237,7 +237,7 @@ class MisconceptionAnalyzer:
                 "occurrences": 0,
                 "confidences": [],
                 "models": set(),
-                "bloom_level": "",
+                "topic": "",
                 "task": "",
             }
         )
@@ -245,23 +245,23 @@ class MisconceptionAnalyzer:
         model_misconception_counts: dict[str, int] = defaultdict(int)
 
         for record in self.misconception_records:
-            key = (record.bloom_level, record.task)
+            key = (record.topic, record.task)
 
-            bloom_task_data[key]["students"].add(record.student_id)
-            bloom_task_data[key]["misconceptions"].append(record.name)
-            bloom_task_data[key]["confidences"].append(record.confidence)
-            bloom_task_data[key]["models"][record.name].add(record.model_name)
+            topic_task_data[key]["students"].add(record.student_id)
+            topic_task_data[key]["misconceptions"].append(record.name)
+            topic_task_data[key]["confidences"].append(record.confidence)
+            topic_task_data[key]["models"][record.name].add(record.model_name)
 
             misconception_type_data[record.name]["students"].add(record.student_id)
             misconception_type_data[record.name]["occurrences"] += 1
             misconception_type_data[record.name]["confidences"].append(record.confidence)
             misconception_type_data[record.name]["models"].add(record.model_name)
-            misconception_type_data[record.name]["bloom_level"] = record.bloom_level
+            misconception_type_data[record.name]["topic"] = record.topic
             misconception_type_data[record.name]["task"] = record.task
 
             model_misconception_counts[record.model_name] += 1
 
-        for (bloom_level, task), data in bloom_task_data.items():
+        for (topic, task), data in topic_task_data.items():
             misconception_counts = defaultdict(int)
             for name in data["misconceptions"]:
                 misconception_counts[name] += 1
@@ -274,8 +274,8 @@ class MisconceptionAnalyzer:
                 agreement_rates.append(len(models) / total_models if total_models > 0 else 0)
             avg_agreement = sum(agreement_rates) / len(agreement_rates) if agreement_rates else 0
 
-            stats = BloomTaskStats(
-                bloom_level=bloom_level,
+            stats = TopicTaskStats(
+                topic=topic,
                 task=task,
                 student_count=len(data["students"]),
                 total_students=total_students,
@@ -288,14 +288,14 @@ class MisconceptionAnalyzer:
                 model_agreement_rate=avg_agreement,
                 common_misconceptions=common,
             )
-            analysis.bloom_task_stats.append(stats)
+            analysis.topic_task_stats.append(stats)
 
-        analysis.bloom_task_stats.sort(key=lambda x: -x.percentage_affected)
+        analysis.topic_task_stats.sort(key=lambda x: -x.percentage_affected)
 
         for name, data in misconception_type_data.items():
             stats = MisconceptionTypeStats(
                 name=name,
-                bloom_level=data["bloom_level"],
+                topic=data["topic"],
                 task=data["task"],
                 student_count=len(data["students"]),
                 total_students=total_students,
@@ -338,41 +338,41 @@ class MisconceptionAnalyzer:
             "",
         ]
 
-        if class_analysis.bloom_task_stats:
+        if class_analysis.topic_task_stats:
             lines.append("### Most Difficult Areas (by % of class affected)")
             lines.append("")
-            lines.append("| Rank | Bloom Level | Task | Students Affected | Avg Confidence |")
-            lines.append("|------|-------------|------|-------------------|----------------|")
+            lines.append("| Rank | Topic | Task | Students Affected | Avg Confidence |")
+            lines.append("|------|-------|------|-------------------|----------------|")
 
-            for i, stat in enumerate(class_analysis.bloom_task_stats[:5], 1):
+            for i, stat in enumerate(class_analysis.topic_task_stats[:5], 1):
                 lines.append(
-                    f"| {i} | {stat.bloom_level} | {stat.task} | "
+                    f"| {i} | {stat.topic} | {stat.task} | "
                     f"{stat.student_count}/{stat.total_students} ({stat.percentage_affected:.0f}%) | "
                     f"{stat.avg_confidence:.2f} |"
                 )
             lines.append("")
 
-        # Add Bloom Level Summary
-        bloom_level_summary: dict[str, dict] = defaultdict(
+        # Add Topic Summary
+        topic_summary: dict[str, dict] = defaultdict(
             lambda: {"total": 0, "students": set(), "avg_confidence": []}
         )
         for record in self.misconception_records:
-            bloom_level_summary[record.bloom_level]["total"] += 1
-            bloom_level_summary[record.bloom_level]["students"].add(record.student_id)
-            bloom_level_summary[record.bloom_level]["avg_confidence"].append(record.confidence)
+            topic_summary[record.topic]["total"] += 1
+            topic_summary[record.topic]["students"].add(record.student_id)
+            topic_summary[record.topic]["avg_confidence"].append(record.confidence)
 
-        if bloom_level_summary:
-            lines.append("### Top Bloom Levels by Misconceptions")
+        if topic_summary:
+            lines.append("### Top Topics by Misconceptions")
             lines.append("")
             lines.append(
-                "| Rank | Bloom Level | Total Misconceptions | Students Affected | Avg Confidence |"
+                "| Rank | Topic | Total Misconceptions | Students Affected | Avg Confidence |"
             )
             lines.append(
-                "|------|-------------|---------------------|-------------------|----------------|"
+                "|------|-------|---------------------|-------------------|----------------|"
             )
 
-            sorted_bloom = sorted(bloom_level_summary.items(), key=lambda x: -x[1]["total"])
-            for i, (bloom_level, data) in enumerate(sorted_bloom, 1):
+            sorted_topic = sorted(topic_summary.items(), key=lambda x: -x[1]["total"])
+            for i, (topic, data) in enumerate(sorted_topic, 1):
                 student_count = len(data["students"])
                 percentage = (
                     (student_count / class_analysis.total_students * 100)
@@ -385,7 +385,7 @@ class MisconceptionAnalyzer:
                     else 0
                 )
                 lines.append(
-                    f"| {i} | {bloom_level} | {data['total']} | "
+                    f"| {i} | {topic} | {data['total']} | "
                     f"{student_count}/{class_analysis.total_students} ({percentage:.0f}%) | "
                     f"{avg_conf:.2f} |"
                 )
@@ -394,14 +394,14 @@ class MisconceptionAnalyzer:
         if class_analysis.misconception_type_stats:
             lines.append("### Most Common Misconceptions")
             lines.append("")
-            lines.append("| Rank | Misconception | Bloom Level | Occurrences | Models Agreeing |")
-            lines.append("|------|---------------|-------------|-------------|-----------------|")
+            lines.append("| Rank | Misconception | Topic | Occurrences | Models Agreeing |")
+            lines.append("|------|---------------|-------|-------------|-----------------|")
 
             for i, stat in enumerate(class_analysis.misconception_type_stats[:10], 1):
                 name_short = stat.name[:35] + "..." if len(stat.name) > 35 else stat.name
                 models_str = ", ".join(m.split("/")[-1] for m in stat.models_detecting)
                 lines.append(
-                    f"| {i} | {name_short} | {stat.bloom_level} | "
+                    f"| {i} | {name_short} | {stat.topic} | "
                     f"{stat.occurrence_count} | {stat.model_agreement_count} ({models_str}) |"
                 )
             lines.append("")
@@ -429,13 +429,13 @@ class MisconceptionAnalyzer:
             [
                 "---",
                 "",
-                "## Detailed Analysis by Bloom Level + Task",
+                "## Detailed Analysis by Topic + Task",
                 "",
             ]
         )
 
-        for stat in class_analysis.bloom_task_stats:
-            lines.append(f"### {stat.bloom_level}: {stat.task}")
+        for stat in class_analysis.topic_task_stats:
+            lines.append(f"### {stat.topic}: {stat.task}")
             lines.append("")
             lines.append(
                 f"- **Students Affected:** {stat.student_count}/{stat.total_students} "
@@ -458,24 +458,24 @@ class MisconceptionAnalyzer:
                 "",
                 "## Per-Student Summary",
                 "",
-                "| Student | Total Misconceptions | Avg Model Confidence | Top Bloom Level |",
-                "|---------|---------------------|---------------------|-----------------|",
+                "| Student | Total Misconceptions | Avg Model Confidence | Top Topic |",
+                "|---------|---------------------|---------------------|-----------|",
             ]
         )
 
         for eval_doc in self.evaluations:
             student_analysis = self.analyze_student(eval_doc.submission.student_id)
             if student_analysis:
-                top_bloom = (
-                    max(student_analysis.misconceptions_by_bloom.items(), key=lambda x: x[1])[0]
-                    if student_analysis.misconceptions_by_bloom
+                top_topic = (
+                    max(student_analysis.misconceptions_by_topic.items(), key=lambda x: x[1])[0]
+                    if student_analysis.misconceptions_by_topic
                     else "N/A"
                 )
                 lines.append(
                     f"| {student_analysis.student_id} | "
                     f"{student_analysis.total_misconceptions} | "
                     f"{student_analysis.avg_misconception_confidence:.2f} | "
-                    f"{top_bloom} |"
+                    f"{top_topic} |"
                 )
 
         lines.extend(
@@ -491,7 +491,7 @@ class MisconceptionAnalyzer:
                 "",
                 "**Most Difficult Areas (by % of class affected)**",
                 "",
-                "- **Students Affected**: Count and percentage of students who had misconceptions for this Bloom Level + Task combination",
+                "- **Students Affected**: Count and percentage of students who had misconceptions for this Topic + Task combination",
                 "",
                 "  $$\\text{Students Affected \\%} = \\frac{\\text{students with misconceptions}}{\\text{total students}} \\times 100\\%$$",
                 "",
@@ -499,14 +499,14 @@ class MisconceptionAnalyzer:
                 "",
                 "  $$\\text{Avg Confidence} = \\frac{\\sum \\text{confidence scores}}{\\text{count(misconceptions)}}$$",
                 "",
-                "**Top Bloom Levels by Misconceptions**",
+                "**Top Topics by Misconceptions**",
                 "",
-                "- **Total Misconceptions**: Total count of misconceptions flagged at this Bloom's Taxonomy level",
-                "- **Students Affected**: Count and percentage of unique students with misconceptions at this Bloom level",
+                "- **Total Misconceptions**: Total count of misconceptions flagged at this Topic",
+                "- **Students Affected**: Count and percentage of unique students with misconceptions at this Topic",
                 "",
                 "  $$\\text{Students Affected \\%} = \\frac{\\text{unique students with misconceptions}}{\\text{total students}} \\times 100\\%$$",
                 "",
-                "- **Avg Confidence**: Average model confidence for misconceptions at this Bloom level",
+                "- **Avg Confidence**: Average model confidence for misconceptions at this Topic",
                 "",
                 "  $$\\text{Avg Confidence} = \\frac{\\sum \\text{confidence scores}}{\\text{count(misconceptions)}}$$",
                 "",
@@ -520,7 +520,7 @@ class MisconceptionAnalyzer:
                 "",
                 "- **Misconceptions Detected**: Total number of misconceptions each model identified across all students",
                 "",
-                "### Detailed Analysis by Bloom Level + Task",
+                "### Detailed Analysis by Topic + Task",
                 "",
                 "- **Students Affected**: Students who had misconceptions in this category",
                 "",
@@ -545,7 +545,7 @@ class MisconceptionAnalyzer:
                 "  where $n$ = count of misconceptions for the student",
                 "",
                 "  - Higher values indicate models are more confident about the misconceptions they detected",
-                "- **Top Bloom Level**: The Bloom's Taxonomy level with the most misconceptions for this student",
+                "- **Top Topic**: The Topic with the most misconceptions for this student",
                 "",
                 "### Confidence Scores",
                 "",
