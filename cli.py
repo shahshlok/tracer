@@ -40,7 +40,7 @@ MODELS = [
     "google/gemini-2.5-flash-lite",
     "openai/gpt-5-nano",
 ]
-BATCH_LIMIT = 3  # Process 3 students
+BATCH_LIMIT = 25  # Process 25 students
 
 # --- Helper Functions ---
 
@@ -385,7 +385,7 @@ def run_grading():
 
     students_to_grade = all_students[:BATCH_LIMIT]
     console.print(
-        f"[bold]Found {len(all_students)} submissions. Processing top {len(students_to_grade)}...[/bold]"
+        f"[bold]Found {len(all_students)} submissions. Processing {len(students_to_grade)}...[/bold]"
     )
     console.print(f"[dim]Concurrency Limit: {MAX_CONCURRENT_STUDENTS} students at a time[/dim]")
     console.print()
