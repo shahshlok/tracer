@@ -2,7 +2,9 @@
 
 This package provides a complete, schema-first set of Pydantic models for representing student evaluations graded by multiple LLMs, together with comparison and ensemble analysis structures.
 
-## Structure
+> **Full Documentation:** See [docs/pydantic-models.md](../docs/pydantic-models.md) for complete model reference with examples.
+
+## Quick Reference
 
 ```
 pydantic_models/
@@ -19,132 +21,43 @@ pydantic_models/
     └── ensemble.py            # Ensemble decisions and quality
 ```
 
-## Usage
-
-### Basic Import
+## Basic Usage
 
 ```python
 from pydantic_models import EvaluationDocument
 
 # Load evaluation from JSON
 with open('evaluation.json') as f:
-    eval_data = json.load(f)
+    evaluation = EvaluationDocument(**json.load(f))
 
-evaluation = EvaluationDocument(**eval_data)
-```
-
-### Accessing Specific Components
-
-```python
-# Access context
-course_id = evaluation.context.course_id
-question_title = evaluation.context.question_title
-
-# Access submission
-student_name = evaluation.submission.student_name
-files = evaluation.submission.files
-
-# Access rubric
-total_points = evaluation.rubric.total_points
-categories = evaluation.rubric.categories
-
-# Access model evaluations
+# Access scores
 for model_name, model_eval in evaluation.models.items():
     print(f"{model_name}: {model_eval.scores.percentage}%")
 
-# Access comparison and ensemble
-ensemble_score = evaluation.comparison.ensemble_decision.recommended_score
-reliability = evaluation.comparison.reliability_metrics.intraclass_correlation_icc
+# Access misconceptions
+for model_name, model_eval in evaluation.models.items():
+    for misc in model_eval.misconceptions:
+        print(f"  {misc.name} ({misc.confidence})")
 ```
 
-### Creating Model Evaluation Responses
+## Model Hierarchy
 
-```python
-from pydantic_models import (
-    ModelEvaluation, Config, Scores, CategoryScore,
-    Feedback, Misconception, Evidence
-)
-
-# Create a model evaluation programmatically
-model_eval = ModelEvaluation(
-    model_name="gpt-4o",
-    provider="openai",
-    model_version="2024-11-01",
-    run_id="run_001",
-    config=Config(
-        system_prompt_id="grading_v1",
-        rubric_prompt_id="rubric_v1"
-    ),
-    scores=Scores(
-        total_points_awarded=85,
-        max_points=100,
-        percentage=85.0
-    ),
-    category_scores=[...],
-    feedback=Feedback(...),
-    misconceptions=[...]
-)
-```
-
-### Validation
-
-All models include Pydantic validation:
-
-```python
-from pydantic import ValidationError
-
-try:
-    evaluation = EvaluationDocument(**data)
-except ValidationError as e:
-    print(f"Validation errors: {e}")
-```
-
-## Model Overview
-
-### Root Model
-- **EvaluationDocument**: Complete evaluation with all sections
-
-### Context
-- **Context**: Course, assignment, question metadata
-
-### Submission
-- **Submission**: Student work and metadata
-- **StudentFile**: Individual submitted files
-
-### Rubric
-- **Rubric**: Grading criteria
-- **RubricCategory**: Individual rubric categories
-
-### Model Evaluation
-- **ModelEvaluation**: Complete per-model grading result
-- **Config**: Model configuration
-- **Scores**: Aggregate scores
-- **CategoryScore**: Per-category scores
-- **Feedback**: Strengths and areas for improvement
-- **Evidence**: Evidence for misconceptions
-- **Misconception**: Identified misconceptions
-
-### Comparison (Ensemble Analysis)
-- **Comparison**: Main comparison model
-- **ScoreSummary**: Score statistics across models
-- **PairwiseComparison**: Model-vs-model differences
-- **CategoryAgreement**: Per-category agreement analysis
-- **MisconceptionSummary**: Misconception detection comparison
-- **ConfidenceAnalysis**: Confidence patterns
-- **ModelCharacteristics**: Grading tendencies
-- **ReliabilityMetrics**: Inter-rater reliability (ICC, Pearson, etc.)
-- **EnsembleDecision**: Final grade recommendation
-- **EnsembleQuality**: Quality assessment
-- **Flags**: Automated review recommendations
-
-## Features
-
-- **Type Safety**: Full type hints for IDE support
-- **Validation**: Automatic validation of all fields
-- **JSON Serialization**: Easy conversion to/from JSON
-- **Documentation**: Comprehensive field descriptions
-- **Extensibility**: Easy to extend with new models
+- **EvaluationDocument** - Root document
+  - **Context** - Course/assignment/question metadata
+  - **Submission** - Student files and info
+  - **Rubric** - Grading criteria
+  - **ModelEvaluation** - Per-model results
+    - Scores, CategoryScores, Feedback, Misconceptions
+  - **Comparison** - Cross-model analysis (optional)
 
 ## Version
 
-Current version: 1.0.0
+Current version: **1.0.0**
+
+Schema version is validated on load to ensure data/code compatibility.
+
+## Related Documentation
+
+- [Pydantic Models Reference](../docs/pydantic-models.md) - Complete documentation
+- [Architecture](../docs/architecture.md) - System design
+- [Grading Workflow](../docs/grading-workflow.md) - How evaluations are created

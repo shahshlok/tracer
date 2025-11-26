@@ -1,413 +1,189 @@
-# Ensemble Model Evaluation (EME) Framework
+# Ensemble Model Evaluation (EME) CLI
 
-Research-grade harness for grading student code submissions with multiple LLMs, analyzing misconception patterns, and evaluating ensemble grading strategies via structured cross-model analytics.
+A research-grade framework for grading student code submissions using multiple Large Language Models, with capabilities for analyzing misconception patterns, evaluating ensemble grading strategies, and generating cross-model analytics.
+
+**Research Context:** Honours Thesis Research at UBCO, investigating ensemble methods for automated code grading.
 
 ## Status
 
-**Schema:** v1.0.0 (stable, Pydantic-based)  
-**Implementation:** Evaluation pipeline + async batch CLI implemented; comparison/DB/analytics layers in progress.
-
----
-
-## Documentation
-
-All project documentation lives in `docs/`. The docs are written for instructors, applied ML practitioners, and researchers comfortable with Python and LLM APIs.
-
-- Overview & installation: `docs/00-QUICK-START.md`
-- Conceptual model and workflows: `docs/01-GETTING-STARTED.md`
-- Codebase layout: `docs/02-PROJECT-STRUCTURE.md`
-- End-to-end usage: `docs/03-USAGE-GUIDE.md`
-- Data/API reference: `docs/04-API-REFERENCE.md`
-- Architecture and extension: `docs/05-ARCHITECTURE.md`
-
-Documentation index: `docs/INDEX.md`
-
----
-
-### Implemented
-- **Complete Pydantic schema**: All data models for evaluations, submissions, rubrics, and comparisons
-- **Multi-model evaluation support**: OpenAI and OpenRouter SDK integration with Instructor
-- **Structured LLM outputs**: Enforced JSON schema validation for all model responses
-- **Misconception tracking**: Inductive approach with evidence linking and model attribution
-- **Comprehensive comparison models**: Score analysis, reliability metrics, ensemble decisions, and quality assessment
-- **Three grading strategies**: Direct, Reverse, and Ensemble Method Evaluation (EME) prompts
-
-### In Development
-- **Comparison computation engine**: Score statistics, agreement metrics (ICC, Krippendorff's alpha, etc.), ensemble decisions
-- **Database persistence**: SQLite-backed storage and query interface for historical evaluations
-- **CLI extensions**: Additional commands for loading, validating, and analyzing evaluation corpora
-- **Visualization tools**: Dashboards for ensemble behaviour, agreement heatmaps, and misconception distributions
-
-### Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    EVALUATION PIPELINE                       │
-└─────────────────────────────────────────────────────────────┘
-
-Input (Question + Rubric + Student Code)
-    │
-    ▼
-Prompt Generation (Direct/Reverse/EME)
-    │
-    ▼
-Multi-Model LLM Evaluation (OpenAI/OpenRouter)
-    │
-    ▼
-Structured Response Parsing (Pydantic Models)
-    │
-    ▼
-EvaluationDocument Assembly
-    │
-    ├──> Context (Course/Assignment/Question)
-    ├──> Submission (Student Files)
-    ├──> Rubric (Categories & Criteria)
-    └──> Models (Per-Model Evaluations)
-    │
-    ▼
-[Future] Comparison Analysis
-    │
-    ├──> Score Statistics & Agreement
-    ├──> Misconception Overlap Analysis
-    ├──> Confidence Patterns
-    ├──> Reliability Metrics (ICC, Pearson, Spearman, Krippendorff's α)
-    └──> Ensemble Decision & Quality Assessment
-    │
-    ▼
-JSON Output (student_evals/*.json)
-```
-
----
+| Component | Status |
+|-----------|--------|
+| Pydantic Schema | v1.0.0 (stable) |
+| Evaluation Pipeline | ✅ Complete |
+| Async Batch CLI | ✅ Complete |
+| Misconception Analysis | ✅ Complete |
+| Comparison Engine | 🔄 In Progress |
 
 ## Quick Start
 
-Minimal setup to execute the provided example workflow:
-
 ```bash
-# 1. Clone repository
+# Clone and install
 git clone https://github.com/shahshlok/ensemble-eval-cli
 cd ensemble-eval-cli
-
-# 2. Install dependencies (using uv)
 uv sync
 
-# 3. Create .env file with your API keys
-# (See docs/00-QUICK-START.md for details)
-echo "OPENAI_API_KEY=sk-..." > .env
-echo "OPENROUTER_API_KEY=sk-or-..." >> .env
+# Configure API keys
+echo "OPENROUTER_API_KEY=sk-or-..." > .env
 
-# 4a. Run the batch CLI over all students
-uv run python cli.py bench
+# Run grading
+uv run python cli.py grade
 
-# 4b. (Optional) Run the single‑student sandbox experiment
-# Long form:
-uv run python sandbox/single_submission.py
-# Or, using the CLI alias:
-uv run experiment
+# Run misconception analysis
+uv run python cli.py analyze
 ```
 
-**Batch results saved to:** `student_evals/{student_id}_eval.json`  
-**Sandbox results saved to:** `sandbox/evals/{student_id}_eval.json`
+**Output:** `student_evals/{student_id}_{question}_eval.json`
 
-For a more detailed description of the pipeline and configuration options, see `docs/00-QUICK-START.md` and `docs/03-USAGE-GUIDE.md`.
+## Documentation
 
----
-
-## Batch CLI (Async Benchmark Harness)
-
-An async batch CLI is provided for running ensemble evaluations over a cohort of students and summarizing cross-model behaviour.
-
-From the project root:
-
-```bash
-# Grade a batch of students using the async CLI
-uv run python cli.py bench
-```
-
-The CLI:
-- Discovers student IDs under `student_submissions/`
-- Loads `question_cuboid.md` and `rubric_cuboid.json`
-- Evaluates each student against the configured models in parallel
-- Writes one `*_eval.json` per student under `student_evals/`
-- Renders a comparative table (per-model scores, average, disagreement flags, confidence)
-
-See `cli.py` and `utils/grading.py` for the orchestration logic, and `docs/03-USAGE-GUIDE.md` for integrating the CLI into your own assignment/rubric layouts.
-
----
+| Document | Description |
+|----------|-------------|
+| [Architecture](docs/architecture.md) | System design, data flow, and component relationships |
+| [CLI Reference](docs/cli-reference.md) | Commands, options, and usage examples |
+| [Grading Workflow](docs/grading-workflow.md) | End-to-end grading process explained |
+| [Misconception Analysis](docs/misconception-analysis.md) | Fuzzy clustering and pattern detection |
+| [Pydantic Models](docs/pydantic-models.md) | Complete data model reference |
+| [Prompt Strategies](docs/prompts.md) | Direct, Reverse, and EME grading approaches |
+| [Configuration](docs/configuration.md) | Setup, environment variables, and customization |
 
 ## Features
 
-### Evaluation Capabilities
+### Multi-Model Grading
+- OpenAI models (GPT-4, GPT-4o, GPT-5 series)
+- OpenRouter providers (Gemini, Claude, Llama, etc.)
+- Parallel evaluation with configurable concurrency
+- Structured output validation via Pydantic
 
-✅ **Multi-Model Grading**
-- Support for OpenAI models (GPT-4, GPT-4o, etc.)
-- Support for OpenRouter providers (Gemini, Claude, Kimi, Llama, etc.)
-- Parallel evaluation across multiple models for ensemble analysis
-- Configurable model selection and parameters
+### Three Grading Strategies
+- **Direct Grading:** Evaluate code directly against rubric
+- **Reverse Grading:** Generate ideal solution, then compare
+- **EME (Ensemble Method Evaluation):** Multi-model ensemble with 100-point normalization
 
-✅ **Three Grading Strategies**
-- **Direct Grading** (`prompts/direct_prompt.py`): Grade student code directly against rubric
-- **Reverse Grading** (`prompts/reverse_prompt.py`): Generate ideal solution first, then compare student work
-- **Ensemble Method Evaluation** (`prompts/eme_prompt.py`): Multi-model ensemble approach with structured 100-point rubric enforcement
+### Misconception Detection
+- Inductive approach: models identify misconceptions from code
+- Evidence linking with code snippets and line numbers
+- Fuzzy clustering to merge similar misconception names
+- Cross-model agreement tracking
 
-✅ **Structured Output Validation**
-- Pydantic models enforce type safety and schema compliance
-- Automatic validation of all LLM responses
-- Field-level descriptions for comprehensive documentation
-- Support for nested structures and complex validation rules
-
-✅ **Rich Misconception Detection**
-- Inductive approach: models identify misconceptions directly from student code
-- Evidence linking: each misconception tied to specific code lines and snippets
-- Confidence scoring: models rate their certainty in each identified misconception
-- Cross-model comparison: track which models identify which misconceptions
-
-### Data Models & Schema
-
-✅ **Comprehensive Pydantic Models** (`pydantic_models/`)
-- **Context**: Course, assignment, and question metadata
-- **Submission**: Student files, submission time, programming language
-- **Rubric**: Hierarchical grading criteria with category weights
-- **ModelEvaluation**: Per-model scores, category breakdowns, feedback, and misconceptions
-- **Comparison** (designed, not yet computed):
-  - Score statistics and pairwise model differences
-  - Category-level agreement analysis
-  - Misconception overlap and patterns
-  - Confidence analysis and model characteristics
-  - Inter-rater reliability metrics (ICC, Pearson, Spearman, Krippendorff's alpha)
-  - Ensemble decision strategies (mean, median, weighted)
-  - Quality assessment and automated review flags
-
-### Integration & Extensibility
-
-✅ **Flexible LLM Integration**
-- OpenAI structured outputs API via `utils/openai_client.py`
-- OpenRouter SDK with Instructor library via `utils/openrouter_sdk.py`
-- Generic interface for adding new providers
-- Fallback handling and error recovery
-
-✅ **Data Validation**
-- Schema version tracking and validation
-- Type checking across all models
-- Business logic validation (score calculations, percentages)
-- Graceful error handling with detailed error messages
-
----
+### Rich Analytics
+- Per-question difficulty analysis
+- Topic-based misconception aggregation
+- Q3→Q4 progression tracking
+- Model agreement heatmaps
 
 ## Project Structure
 
 ```
 ensemble-eval-cli/
-├── docs/                        # 📚 Complete documentation
-│   ├── 00-QUICK-START.md
-│   ├── 01-GETTING-STARTED.md
-│   ├── 02-PROJECT-STRUCTURE.md
-│   ├── 03-USAGE-GUIDE.md
-│   ├── 04-API-REFERENCE.md
-│   ├── 05-ARCHITECTURE.md
-│   └── INDEX.md
-│
-├── pydantic_models/             # Data definitions (Pydantic v2)
-├── prompts/                     # Grading strategies
-├── utils/                       # LLM integrations and grading helpers
-├── tests/                       # Test suite
-│
-├── student_submissions/         # Input: student code (one folder per student)
-├── student_evals/               # Output: evaluation results (one JSON per eval)
-│
-├── cli.py                       # Async batch CLI (Typer + Rich)
-├── sandbox/single_submission.py # Single-student sandbox workflow
-├── question_cuboid.md           # Example assignment
-├── rubric_cuboid.json           # Example grading rubric
-├── pyproject.toml               # Project configuration
-└── .env                         # API keys (not in repo)
+├── docs/                    # Documentation
+├── pydantic_models/         # Data models (Pydantic v2)
+│   ├── evaluation.py        # Root EvaluationDocument
+│   ├── context/             # Course/assignment metadata
+│   ├── submission/          # Student files
+│   ├── rubric/              # Grading criteria
+│   ├── models/              # Per-model evaluations
+│   └── comparison/          # Multi-model analysis
+├── prompts/                 # Grading strategies
+│   ├── direct_prompt.py
+│   ├── reverse_prompt.py
+│   └── eme_prompt.py
+├── utils/                   # Core utilities
+│   ├── grading.py           # Grading orchestration
+│   ├── openrouter_sdk.py    # LLM integration
+│   ├── misconception_analyzer.py
+│   └── comparison_generator.py
+├── data/a2/                 # Questions and rubrics
+├── student_submissions/     # Input: student code
+├── student_evals/           # Output: evaluation JSONs
+└── cli.py                   # Main CLI entry point
 ```
 
-For a complete walkthrough of the directory layout and model dependencies, see `docs/02-PROJECT-STRUCTURE.md`.
+## Usage
 
----
+### Interactive Mode
 
-## Usage Guide
+```bash
+uv run python cli.py
+```
 
-**Full usage guide with step-by-step examples:** [`docs/03-USAGE-GUIDE.md`](docs/03-USAGE-GUIDE.md)
+Presents a menu:
+1. **Grade Students** - Run batch grading
+2. **Analyze Misconceptions** - Analyze existing evaluations
+3. **Exit**
 
-Topics covered:
-- Evaluating your first student
-- Batch evaluating entire classes
-- Choosing different AI models
-- Understanding evaluation results
-- Advanced usage patterns
+### Direct Commands
 
----
+```bash
+# Grade all students in student_submissions/
+uv run python cli.py grade
 
-## Structured LLM Outputs
+# Analyze misconceptions from student_evals/
+uv run python cli.py analyze
+```
 
-The framework uses **Pydantic models** to ensure reliable, schema-validated evaluations from language models.
+### Sandbox Experiment
 
-**For complete details:** [`docs/04-API-REFERENCE.md`](docs/04-API-REFERENCE.md#structured-lllm-outputs)
+```bash
+# Single-student evaluation for testing
+uv run python sandbox/single_submission.py
+```
 
-Key features:
-- Type-safe evaluation responses
-- Automatic validation
-- Clear error messages on invalid data
-- No parsing errors or data loss
+## Output Format
 
----
+Evaluations are saved as JSON files conforming to the `EvaluationDocument` schema:
+
+```json
+{
+  "evaluation_id": "eval_abc123",
+  "schema_version": "1.0.0",
+  "context": { "course_id": "COSC121", "question_id": "q1" },
+  "submission": { "student_id": "Chen_Wei_200023", "files": [...] },
+  "rubric": { "total_points": 4, "categories": [...] },
+  "models": {
+    "google/gemini-2.5-flash-lite": { "scores": {...}, "misconceptions": [...] },
+    "openai/gpt-5-nano": { "scores": {...}, "misconceptions": [...] }
+  }
+}
+```
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Required for OpenRouter models
+OPENROUTER_API_KEY=sk-or-...
+
+# Optional: Direct OpenAI access
+OPENAI_API_KEY=sk-...
+```
+
+### In-Code Configuration (`cli.py`)
+
+```python
+MAX_CONCURRENT_STUDENTS = 5  # Reduce if hitting rate limits
+BATCH_LIMIT = 25             # Students per batch
+MODELS = [
+    "google/gemini-2.5-flash-lite",
+    "openai/gpt-5-nano",
+]
+```
 
 ## Testing
 
 ```bash
-# Run all tests
 uv run pytest
-
-# Run with verbose output
-uv run pytest -v
+uv run pytest -v  # Verbose
 ```
-
-**Current coverage:** ~5-10%
-
-**For testing best practices:** [`docs/05-ARCHITECTURE.md`](docs/05-ARCHITECTURE.md#testing-strategy)
-
----
-
-## Configuration
-
-**For configuration details:** [`docs/03-USAGE-GUIDE.md`](docs/03-USAGE-GUIDE.md#choosing-different-ai-models)
-
-Supported models:
-- **OpenAI:** GPT-4, GPT-4o, GPT-3.5-turbo
-- **Anthropic:** Claude 3 Opus, Sonnet
-- **Google:** Gemini models
-- **Others:** Via OpenRouter (Moonshot, Llama, etc.)
-
----
-
-## Output Format
-
-Evaluation results are saved as JSON files in `student_evals/`.
-
-**For output format details:** [`docs/03-USAGE-GUIDE.md`](docs/03-USAGE-GUIDE.md#understanding-your-results)
-
-Each file contains:
-- Student information
-- Scores from each AI model
-- Feedback (strengths and areas for improvement)
-- Identified misconceptions with evidence
-- Metadata (timestamps, model versions, etc.)
-
----
-
-## Development Roadmap
-
-### Phase 1: Schema & Infrastructure ✅ **COMPLETE**
-- [x] Finalize evaluation JSON schema (v1.0.0)
-- [x] Define misconception structure (inductive approach)
-- [x] Design comprehensive comparison metrics
-- [x] Document all fields and interpretations
-- [x] Implement complete Pydantic model hierarchy
-- [x] Integrate OpenAI and OpenRouter SDKs
-- [x] Create example evaluation workflows (batch CLI + sandbox single-student script)
-
-### Phase 2: Comparison Engine **IN PROGRESS**
-- [ ] Implement comparison computation logic
-  - [ ] Score statistics calculation (mean, median, std dev, SEM)
-  - [ ] Pairwise model comparisons
-  - [ ] Category-level agreement analysis
-  - [ ] Misconception overlap detection
-  - [ ] Confidence pattern analysis
-- [ ] Implement reliability metrics
-  - [ ] Intraclass Correlation Coefficient (ICC)
-  - [ ] Pearson correlation
-  - [ ] Spearman rank correlation
-  - [ ] Krippendorff's alpha
-- [ ] Implement ensemble decision strategies
-  - [ ] Mean/median score aggregation
-  - [ ] Weighted ensemble (by confidence)
-  - [ ] Quality assessment metrics
-
-### Phase 3: CLI & Database
-- [ ] Build interactive CLI (using Typer & Rich)
-  - [ ] Batch evaluation interface
-  - [ ] Model selection and configuration
-  - [ ] Progress reporting
-- [ ] Implement SQLite database persistence
-  - [ ] Schema migration from JSON
-  - [ ] Query interface for historical data
-  - [ ] Export and analysis tools
-
-### Phase 4: Analysis & Visualization
-- [ ] LLM-powered misconception pattern analysis
-- [ ] Statistical analysis scripts
-- [ ] Instructor dashboard with visualizations
-  - [ ] Score distributions
-  - [ ] Model agreement heatmaps
-  - [ ] Misconception frequency charts
-  - [ ] Confidence vs accuracy plots
-
-### Phase 5: Research Applications
-- [ ] Ensemble strategy comparison studies
-- [ ] Model reliability & calibration analysis
-- [ ] Misconception clustering and insights
-- [ ] Publication-ready data exports
-
----
-
-## Current Limitations & Future Work
-
-### Known Limitations
-- Single-file submissions: current workflow assumes one code file per student
-- No database: evaluations are stored as individual JSON files
-- Comparison logic not implemented: comparison models exist, but computation is not wired
-- Manual model configuration: model lists and parameters are edited in code/CLI config
-
-### Planned Enhancements
-1. **Multi-file submission support**
-   - Handle projects with multiple files (main class, tests, utilities)
-   - Concatenate files with clear delimiters for LLM context
-   - Track individual file metadata
-   - Support mixed file types (`.java`, `.py`, `.cpp`, etc.)
-
-2. **Batch evaluation**
-   - Process entire classrooms of students
-   - Parallel model queries for efficiency
-   - Progress tracking and resume capability
-
-3. **Interactive CLI**
-   - Menu-driven interface for non-programmers
-   - Configuration wizards
-   - Result browsing and filtering
-
-4. **Advanced analytics**
-   - Cohort-level statistics
-   - Longitudinal tracking across assignments
-   - Anomaly detection (unusual scoring patterns)
-   - Model calibration studies
-
----
-
-## Contributing
-
-**For detailed development guidance:** [`docs/05-ARCHITECTURE.md`](docs/05-ARCHITECTURE.md#extension-guide)
-
-When adding features:
-1. Follow architectural patterns
-2. Maintain schema integrity with Pydantic
-3. Document thoroughly
-4. Write tests with good coverage
-
----
 
 ## Research Context
 
-**Project:** Honours Thesis Research - Ensemble Model Evaluation for Code Grading
-**Institution:** University of British Columbia Okanagan (UBCO)
-**Course:** COSC 499 - Honours Thesis
-**Researcher:** Shlok Shah
+**Project:** Honours Thesis - Ensemble Model Evaluation for Code Grading  
+**Institution:** University of British Columbia Okanagan (UBCO)  
+**Researcher:** Shlok Shah  
 **Academic Year:** 2024-2025
 
 ## Citation
-
-If you use this schema or framework in your research, please cite:
 
 ```bibtex
 @software{eme_framework_2025,
