@@ -618,8 +618,6 @@ class MisconceptionAnalyzer:
             "",
             "---",
             "",
-            "## Executive Summary",
-            "",
         ]
 
         # Add Topic Summary (Most Difficult Areas by unique topics)

@@ -1,12 +1,10 @@
 # Misconception Analysis Report
 
-**Generated:** 2025-11-25 12:31:17
+**Generated:** 2025-11-25 16:57:00
 **Total Students Analyzed:** 25
 **Total Misconceptions Detected:** 56
 
 ---
-
-## Executive Summary
 
 ### Most Difficult Areas (by % of class affected)
 
@@ -24,7 +22,7 @@
 | 1 | Missing Semicolon | Variables | 2 | 1 (gemini-2.5-flash-lite) |
 | 2 | Incorrect input handling | Reading input from the keyboard | 2 | 1 (gemini-2.5-flash-lite) |
 | 3 | Incorrect formula application | Variables | 2 | 1 (gemini-2.5-flash-lite) |
-| 4 | Incorrect operator precedence | Variables | 2 | 2 (gemini-2.5-flash-lite, gpt-5-nano) |
+| 4 | Incorrect operator precedence | Variables | 2 | 2 (gpt-5-nano, gemini-2.5-flash-lite) |
 | 5 | Syntax errors prevent compilation | Variables | 1 | 1 (gpt-5-nano) |
 | 6 | Missing semicolon after print statement | Variables | 1 | 1 (gpt-5-nano) |
 | 7 | Misinterpreting the problem and irrelevant input/output | Variables | 1 | 1 (gemini-2.5-flash-lite) |
