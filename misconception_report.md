@@ -1,6 +1,6 @@
 # Misconception Analysis Report
 
-**Generated:** 2025-11-30 03:53:19
+**Generated:** 2025-11-30 03:58:18
 **Total Students Analyzed:** 25
 **Total Misconceptions Detected:** 49
 
@@ -15,6 +15,18 @@
 | 3 | Data Types | 6 | 4/25 (16%) | 0.89 |
 | 4 | Constants | 4 | 4/25 (16%) | 0.81 |
 | 5 | Reading input from the keyboard | 7 | 3/25 (12%) | 0.86 |
+
+### 'Other' Category Breakdown
+
+The 'Other' category contains 24 misconceptions that don't fit the 4 course topics.
+These are grouped by semantic similarity:
+
+| Sub-category | Count | Examples |
+|--------------|-------|----------|
+| Problem Understanding | 10 | "Wrong approach / Solution not matching p...", "Misinterpretation of Problem Requirement..." |
+| Miscellaneous | 8 | "Incorrect sign in velocity change", "Incorrect problem implementation (fuel-c..." |
+| Formula Application | 5 | "Formula Misapplication", "Solved a different problem (acceleration..." |
+| Output Issues | 1 | "Incorrect Output Value" |
 
 ### Most Common Misconceptions
 

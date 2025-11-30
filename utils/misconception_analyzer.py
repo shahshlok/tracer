@@ -467,6 +467,84 @@ class MisconceptionAnalyzer:
                 
         return clusters
 
+    def get_other_subcategories(self) -> dict[str, list[MisconceptionRecord]]:
+        """Group misconceptions in 'Other' category into sub-categories using keyword matching.
+        
+        Uses a two-pass approach:
+        1. First try to match on the misconception NAME only (more reliable)
+        2. If no match, try matching on description (less reliable, more specific keywords)
+
+        Returns:
+            Dictionary mapping sub-category names to list of records in that sub-category.
+        """
+        if not self.misconception_records:
+            return {}
+
+        # Get only "Other" records
+        other_records = [r for r in self.misconception_records if r.topic == OTHER_TOPIC]
+        if not other_records:
+            return {}
+
+        # Define semantic sub-categories with keywords
+        # Priority order matters - first match wins
+        # Using more specific phrases to avoid false positives
+        SUBCATEGORY_RULES = [
+            ("Formula Application", {
+                "name_keywords": ["formula", "distance", "acceleration", "heron", "area", "geometry", "calculation"],
+                "description_keywords": []  # Don't match on description for this category
+            }),
+            ("Problem Understanding", {
+                "name_keywords": ["misinterpret", "misunderstand", "wrong problem", "wrong approach", 
+                                  "different problem", "problem requirement", "problem interpretation",
+                                  "misappl", "disregard", "objective"],
+                "description_keywords": ["solved a different", "wrong problem", "misunderstood the"]
+            }),
+            ("Output Issues", {
+                "name_keywords": ["output", "display", "print"],
+                "description_keywords": []
+            }),
+            ("Algorithm/Logic", {
+                "name_keywords": ["algorithm", "logic error"],
+                "description_keywords": []
+            }),
+        ]
+
+        # Categorize each record
+        subcategories: dict[str, list[MisconceptionRecord]] = defaultdict(list)
+        
+        for record in other_records:
+            name_lower = record.name.lower()
+            desc_lower = record.description.lower()
+            
+            matched = False
+            
+            # First pass: try to match on NAME only
+            for subcat, rules in SUBCATEGORY_RULES:
+                for keyword in rules["name_keywords"]:
+                    if keyword in name_lower:
+                        subcategories[subcat].append(record)
+                        matched = True
+                        break
+                if matched:
+                    break
+            
+            # Second pass: if no name match, try description with more specific keywords
+            if not matched:
+                for subcat, rules in SUBCATEGORY_RULES:
+                    for keyword in rules["description_keywords"]:
+                        if keyword in desc_lower:
+                            subcategories[subcat].append(record)
+                            matched = True
+                            break
+                    if matched:
+                        break
+            
+            # If still no match, put in "Miscellaneous"
+            if not matched:
+                subcategories["Miscellaneous"].append(record)
+
+        return dict(subcategories)
+
     def analyze_student(self, student_id: str) -> StudentAnalysis | None:
         """Analyze misconceptions for a specific student across all questions.
 
@@ -793,6 +871,27 @@ class MisconceptionAnalyzer:
                     f"{student_count}/{class_analysis.total_students} ({percentage:.0f}%) | "
                     f"{avg_conf:.2f} |"
                 )
+            lines.append("")
+
+        # Add "Other" category breakdown if there are items in it
+        other_subcats = self.get_other_subcategories()
+        if other_subcats:
+            other_total = sum(len(records) for records in other_subcats.values())
+            lines.append("### 'Other' Category Breakdown")
+            lines.append("")
+            lines.append(f"The 'Other' category contains {other_total} misconceptions that don't fit the 4 course topics.")
+            lines.append("These are grouped by semantic similarity:")
+            lines.append("")
+            lines.append("| Sub-category | Count | Examples |")
+            lines.append("|--------------|-------|----------|")
+            
+            for subcat, records in sorted(other_subcats.items(), key=lambda x: -len(x[1])):
+                count = len(records)
+                # Get unique misconception names as examples (max 2)
+                unique_names = list(set(r.name for r in records))[:2]
+                examples = ", ".join(f'"{n[:40]}..."' if len(n) > 40 else f'"{n}"' for n in unique_names)
+                lines.append(f"| {subcat} | {count} | {examples} |")
+            
             lines.append("")
 
         if class_analysis.misconception_type_stats:
