@@ -1,185 +1,62 @@
-# Research Implementation Plan
+# Plan: Authentic Seeded Submission Generation
 
-**Project:** LLM-Based Misconception Detection in Introductory Programming  
-**Deadline:** End of January 2026  
-**Status:** Literature review in progress (deep research agents running)
+## Objective
+Create a high-fidelity validation dataset, `authentic_seeded/`, that mirrors and improves upon the authenticity of `student_submissions/`. The goal is to have a directory of "student" submissions that look completely real—messy, varied, and diverse—but contain specific, ground-truth misconceptions for validation.
 
----
+## Strategy: The "Authentic Simulation" Approach
 
-## Research Focus
+Instead of reusing existing student files as a fixed "control group," we will treat the entire `student_submissions/` directory as a **style corpus**. We will analyze the styles, variable naming patterns, and structural quirks of *all* students, and then generate new, unique seeded submissions that mimic these authentic traits.
 
-**Primary Research Question:**  
-Can LLMs reliably detect student misconceptions, and can automated misconception detection help instructors identify at-risk students and struggling topics?
+### 1. Style Analysis
+We will analyze the existing 25 students to understand:
+*   **Scanner Names**: `sc`, `input`, `scanner`, `reader`, `keyboard`.
+*   **Variable Naming**: `v0` vs `startVelocity`, `t` vs `time`.
+*   **Formatting**: Indentation (spaces vs tabs, 2 vs 4), brace placement (end-of-line vs new-line).
+*   **Noise**: Extra newlines, comments, missing spaces around operators.
 
-**Novel Contribution (Primary):**  
-> "A systematic study of LLM-based misconception detection in introductory programming, with a tool/methodology for instructors to identify at-risk topics"
+### 2. "Authentic Seeded" Generation
+We will create `utils/authentic_generator.py` to generate completely new student profiles (e.g., `Lastname_firstname_001`, `Lastname_firstname_002`) that exhibit these realistic traits.
 
-**Supporting Contributions:**
-- A taxonomy for classifying programming misconceptions (vs syntax errors)
-- Multi-model agreement as a validity signal
-- Seeded misconception validation methodology (synthetic benchmark)
+**Process per Seeded Student:**
+1.  **Assign Persona**: Randomly pick a "coding persona" (e.g., "The Minimalist", "The Verbose", "The Messy").
+2.  **Generate Correct Base**: Construct the correct Java code using the persona's style preferences (variable names, whitespace).
+3.  **Inject Misconception**: "Break" the code logic according to the specific misconception ID (e.g., `DT001` - Int Division).
+4.  **Add Noise**: Randomly add "human" touches like spacing inconsistencies or comments.
 
----
+### 3. Injection Logic
+The injection will happen at the *generation* stage, not post-processing. This is more robust.
 
-## Constraints & Decisions
+| Misconception | Injection Strategy |
+| :--- | :--- |
+| **DT001 (Int Types)** | Declare all inputs as `int` instead of `double`. |
+| **DT002 (Int Div)** | Cast operands to `(int)` before division. |
+| **VAR001 (Precedence)** | Remove parentheses in `(v1 - v0) / t`. |
+| **CONST001 (Caret)** | Use `^` instead of `Math.pow()`. |
+| **...and so on** | (Full mapping for all 11 misconceptions) |
 
-| Decision | Choice |
-|----------|--------|
-| Language | Java only |
-| Assignment | data/a2 (Q1-Q4) |
-| Data | Synthetic submissions (no ethics approval for real data) |
-| Ensemble voting | Deferred (focus on misconceptions) |
-| Bloom's taxonomy | Deferred (see future.txt) |
-| Target audience | Instructors, TAs, researchers |
+### 4. Output Structure
+The `authentic_seeded/` directory will look indistinguishable from a real class roster, except for the folder naming convention to track ground truth.
 
----
+```
+authentic_seeded/
+├── lastname_firstname_DT001/   <-- unique student name + Misconception Tag
+│   └── Q1.java                   <-- The messy, "real" looking file
+├── lastname_firstname_VAR003/
+│   └── Q2.java
+├── lastname_firstname_Correct/
+│   └── Q1.java
+└── manifest.json                 <-- Full ground truth map
+```
 
-## Ground Truth Strategy: Seeded Misconception Validation
+### 5. Implementation Plan
+1.  **`utils/authentic_generator.py`**:
+    *   `CodeBuilder` class: Handles indentation, spacing, and variable naming context.
+    *   `StyleProfile`: Dataclass defining a student's specific quirks.
+    *   `Templates`: Logic-agnostic templates that `CodeBuilder` fleshes out.
+2.  **Execution**: Generate 50+ unique seeded submissions covering all misconceptions + control correct ones.
+3.  **Validation**: Ensure the code compiles (except for syntax-error misconceptions) and looks "human".
 
-Since we don't have real student data, we create a synthetic benchmark:
-
-1. **Define a misconception catalog** - List of known misconceptions we expect to detect
-2. **Generate seeded submissions** - Create synthetic code with specific, known misconceptions injected
-3. **Run detection** - Have LLMs analyze the seeded submissions
-4. **Measure precision/recall** - Did the LLMs find what we injected?
-
-**Why this works for publication:**
-- Reproducible by other researchers
-- You control the ground truth
-- Common methodology in ML/NLP research
-- Novel contribution in CS education context
-
----
-
-## What Counts as a Misconception
-
-| REAL Misconception (Detect) | NOT a Misconception (Filter Out) |
-|-----------------------------|----------------------------------|
-| Using `int` instead of `double` for decimals | Missing semicolon |
-| Using `^` instead of `Math.pow()` | Misspelled variable name |
-| Wrong formula: `(v1 + v0) / t` vs `(v1 - v0) / t` | Extra whitespace |
-| Integer division confusion (`5/2 = 2`) | Missing import statement |
-| Not closing Scanner (resource leak) | Formatting issues |
-| Wrong operator precedence in expressions | Typos in string literals |
-
-**Key distinction:** Misconception = misunderstanding of a concept. Mistake = mechanical error.
-
----
-
-## Topic Taxonomy
-
-**Original course topics from Assignment 2 rubric** (kept pure and clean):
-
-| Topic | Description | Examples |
-|-------|-------------|----------|
-| **Variables** | Declaring, assigning, using in expressions | Operator precedence |
-| **Data Types** | Choosing appropriate types | int vs double, type casting, integer division |
-| **Constants** | Math library usage | Math.pow, Math.sqrt |
-| **Reading input from the keyboard** | Scanner usage | Scanner methods, prompts, parsing |
-
-**Catch-all category:**
-| **Other** | Doesn't fit course topics | Problem understanding, formula application, output formatting |
-
-**Filtered out (not real misconceptions):**
-| **Syntax** | Mechanical errors | Missing semicolons, typos, missing imports |
-
----
-
-## 8-Week Timeline
-
-| Week | Focus | Deliverables |
-|------|-------|--------------|
-| **1** (Dec 1-7) | Tool improvements | Fix topic taxonomy, add misconception filtering |
-| **2** (Dec 8-14) | Seeded validation | Misconception catalog, seeded submission generator |
-| **3** (Dec 15-21) | Experiments | Run detection on seeded data, measure precision/recall |
-| **4** (Dec 22-28) | Visualizations | Heatmaps, progression charts, model agreement |
-| **5** (Dec 29-Jan 4) | Analysis | Statistical analysis, write results section |
-| **6** (Jan 5-11) | Paper draft | Introduction, methodology, results |
-| **7** (Jan 12-18) | Paper draft | Related work (from lit review), discussion |
-| **8** (Jan 19-25) | Polish | Revisions, formatting, submission |
-
----
-
-## Implementation Tasks (Priority Order)
-
-### Phase 1: Core Improvements (Week 1) - COMPLETED
-
-- [x] **1.1 Keep original topic taxonomy**
-  - Kept original 4 course topics: Variables, Data Types, Constants, Reading input from the keyboard
-  - These align with the actual learning objectives from the assignment rubric
-
-- [x] **1.2 Add misconception filtering**
-  - Created `is_syntax_error()` function to detect and filter mechanical errors
-  - Filters: missing semicolons, typos, misspellings, missing imports, formatting
-  - Result: 7 syntax errors filtered, 49 real misconceptions remain
-
-- [x] **1.3 Improve prompt for misconception quality**
-  - Updated `direct_prompt.py` and `grading.py` with clear examples
-  - REPORT: wrong data types, wrong formulas, operator precedence issues
-  - DO NOT REPORT: semicolons, typos, imports, formatting
-
-### Phase 2: Validation Framework (Week 2)
-
-- [ ] **2.1 Create misconception catalog**
-  - Define 10-15 common misconceptions for A2
-  - Document expected behavior for each
-
-- [ ] **2.2 Build seeded submission generator**
-  - Script to generate Java files with known misconceptions
-  - Metadata file tracking what was injected where
-
-- [ ] **2.3 Validation pipeline**
-  - Run grading on seeded submissions
-  - Compare detected vs injected misconceptions
-  - Calculate precision/recall
-
-### Phase 3: Visualization (Week 4)
-
-- [ ] **3.1 Heatmap: Topic × Question**
-  - Which topics are hardest in which questions?
-
-- [ ] **3.2 Student progression chart**
-  - Q1→Q2→Q3→Q4 flow (generalized, not hardcoded)
-
-- [ ] **3.3 Model agreement visualization**
-  - Which misconceptions do models agree/disagree on?
-
-- [ ] **3.4 Export figures for paper**
-  - PNG/PDF outputs suitable for publication
-
-### Phase 4: Analysis & Paper (Weeks 5-8)
-
-- [ ] **4.1 Statistical analysis**
-  - Precision/recall on seeded data
-  - Inter-model agreement metrics
-  - Topic difficulty rankings
-
-- [ ] **4.2 Paper writing**
-  - Use literature review results
-  - Document methodology
-  - Present findings
-
----
-
-## Files to Modify
-
-| File | Changes |
-|------|---------|
-| `utils/misconception_analyzer.py` | New topic taxonomy, misconception filtering |
-| `prompts/direct_prompt.py` | Better misconception vs mistake guidance |
-| `pydantic_models/models/evaluation.py` | Update `CANONICAL_TOPICS` |
-| `cli.py` | Add visualization export command |
-| NEW: `utils/seeded_generator.py` | Seeded submission generator |
-| NEW: `utils/validation.py` | Precision/recall calculation |
-| NEW: `utils/visualizations.py` | Chart generation |
-
----
-
-## Next Immediate Action
-
-While literature review runs, start **Phase 1: Core Improvements**:
-1. Fix the topic taxonomy
-2. Add misconception filtering
-3. Improve the grading prompt
-
-Ready to begin implementation?
+## Benefits
+*   **No Data Leakage**: We aren't reusing the exact code from the training/test set (`student_submissions`).
+*   **Infinite Diversity**: We can generate 1000s of unique-looking submissions.
+*   **Ground Truth**: We know exactly what error is in `Authentic_Seeded_055` because we put it there.
