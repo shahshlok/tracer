@@ -12,7 +12,8 @@ public class Q3
 		double y1 = input.nextDouble();
 		System.out.print("Enter x2 and y2: ");
 		double x2 = input.nextDouble();
-		double y2 = input.nextDouble();
+		// double y2 = input.nextDouble();
+		double y2 = 3.0;
 		double distance = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
 		System.out.println("The distance of the two points is " + distance);
 	}

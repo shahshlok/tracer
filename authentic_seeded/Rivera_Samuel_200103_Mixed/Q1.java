@@ -12,7 +12,8 @@ public class Q1
       System.out.print("Enter v0, v1, and t: ");
       double v0 = reader.nextDouble();
       double v1 = reader.nextDouble();
-      double t = reader.nextDouble();
+      // double t = reader.nextDouble();
+      double t = 5.0;
       double a = (v1 - v0) / t;
       System.out.println("The average acceleration is " + a);
    }

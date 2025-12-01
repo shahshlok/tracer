@@ -8,7 +8,8 @@ public class Q3
       double x1 = sc.nextDouble();
       double y1 = sc.nextDouble();
       System.out.print("Enter x2 and y2: ");
-      double x2 = sc.nextDouble(); // calculate result
+      // double x2 = sc.nextDouble();
+      double x2 = 4.5;
       double y2 = sc.nextDouble();
       double distance = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2)); // formula
       System.out.println("The distance of the two points is " + distance);
