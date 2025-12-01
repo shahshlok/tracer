@@ -33,17 +33,10 @@ console = Console()
 # --- Configuration ---
 # Reduce this if you hit rate limits (429 errors), increase if your tier allows.
 MAX_CONCURRENT_STUDENTS = 10
-MODELS = [
-    # "google/gemini-2.5-flash",
-    # "openai/gpt-5.1",
-    "google/gemini-2.5-flash-lite",
-    "openai/gpt-5-nano",
-]
+MODELS = ["google/gemini-2.5-flash-preview-09-2025", "openai/gpt-5.1"]
 MODEL_SHORT_NAMES = {
-    "google/gemini-2.5-flash": "GemFlash",
+    "google/gemini-2.5-flash-preview-09-2025": "2.5-Flash",
     "openai/gpt-5.1": "GPT5.1",
-    "google/gemini-2.5-flash-lite": "GemLite",
-    "openai/gpt-5-nano": "GPT5N",
 }
 BATCH_LIMIT = 25  # Process 25 students
 
@@ -359,8 +352,8 @@ async def batch_grade_students(students: list[str], strategy: str = "minimal") -
         students: List of student IDs to grade
         strategy: Prompt strategy - "baseline", "minimal", "socratic", "rubric_only"
     """
-    from rich.live import Live
     from rich.layout import Layout
+    from rich.live import Live
     from rich.spinner import Spinner
 
     sem = asyncio.Semaphore(MAX_CONCURRENT_STUDENTS)
@@ -594,17 +587,15 @@ def display_grading_results(results: list[dict], strategy: str = "minimal"):
 
     table.add_column("Student", style="white")
     table.add_column("Q", style="yellow")
-    table.add_column("GemFlash", justify="right", style="cyan")
+    table.add_column("2.5-Flash", justify="right", style="cyan")
     table.add_column("GPT5.1", justify="right", style="green")
-    table.add_column("GemLite", justify="right", style="magenta")
-    table.add_column("GPT5N", justify="right", style="yellow")
     table.add_column("Avg", justify="right", style="bold white")
     table.add_column("Range", justify="right", style="red")
     table.add_column("Conf", justify="right", style="blue")
     table.add_column("Flag", justify="center")
 
     displayed_count = 0
-    
+
     for res in results:
         student = res["student"]
 
@@ -613,8 +604,6 @@ def display_grading_results(results: list[dict], strategy: str = "minimal"):
             table.add_row(
                 student,
                 res.get("question", "-"),
-                "-",
-                "-",
                 "-",
                 "-",
                 "-",
@@ -630,23 +619,21 @@ def display_grading_results(results: list[dict], strategy: str = "minimal"):
         question = res.get("question", "?")
 
         # Get evaluations for each model
-        gemini_flash_eval = evals.get("google/gemini-2.5-flash")
+        gemini_flash_eval = evals.get("google/gemini-2.5-flash-preview-09-2025")
         gpt51_eval = evals.get("openai/gpt-5.1")
-        gemini_lite_eval = evals.get("google/gemini-2.5-flash-lite")
-        gpt5nano_eval = evals.get("openai/gpt-5-nano")
 
         # Get scores
         valid_scores = []
-        for ev in [gemini_flash_eval, gpt51_eval, gemini_lite_eval, gpt5nano_eval]:
+        for ev in [gemini_flash_eval, gpt51_eval]:
             if ev:
                 valid_scores.append(ev.scores.total_points_awarded)
 
         avg_score = sum(valid_scores) / len(valid_scores) if valid_scores else 0
-        score_range = max(valid_scores) - min(valid_scores) if valid_scores else 0
+        score_range = max(valid_scores) - min(valid_scores) if len(valid_scores) >= 2 else 0
 
         # Calculate average confidence
         confs = []
-        for ev in [gemini_flash_eval, gpt51_eval, gemini_lite_eval, gpt5nano_eval]:
+        for ev in [gemini_flash_eval, gpt51_eval]:
             if ev:
                 confs.extend([cs.confidence for cs in ev.category_scores])
 
@@ -661,10 +648,10 @@ def display_grading_results(results: list[dict], strategy: str = "minimal"):
             table.add_row(
                 student,
                 question,
-                f"{gemini_flash_eval.scores.total_points_awarded:.1f}" if gemini_flash_eval else "-",
+                f"{gemini_flash_eval.scores.total_points_awarded:.1f}"
+                if gemini_flash_eval
+                else "-",
                 f"{gpt51_eval.scores.total_points_awarded:.1f}" if gpt51_eval else "-",
-                f"{gemini_lite_eval.scores.total_points_awarded:.1f}" if gemini_lite_eval else "-",
-                f"{gpt5nano_eval.scores.total_points_awarded:.1f}" if gpt5nano_eval else "-",
                 f"{avg_score:.1f}",
                 f"{score_range:.1f}",
                 f"{avg_conf:.0f}%",
@@ -676,7 +663,7 @@ def display_grading_results(results: list[dict], strategy: str = "minimal"):
         console.print(table)
     else:
         console.print("[green]No significant disagreements or errors found![/green]")
-        
+
     console.print()
     console.print(
         f"[dim]Processed {len(results)} evaluations. Showing {displayed_count} flagged/error items.[/dim]"
@@ -843,7 +830,7 @@ def run_misconception_analysis():
             stat.topic,
             str(stat.occurrence_count),
             f"{stat.student_count}/{stat.total_students}",
-            f"{stat.model_agreement_count}/4",
+            f"{stat.model_agreement_count}/{len(MODELS)}",
         )
 
     console.print(misconception_table)
