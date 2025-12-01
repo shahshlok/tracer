@@ -41,6 +41,21 @@ MODELS = [
 ]
 BATCH_LIMIT = 25  # Process 25 students
 
+# Representative sample of 10 students (20% Correct, 30% Mixed, 50% Single Error)
+# Balanced to match class distribution: 2 Correct, 3 Mixed, 5 Single (DT, VAR, CONST, INPUT, OTHER)
+REPRESENTATIVE_STUDENTS = [
+    "Walker_Chloe_200124_Correct",  # All correct (control)
+    "Robinson_Noah_200127_Correct",  # All correct (control 2)
+    "Torres_Daniel_200148_Mixed",  # DT002 + INPUT003
+    "Ramirez_Zoey_200134_Mixed",  # VAR001 + CONST001 + DT003
+    "Lopez_Abigail_200117_Mixed",  # OTHER001 + INPUT001
+    "Anderson_Noah_200113_DT003",  # DT003
+    "Hill_Michael_200140_VAR001",  # VAR001: operator precedence
+    "Smith_Mason_200158_CONST002",  # CONST002: missing Math.sqrt
+    "Flores_Emily_200126_INPUT002",  # INPUT002: scanner.nextLine() vs next()
+    "Rodriguez_Owen_200104_OTHER002",  # OTHER002: miscellaneous
+]
+
 # --- Helper Functions ---
 
 
@@ -426,7 +441,8 @@ def run_grading(strategy: str = "minimal", batch_size: int | None = None):
             - "minimal": No examples, minimal guidance (recommended for research)
             - "socratic": Chain-of-thought reasoning
             - "rubric_only": Grade only, no misconception detection
-        batch_size: Number of students to grade. If None, uses BATCH_LIMIT.
+        students: Specific list of student IDs to grade. If None, uses batch_size.
+        batch_size: Number of students to grade (from beginning of list). If None, uses BATCH_LIMIT.
     """
     # Discovery
     all_students = get_student_list()
@@ -440,9 +456,12 @@ def run_grading(strategy: str = "minimal", batch_size: int | None = None):
         )
         return
 
-    # Determine batch size
-    limit = batch_size if batch_size is not None else BATCH_LIMIT
-    students_to_grade = all_students[:limit]
+    # Determine which students to grade
+    if students is not None:
+        students_to_grade = students
+    else:
+        limit = batch_size if batch_size is not None else BATCH_LIMIT
+        students_to_grade = all_students[:limit]
 
     console.print(
         f"[bold]Processing {len(students_to_grade)} of {len(all_students)} students...[/bold]"
@@ -712,22 +731,44 @@ def main(ctx: typer.Context):
 
         console.print()
 
-        # Ask for batch size
+        # Ask for student selection
         all_students = get_student_list()
         console.print(f"[dim]Found {len(all_students)} students in authentic_seeded/[/dim]")
-        batch_size = Prompt.ask(
-            "[bold]How many students to grade?[/bold]",
-            default="5",
+        console.print()
+        console.print("[bold]Select students to grade:[/bold]")
+        console.print("  [1] Representative sample (10 students, covers 12/15 misconception types)")
+        console.print("  [2] Custom number (first N alphabetically)")
+        console.print("  [3] All students")
+        console.print()
+
+        student_choice = Prompt.ask(
+            "[bold]Selection[/bold]",
+            choices=["1", "2", "3"],
+            default="1",
         )
 
-        try:
-            batch_size = int(batch_size)
-            batch_size = min(batch_size, len(all_students))  # Cap at available students
-        except ValueError:
-            batch_size = 5
+        if student_choice == "1":
+            # Use representative sample
+            students_to_use = [s for s in REPRESENTATIVE_STUDENTS if s in all_students]
+            console.print(
+                f"[green]Using representative sample: {len(students_to_use)} students[/green]"
+            )
+        elif student_choice == "2":
+            batch_size = Prompt.ask(
+                "[bold]How many students?[/bold]",
+                default="5",
+            )
+            try:
+                batch_size = int(batch_size)
+                batch_size = min(batch_size, len(all_students))
+            except ValueError:
+                batch_size = 5
+            students_to_use = all_students[:batch_size]
+        else:
+            students_to_use = all_students
 
         console.print()
-        run_grading(strategy=strategy, batch_size=batch_size)
+        run_grading(strategy=strategy, students=students_to_use)
 
     elif choice == "2":
         # Misconception Analysis workflow
