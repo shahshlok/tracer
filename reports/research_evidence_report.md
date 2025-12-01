@@ -6,7 +6,7 @@ Statistical analysis of prompt strategies for automated misconception detection.
 
 ## 1. Executive Statistical Summary
 
-![Strategy Comparison](reports/figures/strategy_comparison.png)
+![Strategy Comparison](figures/strategy_comparison.png)
 
 ### Understanding the Metrics
 
@@ -168,7 +168,7 @@ either the task is inherently ambiguous or the models have different 'opinions' 
 
 ### Krippendorff's Alpha (Multi-Rater Agreement)
 
-![Model Agreement](reports/figures/model_agreement.png)
+![Model Agreement](figures/model_agreement.png)
 
 | Strategy    |  Alpha  | Interpretation                       |
 | ----------- | :-----: | ------------------------------------ |
@@ -211,7 +211,7 @@ in the ground truth. A rate of 100% means the LLMs caught every instance; 0% mea
 
 ### Detection Rates by Misconception Type
 
-![Misconception Heatmap](reports/figures/misconception_heatmap.png)
+![Misconception Heatmap](figures/misconception_heatmap.png)
 
 | ID       | Name                                | Minimal | Baseline | Socratic | Rubric_only |  Avg  |
 | :------- | :---------------------------------- | :-----: | :------: | :------: | :---------: | :---: |
