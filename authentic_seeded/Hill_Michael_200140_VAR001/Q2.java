@@ -3,6 +3,7 @@
 // Assignment 2
 
 import java.util.Scanner;
+
 public class Q2 {
 	public static void main(String[] args) {
 		Scanner scanner = new Scanner(System.in);
@@ -12,7 +13,7 @@ public class Q2 {
 		double milesPerGallon = scanner.nextDouble();
 		System.out.print("Enter price in $ per gallon: ");
 		double price = scanner.nextDouble();
-		double cost = (distance / milesPerGallon) * price;
+		cost = (distance / milesPerGallon) * price;
 		System.out.println("The cost of driving is $" + cost);
 	}
 }

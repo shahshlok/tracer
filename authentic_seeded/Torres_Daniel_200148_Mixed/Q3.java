@@ -1,8 +1,10 @@
 import java.util.Scanner;
+
 public class Q3 {
   public static void main(String[] args) {
     Scanner scanner = new Scanner(System.in);
     System.out.print("Enter x1 and y1: ");
+    scanner.nextDouble(); // Extra read
     double x1 = scanner.nextDouble();
     double y1 = scanner.nextDouble();
     System.out.print("Enter x2 and y2: ");

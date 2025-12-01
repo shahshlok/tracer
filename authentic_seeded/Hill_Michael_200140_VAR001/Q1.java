@@ -11,7 +11,7 @@ public class Q1 {
 		double vStart = scanner.nextDouble();
 		double vEnd = scanner.nextDouble();
 		double t = scanner.nextDouble();
-		double a = vEnd - vStart / t;
+		a = vEnd - vStart / t;
 		System.out.println("The average acceleration is " + a);
 	}
 }

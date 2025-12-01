@@ -8,7 +8,7 @@ public class Q1 {
     double vEnd = scanner.nextDouble();
     double t = scanner.nextDouble();
     System.out.println("----------------");
-    double a = (int)(vEnd - vStart) / (int)t;
+    a = (int) (vEnd - vStart) / (int) t;
     System.out.println("test");
     System.out.println("The average acceleration is " + a);
   }
