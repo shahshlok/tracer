@@ -32,13 +32,19 @@ console = Console()
 
 # --- Configuration ---
 # Reduce this if you hit rate limits (429 errors), increase if your tier allows.
-MAX_CONCURRENT_STUDENTS = 5
+MAX_CONCURRENT_STUDENTS = 10
 MODELS = [
     # "google/gemini-2.5-flash",
     # "openai/gpt-5.1",
     "google/gemini-2.5-flash-lite",
     "openai/gpt-5-nano",
 ]
+MODEL_SHORT_NAMES = {
+    "google/gemini-2.5-flash": "GemFlash",
+    "openai/gpt-5.1": "GPT5.1",
+    "google/gemini-2.5-flash-lite": "GemLite",
+    "openai/gpt-5-nano": "GPT5N",
+}
 BATCH_LIMIT = 25  # Process 25 students
 
 # Representative sample of 10 students (20% Correct, 30% Mixed, 50% Single Error)
@@ -135,8 +141,36 @@ def create_strategy_panel():
     )
 
 
+class GradingTracker:
+    """Thread-safe tracker for grading progress across models."""
+
+    def __init__(self):
+        self.model_status: dict[str, str] = {model: "idle" for model in MODELS}
+        self.model_completed: dict[str, int] = {model: 0 for model in MODELS}
+        self.model_errors: dict[str, int] = {model: 0 for model in MODELS}
+        self.lock = asyncio.Lock()
+
+    async def set_status(self, model: str, status: str):
+        async with self.lock:
+            self.model_status[model] = status
+
+    async def mark_completed(self, model: str, success: bool = True):
+        async with self.lock:
+            if success:
+                self.model_completed[model] += 1
+            else:
+                self.model_errors[model] += 1
+            self.model_status[model] = "idle"
+
+
 async def grade_student_with_models(
-    student_code: str, question_text: str, rubric_data: dict[str, Any], strategy: str = "minimal"
+    student_code: str,
+    question_text: str,
+    rubric_data: dict[str, Any],
+    strategy: str = "minimal",
+    tracker: GradingTracker | None = None,
+    student_id: str = "",
+    q_id: str = "",
 ) -> dict[str, Any]:
     """
     Grades a single student against ALL models in parallel.
@@ -146,15 +180,29 @@ async def grade_student_with_models(
         question_text: The assignment question
         rubric_data: The grading rubric
         strategy: Prompt strategy - "baseline", "minimal", "socratic", "rubric_only"
+        tracker: Optional tracker for progress updates
+        student_id: Student identifier for status display
+        q_id: Question identifier for status display
     """
     prompt = construct_prompt(question_text, rubric_data, student_code, strategy=strategy)
     messages = [{"role": "user", "content": prompt}]
 
     async def grade_with_error_handling(model: str):
         try:
+            if tracker:
+                short_name = MODEL_SHORT_NAMES.get(model, model.split("/")[-1])
+                await tracker.set_status(model, f"{student_id[:15]}:{q_id}")
+
             # grading.py's grade_with_model is already async
-            return await grade_with_model(model, messages)
+            result = await grade_with_model(model, messages)
+
+            if tracker:
+                await tracker.mark_completed(model, success=True)
+
+            return result
         except Exception:
+            if tracker:
+                await tracker.mark_completed(model, success=False)
             # Return None on error, will be filtered out later
             return None
 
@@ -172,6 +220,7 @@ async def process_student_wrapper(
     progress: Progress,
     task_id: TaskID,
     strategy: str = "minimal",
+    tracker: GradingTracker | None = None,
 ) -> list[dict[str, Any]]:
     """
     Worker function that processes one student within the semaphore limit.
@@ -183,6 +232,7 @@ async def process_student_wrapper(
         progress: Rich progress bar
         task_id: Task ID for progress tracking
         strategy: Prompt strategy - "baseline", "minimal", "socratic", "rubric_only"
+        tracker: Optional tracker for per-model progress
     """
     student_name = student_id.replace("_", " ")
     student_results = []
@@ -237,7 +287,13 @@ async def process_student_wrapper(
 
                 # 3. Grade (Slow Network Call)
                 model_evals = await grade_student_with_models(
-                    student_code, question_text, rubric_data, strategy=strategy
+                    student_code,
+                    question_text,
+                    rubric_data,
+                    strategy=strategy,
+                    tracker=tracker,
+                    student_id=student_id,
+                    q_id=q_id,
                 )
 
                 # 4. Save Results (Fast I/O)
@@ -297,37 +353,233 @@ async def process_student_wrapper(
 
 async def batch_grade_students(students: list[str], strategy: str = "minimal") -> list[dict]:
     """
-    Orchestrates the parallel grading of multiple students.
+    Orchestrates the parallel grading of multiple students with live progress display.
 
     Args:
         students: List of student IDs to grade
         strategy: Prompt strategy - "baseline", "minimal", "socratic", "rubric_only"
     """
+    from rich.live import Live
+    from rich.layout import Layout
+    from rich.spinner import Spinner
+
     sem = asyncio.Semaphore(MAX_CONCURRENT_STUDENTS)
+    tracker = GradingTracker()
     results = []
 
-    with Progress(
-        SpinnerColumn("earth"),
-        TextColumn("[bold blue]{task.description}", justify="right"),
-        BarColumn(bar_width=None, style="black", complete_style="green", finished_style="green"),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        TimeElapsedColumn(),
-        console=console,
-        expand=True,
-    ) as progress:
-        overall_task = progress.add_task("Batch Progress", total=len(students))
+    total_questions = len(students) * 4  # 4 questions per student
+    completed_count = 0
 
-        # Create a list of pending coroutines
-        tasks = []
-        for student_id in students:
-            tasks.append(process_student_wrapper(sem, student_id, progress, overall_task, strategy))
+    def create_progress_display():
+        """Create the live progress display layout."""
+        nonlocal completed_count
 
-        # Fire them all!
-        # returns a list of lists of results
+        # Main layout
+        layout = Layout()
+
+        # Overall progress section
+        pct = (completed_count / total_questions * 100) if total_questions > 0 else 0
+        bar_width = 40
+        filled = int(bar_width * completed_count / total_questions) if total_questions > 0 else 0
+        bar = "█" * filled + "░" * (bar_width - filled)
+
+        overall_text = Text()
+        overall_text.append("Overall Progress\n", style="bold white")
+        overall_text.append(f"[{bar}] ", style="cyan")
+        overall_text.append(f"{completed_count}/{total_questions} ", style="bold white")
+        overall_text.append(f"({pct:.0f}%)\n", style="dim")
+        overall_text.append(f"Students: {len(students)} | ", style="dim")
+        overall_text.append(f"Concurrency: {MAX_CONCURRENT_STUDENTS} | ", style="dim")
+        overall_text.append(f"Strategy: {strategy}", style="cyan")
+
+        # Model status section
+        model_text = Text()
+        model_text.append("\nModel Status\n", style="bold white")
+
+        for model in MODELS:
+            short_name = MODEL_SHORT_NAMES.get(model, model.split("/")[-1])
+            status = tracker.model_status.get(model, "idle")
+            completed = tracker.model_completed.get(model, 0)
+            errors = tracker.model_errors.get(model, 0)
+
+            # Model name with color
+            if "gemini" in model.lower():
+                model_text.append(f"  {short_name:<10}", style="cyan")
+            else:
+                model_text.append(f"  {short_name:<10}", style="green")
+
+            # Status indicator
+            if status == "idle":
+                model_text.append("● ", style="dim")
+                model_text.append("idle          ", style="dim")
+            else:
+                model_text.append("◉ ", style="yellow")
+                model_text.append(f"{status:<14}", style="yellow")
+
+            # Stats
+            model_text.append(f" done: {completed:>3}", style="green")
+            if errors > 0:
+                model_text.append(f" err: {errors}", style="red")
+            model_text.append("\n")
+
+        # Combine into panel
+        content = Text.assemble(overall_text, model_text)
+        return Panel(
+            content,
+            box=box.ROUNDED,
+            border_style="blue",
+            title="[bold]Grading Progress[/bold]",
+            title_align="left",
+            padding=(1, 2),
+        )
+
+    async def process_with_tracking(student_id: str) -> list[dict]:
+        """Process a student and update the completion counter."""
+        nonlocal completed_count
+
+        student_results = []
+        student_name = student_id.replace("_", " ")
+
+        async with sem:
+            for q_num in range(1, 5):
+                q_id = f"q{q_num}"
+                try:
+                    # 1. Load Resources
+                    question_file = f"data/a2/{q_id}.md"
+                    rubric_file = f"data/a2/rubric_{q_id}.md"
+
+                    try:
+                        question_text = load_question(question_file)
+                        rubric_data = load_rubric(rubric_file)
+                    except Exception as e:
+                        student_results.append(
+                            {
+                                "status": "error",
+                                "student": student_id,
+                                "question": q_id,
+                                "error": f"Resource load failed: {e}",
+                            }
+                        )
+                        completed_count += 1
+                        continue
+
+                    # 2. Load submission
+                    submission_dir = "authentic_seeded"
+                    student_dir = os.path.join(submission_dir, student_id)
+                    student_file_name = f"Q{q_num}.java"
+                    student_file_path = os.path.join(student_dir, student_file_name)
+
+                    if not os.path.exists(student_file_path):
+                        student_results.append(
+                            {
+                                "status": "skipped",
+                                "student": student_id,
+                                "question": q_id,
+                                "error": "File not found",
+                            }
+                        )
+                        completed_count += 1
+                        continue
+
+                    with open(student_file_path) as f:
+                        student_code = f.read()
+
+                    # 3. Grade with all models
+                    model_evals = await grade_student_with_models(
+                        student_code,
+                        question_text,
+                        rubric_data,
+                        strategy=strategy,
+                        tracker=tracker,
+                        student_id=student_id,
+                        q_id=q_id,
+                    )
+
+                    # 4. Save results
+                    valid_evals = {k: v for k, v in model_evals.items() if v is not None}
+
+                    if valid_evals:
+                        eval_doc = create_evaluation_document(
+                            student_id,
+                            student_name,
+                            question_text,
+                            rubric_data,
+                            student_file_name,
+                            valid_evals,
+                            question_source_path=question_file,
+                            rubric_source_path=rubric_file,
+                        )
+
+                        eval_doc.context.question_id = q_id
+                        eval_doc.context.question_title = f"Question {q_num}"
+
+                        output_dir = f"student_evals/{strategy}"
+                        os.makedirs(output_dir, exist_ok=True)
+                        output_file = f"{output_dir}/{student_id}_{q_id}_eval.json"
+                        with open(output_file, "w") as f:
+                            f.write(eval_doc.model_dump_json(indent=2))
+
+                        student_results.append(
+                            {
+                                "status": "success",
+                                "student": student_id,
+                                "question": q_id,
+                                "evals": valid_evals,
+                            }
+                        )
+                    else:
+                        student_results.append(
+                            {
+                                "status": "error",
+                                "student": student_id,
+                                "question": q_id,
+                                "error": "All models failed",
+                            }
+                        )
+
+                    completed_count += 1
+
+                except Exception as e:
+                    student_results.append(
+                        {
+                            "status": "error",
+                            "student": student_id,
+                            "question": q_id,
+                            "error": str(e),
+                        }
+                    )
+                    completed_count += 1
+
+        return student_results
+
+    # Run with live display
+    with Live(create_progress_display(), console=console, refresh_per_second=4) as live:
+
+        async def update_display():
+            """Background task to update the display."""
+            while completed_count < total_questions:
+                live.update(create_progress_display())
+                await asyncio.sleep(0.25)
+
+        # Start display updater
+        display_task = asyncio.create_task(update_display())
+
+        # Process all students in parallel
+        tasks = [process_with_tracking(student_id) for student_id in students]
         nested_results = await asyncio.gather(*tasks)
 
-        # Flatten results
-        results = [item for sublist in nested_results for item in sublist]
+        # Cancel display updater
+        display_task.cancel()
+        try:
+            await display_task
+        except asyncio.CancelledError:
+            pass
+
+        # Final display update
+        live.update(create_progress_display())
+
+    # Flatten results
+    results = [item for sublist in nested_results for item in sublist]
 
     return results
 
