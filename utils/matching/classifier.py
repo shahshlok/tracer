@@ -62,7 +62,7 @@ def classify_detection(
     model: str,
     student: str,
     question: str,
-    fuzzy_threshold: float = 0.5,
+    fuzzy_threshold: float = 0.8,
     semantic_threshold: float = 0.7,
 ) -> ClassificationResult:
     """
@@ -144,7 +144,7 @@ def analyze_student_question(
     groundtruth: list[dict[str, Any]],
     student: str,
     question: str,
-    fuzzy_threshold: float = 0.5,
+    fuzzy_threshold: float = 0.8,
     semantic_threshold: float = 0.7,
 ) -> StudentQuestionAnalysis:
     """

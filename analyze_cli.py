@@ -74,7 +74,7 @@ def analyze_strategy(
     detections_dir: Path,
     manifest: dict,
     groundtruth: list[dict],
-    fuzzy_threshold: float = 0.5,
+    fuzzy_threshold: float = 0.8,
     semantic_threshold: float = 0.7,
 ) -> dict[str, Any]:
     """Analyze all detections for a single strategy."""
