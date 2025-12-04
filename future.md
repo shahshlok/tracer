@@ -81,45 +81,40 @@ Keeping it simple allows cleaner metrics and easier interpretation.
 
 ---
 
-## 6. Real Student Submissions
-
-**Current status:** All data is synthetic (LLM-generated with seeded misconceptions).
-
-**Future direction:**
-- Obtain IRB approval for real student code
-- Collect submissions from actual CS1 course
-- Have TAs label misconceptions (establish inter-rater reliability)
-- Validate synthetic results against real data
-
----
-
-## 7. Broader Misconception Taxonomy
+## 6. Broader Misconception Taxonomy
 
 **Current status:** ~15 misconceptions focused on input/output, types, and basic arithmetic.
 
 **Future direction:**
-- Expand to conditionals, loops, methods, arrays
-- Incorporate misconceptions from CS education literature (e.g., Sorva's taxonomy)
-- Cross-validate with other institutions' misconception lists
+- Expand to additional CS1 concepts: conditionals, loops, methods, arrays, parameter passing, etc.
+- Incorporate misconceptions from CS education literature (e.g., Sorva's taxonomy) and align our synthetic injectors with those definitions.
+- Cross-validate with other institutions' misconception lists to avoid overfitting to a single instructor/course, even if we remain in a fully synthetic regime.
+- Design multiple **synthetic assignments** (e.g., kinematics calculator, grade calculator, coordinate transforms) that each exercise overlapping subsets of the taxonomy, so we can study model behavior across different problem contexts.
 
 ---
 
-## 8. Replication Dimension
+## 7. Replication Dimension
 
-**Current status:** Single random seed for dataset generation.
+**Current status:** Single random seed for dataset generation on a single synthetic assignment.
 
 **Future direction:**
-- Generate 3-5 datasets with different seeds
-- Report variance in metrics across replications
-- Strengthen claims about robustness
+- Generate **3–5 independent synthetic cohorts** per assignment using different random seeds (same taxonomy, same assignment).
+- For each cohort, run the full pipeline (generation → detection → analysis) and store:
+  - The manifest used.
+  - A snapshot of key configuration (models, strategies, thresholds).
+  - The aggregated metrics JSON and report for that run.
+- Repeat this across **multiple synthetic assignments** (see Section 7), so we can:
+  - Estimate variance in metrics across seeds for a fixed assignment.
+  - Estimate variance across assignments (task sensitivity).
+  - Strengthen robustness claims by showing that key patterns (e.g., topic difficulty, matcher behavior, model ordering) are stable across seeds and assignments.
 
 ---
 
 ## Priority Order for Future Work
 
-1. Real student submissions (highest impact on validity)
-2. Difficulty labels (data-driven, post-hoc)
-3. Confidence calibration (once we trust the numbers)
-4. Multiple misconceptions per file
-5. Additional models
-6. Broader taxonomy
+1. Broader taxonomy + multiple synthetic assignments (higher impact while staying within synthetic regime)
+2. Replication across seeds and assignments (robustness)
+3. Additional models and prompting variants
+4. Difficulty labels (data-driven, post-hoc, using synthetic performance)
+5. Confidence calibration (once we trust the numbers)
+6. Multiple misconceptions per file
