@@ -1,6 +1,6 @@
 # LLM Misconception Detection: Research Analysis
 
-Generated: 2025-12-03T22:19:57.286442+00:00
+Generated: 2025-12-04T03:24:08.468828+00:00
 
 ## Executive Summary
 
@@ -10,11 +10,46 @@ Generated: 2025-12-03T22:19:57.286442+00:00
 | **rubric_only** | 0.279 | 0.633 | **0.388** | 19 | 49 | 11 | -0.013 |
 | **baseline** | 0.234 | 0.484 | **0.316** | 15 | 49 | 16 | 0.015 |
 | **minimal** | 0.307 | 0.767 | **0.438** | 23 | 52 | 7 | 0.031 |
-| **socratic** | 0.247 | 0.613 | **0.352** | 19 | 58 | 12 | -0.006 |
+| **socratic** | 0.234 | 0.600 | **0.336** | 18 | 59 | 12 | -0.006 |
+
+## Model Showdown: GPT-5.1 vs Gemini-2.5-Flash
+
+Aggregate performance comparison across all strategies.
+
+### Aggregate Metrics
+| Model | TP | FP | Precision | Recall (est) |
+|-------|----|----|-----------|--------------|
+| **gpt-5.1** | 34 | 82 | 0.293 | 0.340 |
+| **gemini-2.5-flash** | 41 | 127 | 0.244 | 0.410 |
+
+### Statistical Significance (McNemar's Test)
+Testing the null hypothesis that both models have equal sensitivity (recall).
+
+**Comparison: gpt-5.1 vs gemini-2.5-flash**
+- **Statistic**: 0.8897
+- **P-Value**: 3.4556e-01
+- **Result**: No Significant Difference (p >= 0.05)
+
+**Contingency Table**
+| | gemini-2.5-flash Correct | gemini-2.5-flash Wrong |
+|---|---|---|
+| **gpt-5.1 Correct** | 20 | 14 |
+| **gpt-5.1 Wrong** | 20 | 46 |
+
+## Performance by Category
+
+Breakdown of detection performance by misconception category (Topic).
+| Category | Recall | Precision | TP | FN | FP |
+|----------|--------|-----------|----|----|----|
+| Algebraic Reasoning | 0.62 | 1.00 | 5 | 3 | 0 |
+| Data Types | 0.81 | 0.58 | 29 | 7 | 21 |
+| Input | 0.14 | 0.38 | 5 | 31 | 8 |
+| Input / Data Types | 0.81 | 0.59 | 13 | 3 | 9 |
+| State / Representation | 0.00 | 0.00 | 0 | 0 | 0 |
+| State / Variables | 0.50 | 0.12 | 2 | 2 | 14 |
 
 ## Deep Dive: Misconception Difficulty
 
-Analysis of which misconceptions were easiest and hardest to detect across all strategies.
 
 ### Hardest Misconceptions (Low Recall)
 | ID | Name | Topic | Recall | TP | FN |
@@ -32,7 +67,7 @@ Analysis of which misconceptions were easiest and hardest to detect across all s
 | TYP-01 | Integer Division Trap | Data Types | 10 |
 | INP-03 | Scanner Type Mismatch | Input / Data Types | 9 |
 | INP-01 | Prompt-Logic Mismatch | Input | 7 |
-| STA-06 | Default Zero Assumption | State / Variables | 6 |
+| STA-07 | Swapped Variables After Read | State / Variables | 6 |
 
 ## Hallucination Analysis
 
@@ -90,7 +125,7 @@ Potential genuine issues found in clean files.
   - Matched to: INP-02 (0.76)
 ### Socratic
 - **Bradley_Nancy_674303** Q2: Input handling for invalid numerical input
-  - Matched to: INP-03 (0.72)
+  - Matched to: INP-03 (0.73)
 - **Benson_Jennifer_117472** Q4: Incorrect handling of Scanner input for multiple values on one line
   - Matched to: INP-01 (0.73)
 - **Benson_Jennifer_117472** Q3: Overwriting Input Variables Before Calculation

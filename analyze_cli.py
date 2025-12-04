@@ -26,6 +26,8 @@ from utils.analysis_helpers import (
     StrategyComparison,
     cluster_false_positives,
     compute_misconception_stats,
+    calculate_mcnemar_test,
+    ModelStats
 )
 
 app = typer.Typer(help="Analyze LLM misconception detections against ground truth")
@@ -97,6 +99,11 @@ def analyze_strategy(
     interesting_discoveries: list[dict] = []
     confidence_analysis = ConfidenceAnalysis()
     
+    # Track results for McNemar's test (per model)
+    # Map: model_name -> list of booleans (success/fail for each opportunity)
+    # We only track "opportunities" (seeded misconceptions) for McNemar's recall test
+    model_recall_tracking = {} 
+    
     for det in detections:
         student = det.get("student", "")
         question = det.get("question", "")
@@ -108,6 +115,8 @@ def analyze_strategy(
         detections_by_model = {}
         for model, model_data in models_data.items():
             detections_by_model[model] = model_data.get("misconceptions", [])
+            if model not in model_recall_tracking:
+                model_recall_tracking[model] = []
         
         # Analyze this student-question
         analysis = StudentQuestionAnalysis(
@@ -118,6 +127,7 @@ def analyze_strategy(
         )
         
         for model, misconceptions in detections_by_model.items():
+            has_tp = False
             for m in misconceptions:
                 classification = classify_detection(
                     detection=m,
@@ -131,6 +141,9 @@ def analyze_strategy(
                     semantic_threshold=semantic_threshold,
                 )
                 analysis.classifications.append(classification)
+                
+                if classification.result == MatchResult.TRUE_POSITIVE:
+                    has_tp = True
                 
                 # Track confidence
                 conf = m.get("confidence", 0.0)
@@ -147,6 +160,10 @@ def analyze_strategy(
                         "matched_to": classification.matched_id,
                         "match_score": classification.match_score,
                     })
+            
+            # For McNemar's: Did this model find the expected misconception?
+            if not is_clean and expected_id:
+                model_recall_tracking[model].append(has_tp)
         
         analyses.append(analysis)
     
@@ -164,6 +181,7 @@ def analyze_strategy(
         "avg_fp_confidence": confidence_analysis.avg_fp_confidence,
         "calibration_gap": confidence_analysis.calibration_gap,
     }
+    metrics["model_recall_tracking"] = model_recall_tracking
     
     return metrics
 
@@ -189,11 +207,6 @@ def display_metrics(metrics: dict[str, Any], strategy: str):
     table.add_row("F1 Score", f"[bold]{metrics['f1_score']:.3f}[/bold]")
     
     console.print(table)
-    console.print()
-    
-    # Confidence stats
-    conf = metrics.get("confidence_stats", {})
-    console.print(f"Confidence Gap: [bold]{conf.get('calibration_gap', 0):.3f}[/bold] (TP: {conf.get('avg_tp_confidence', 0):.2f} vs FP: {conf.get('avg_fp_confidence', 0):.2f})")
     console.print()
 
 
@@ -225,8 +238,100 @@ def generate_thesis_report(
                 f"{conf.get('calibration_gap', 0):.3f} |"
             )
             
+    # Model Comparison Section
+    lines.append("\n## Model Showdown: GPT-5.1 vs Gemini-2.5-Flash\n")
+    lines.append("Aggregate performance comparison across all strategies.")
+    
+    # Aggregate model stats
+    model_stats = {}
+    
+    # For McNemar's
+    agg_recall_tracking = {}
+    
+    for strategy, metrics in all_metrics.items():
+        if "error" in metrics: continue
+        
+        # Per-model breakdown from metrics
+        pm = metrics.get("per_model", {})
+        for model, stats in pm.items():
+            short = model.split("/")[-1]
+            if short not in model_stats:
+                model_stats[short] = {"tp": 0, "fp": 0, "total": 0}
+            model_stats[short]["tp"] += stats["tp"]
+            model_stats[short]["fp"] += stats["fp"]
+            model_stats[short]["total"] += stats["total"]
+            
+        # Aggregate tracking for McNemar's
+        tracking = metrics.get("model_recall_tracking", {})
+        for model, results in tracking.items():
+            short = model.split("/")[-1]
+            if short not in agg_recall_tracking:
+                agg_recall_tracking[short] = []
+            agg_recall_tracking[short].extend(results)
+            
+    lines.append("\n### Aggregate Metrics")
+    lines.append("| Model | TP | FP | Precision | Recall (est) |")
+    lines.append("|-------|----|----|-----------|--------------|")
+    
+    for model, stats in model_stats.items():
+        tp = stats["tp"]
+        fp = stats["fp"]
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+        # Recall estimation is tricky without total FN per model, but we can use McNemar's tracking length
+        # Total opportunities = len(agg_recall_tracking[model])
+        total_opps = len(agg_recall_tracking.get(model, []))
+        recall = tp / total_opps if total_opps > 0 else 0
+        
+        lines.append(f"| **{model}** | {tp} | {fp} | {precision:.3f} | {recall:.3f} |")
+        
+    # Statistical Significance
+    lines.append("\n### Statistical Significance (McNemar's Test)")
+    lines.append("Testing the null hypothesis that both models have equal sensitivity (recall).")
+    
+    models = list(agg_recall_tracking.keys())
+    if len(models) >= 2:
+        m1, m2 = models[0], models[1]
+        stat, p_val, table = calculate_mcnemar_test(agg_recall_tracking[m1], agg_recall_tracking[m2])
+        
+        lines.append(f"\n**Comparison: {m1} vs {m2}**")
+        lines.append(f"- **Statistic**: {stat:.4f}")
+        lines.append(f"- **P-Value**: {p_val:.4e}")
+        if p_val < 0.05:
+            lines.append("- **Result**: Statistically Significant Difference (p < 0.05)")
+        else:
+            lines.append("- **Result**: No Significant Difference (p >= 0.05)")
+            
+        lines.append("\n**Contingency Table**")
+        lines.append(f"| | {m2} Correct | {m2} Wrong |")
+        lines.append("|---|---|---|")
+        lines.append(f"| **{m1} Correct** | {table['both_correct']} | {table['only_a']} |")
+        lines.append(f"| **{m1} Wrong** | {table['only_b']} | {table['both_wrong']} |")
+        
+    # Category Breakdown
+    lines.append("\n## Performance by Category\n")
+    lines.append("Breakdown of detection performance by misconception category (Topic).")
+    
+    # Aggregate by topic
+    topic_stats = {}
+    for metrics in all_metrics.values():
+        if "error" in metrics: continue
+        for mid, stat in metrics.get("misconception_stats", {}).items():
+            topic = stat.topic
+            if topic not in topic_stats:
+                topic_stats[topic] = {"tp": 0, "fn": 0, "fp": 0}
+            topic_stats[topic]["tp"] += stat.true_positives
+            topic_stats[topic]["fn"] += stat.false_negatives
+            topic_stats[topic]["fp"] += stat.false_positives
+            
+    lines.append("| Category | Recall | Precision | TP | FN | FP |")
+    lines.append("|----------|--------|-----------|----|----|----|")
+    
+    for topic, s in sorted(topic_stats.items()):
+        recall = s["tp"] / (s["tp"] + s["fn"]) if (s["tp"] + s["fn"]) > 0 else 0
+        precision = s["tp"] / (s["tp"] + s["fp"]) if (s["tp"] + s["fp"]) > 0 else 0
+        lines.append(f"| {topic} | {recall:.2f} | {precision:.2f} | {s['tp']} | {s['fn']} | {s['fp']} |")
+
     lines.append("\n## Deep Dive: Misconception Difficulty\n")
-    lines.append("Analysis of which misconceptions were easiest and hardest to detect across all strategies.")
     
     # Aggregate misconception stats across strategies
     agg_stats = {}

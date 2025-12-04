@@ -5,6 +5,7 @@ Helper classes for advanced thesis-quality analysis.
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
+import math
 
 from .matching.classifier import ClassificationResult, MatchResult, StudentQuestionAnalysis
 
@@ -31,6 +32,31 @@ class MisconceptionStats:
     def precision(self) -> float:
         total_detections = self.true_positives + self.false_positives
         return self.true_positives / total_detections if total_detections > 0 else 0.0
+
+
+@dataclass
+class ModelStats:
+    """Statistics for a specific model."""
+    model_name: str
+    true_positives: int = 0
+    false_positives: int = 0
+    false_negatives: int = 0
+    
+    @property
+    def precision(self) -> float:
+        total = self.true_positives + self.false_positives
+        return self.true_positives / total if total > 0 else 0.0
+        
+    @property
+    def recall(self) -> float:
+        total = self.true_positives + self.false_negatives
+        return self.true_positives / total if total > 0 else 0.0
+        
+    @property
+    def f1_score(self) -> float:
+        p = self.precision
+        r = self.recall
+        return 2 * p * r / (p + r) if (p + r) > 0 else 0.0
 
 
 class StrategyComparison:
@@ -159,3 +185,67 @@ def cluster_false_positives(analyses: list[StudentQuestionAnalysis]) -> list[dic
             })
             
     return results
+
+
+def calculate_mcnemar_test(
+    success_a: list[bool], 
+    success_b: list[bool]
+) -> tuple[float, float, dict[str, int]]:
+    """
+    Calculates McNemar's test statistic and p-value.
+    
+    Args:
+        success_a: List of booleans indicating success for Model A
+        success_b: List of booleans indicating success for Model B (must be same length)
+        
+    Returns:
+        (statistic, p_value, contingency_table)
+    """
+    if len(success_a) != len(success_b):
+        raise ValueError("Lists must be of equal length")
+        
+    # Contingency table
+    #           Model B
+    #           +     -
+    # Model A + a     b
+    #         - c     d
+    
+    a = 0 # Both correct
+    b = 0 # A correct, B wrong
+    c = 0 # A wrong, B correct
+    d = 0 # Both wrong
+    
+    for res_a, res_b in zip(success_a, success_b):
+        if res_a and res_b:
+            a += 1
+        elif res_a and not res_b:
+            b += 1
+        elif not res_a and res_b:
+            c += 1
+        else:
+            d += 1
+            
+    # McNemar's statistic = (b - c)^2 / (b + c)
+    # Degrees of freedom = 1
+    
+    if (b + c) == 0:
+        statistic = 0.0
+        p_value = 1.0 # No difference
+    else:
+        statistic = (abs(b - c) - 0.5)**2 / (b + c)  # With continuity correction
+        # Approximate p-value from Chi-squared distribution with 1 dof
+        # We can use a simplified approximation or just return the statistic
+        # For 1 dof, p = 0.05 corresponds to chi2 = 3.84
+        
+        # Using math.erf for better approximation if needed, but simple lookup is often enough.
+        # Let's implement a simple chi2 CDF approximation or use scipy if available (but we want to avoid extra deps)
+        # Actually, for 1 DOF, P(X > x) = 2 * (1 - CDF_normal(sqrt(x)))
+        
+        p_value = 2 * (1 - _normal_cdf(math.sqrt(statistic)))
+        
+    return statistic, p_value, {"both_correct": a, "only_a": b, "only_b": c, "both_wrong": d}
+
+
+def _normal_cdf(x):
+    """Cumulative distribution function for the standard normal distribution."""
+    return (1.0 + math.erf(x / math.sqrt(2.0))) / 2.0
