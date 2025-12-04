@@ -796,12 +796,90 @@ def render_hallucination_snippets(df: pd.DataFrame, limit: int = 5) -> str:
     return "\n".join(lines)
 
 
+def compute_misconception_recall(
+    opportunities: pd.DataFrame, 
+    groundtruth: list[dict[str, Any]]
+) -> pd.DataFrame:
+    """Compute recall per misconception ID."""
+    if opportunities.empty:
+        return pd.DataFrame()
+    
+    gt_map = {g["id"]: g for g in groundtruth}
+    
+    stats = opportunities.groupby("expected_id").agg(
+        recall=("success", "mean"),
+        n=("success", "count")
+    ).reset_index()
+    
+    # Add names and categories from groundtruth
+    stats["name"] = stats["expected_id"].map(
+        lambda x: gt_map.get(x, {}).get("misconception_name", x)
+    )
+    stats["category"] = stats["expected_id"].map(
+        lambda x: gt_map.get(x, {}).get("category", "")
+    )
+    
+    return stats.sort_values("recall")
+
+
+def render_misconception_table(stats: pd.DataFrame) -> str:
+    """Render markdown table of per-misconception recall."""
+    if stats.empty:
+        return "_No misconception data available_"
+    
+    lines = [
+        "| ID | Misconception | Category | Recall | N |",
+        "|----|---------------|----------|--------|---|"
+    ]
+    for _, row in stats.iterrows():
+        # Truncate long names
+        name = row["name"][:35] + "..." if len(row["name"]) > 35 else row["name"]
+        lines.append(
+            f"| {row['expected_id']} | {name} | {row['category']} | "
+            f"{row['recall']:.2f} | {int(row['n'])} |"
+        )
+    return "\n".join(lines)
+
+
+def plot_misconception_recall_bars(stats: pd.DataFrame, path: Path) -> Path:
+    """Horizontal bar chart of recall per misconception, color-coded by recall."""
+    if stats.empty:
+        return path
+    
+    plt.figure(figsize=(12, max(6, len(stats) * 0.4)))
+    
+    # Create labels with ID and short name
+    labels = [f"{row['expected_id']}: {row['name'][:25]}" for _, row in stats.iterrows()]
+    recalls = stats["recall"].values
+    
+    # Color by recall (red=low, green=high)
+    colors = plt.cm.RdYlGn(recalls)
+    
+    bars = plt.barh(labels, recalls, color=colors)
+    
+    # Add count labels
+    for bar, n in zip(bars, stats["n"]):
+        plt.text(bar.get_width() + 0.02, bar.get_y() + bar.get_height()/2,
+                f'n={int(n)}', va='center', fontsize=8, color='gray')
+    
+    plt.xlabel("Recall")
+    plt.ylabel("Misconception")
+    plt.title("Detection Recall by Misconception (sorted by difficulty)")
+    plt.xlim(0, 1.15)
+    plt.axvline(x=0.5, color='gray', linestyle='--', alpha=0.5)
+    plt.tight_layout()
+    plt.savefig(path, dpi=200)
+    plt.close()
+    return path
+
+
 def generate_report(
     metrics: pd.DataFrame,
     ci: pd.DataFrame,
     opportunities: pd.DataFrame,
     detections: pd.DataFrame,
     asset_paths: dict[str, Path],
+    misconception_stats: pd.DataFrame | None = None,
 ) -> str:
     ts = datetime.now(timezone.utc).isoformat()
     is_ablation = "match_mode" in metrics.columns
@@ -878,6 +956,22 @@ def generate_report(
         "## Topic Heatmap",
         f"![Topic Heatmap]({asset_paths.get('heatmap', '')})" if asset_paths.get("heatmap") else "_No heatmap generated_",
         "",
+    ])
+    
+    # Per-misconception analysis section
+    if misconception_stats is not None and not misconception_stats.empty:
+        report.extend([
+            "## Per-Misconception Detection Rates",
+            "",
+            "Detection recall for each seeded misconception, sorted by difficulty (hardest to detect at top):",
+            "",
+            render_misconception_table(misconception_stats),
+            "",
+            f"![Misconception Recall]({asset_paths.get('misconception_recall', '')})" if asset_paths.get("misconception_recall") else "",
+            "",
+        ])
+    
+    report.extend([
         "## Hallucination Analysis",
         f"![Hallucinations]({asset_paths.get('hallucinations', '')})" if asset_paths.get("hallucinations") else "",
         "",
@@ -1016,6 +1110,7 @@ def main(
         "pr_scatter": ASSET_DIR / "precision_recall_scatter.png",
         "topic_bars": ASSET_DIR / "topic_recall_bars.png",
         "model_comparison": ASSET_DIR / "model_comparison.png",
+        "misconception_recall": ASSET_DIR / "misconception_recall.png",
     }
     
     # For ablation mode, use hybrid data for topic plots; add ablation-specific plots
@@ -1023,13 +1118,18 @@ def main(
         asset_paths["matcher_ablation"] = ASSET_DIR / "matcher_ablation.png"
         asset_paths["matcher_pr_scatter"] = ASSET_DIR / "matcher_pr_scatter.png"
         
-        # Filter to hybrid for topic-related plots
+        # Filter to hybrid for topic-related plots and misconception analysis
         hybrid_opps = opportunities_df[opportunities_df["match_mode"] == "hybrid"]
         hybrid_dets = detections_df[detections_df["match_mode"] == "hybrid"]
         
         plot_topic_heatmap(hybrid_opps, asset_paths["heatmap"])
         plot_hallucinations(hybrid_dets, asset_paths["hallucinations"])
         plot_topic_recall_bars(hybrid_opps, asset_paths["topic_bars"])
+        
+        # Per-misconception analysis (use hybrid)
+        misconception_stats = compute_misconception_recall(hybrid_opps, groundtruth)
+        if not misconception_stats.empty:
+            plot_misconception_recall_bars(misconception_stats, asset_paths["misconception_recall"])
         
         # Ablation-specific plots
         plot_matcher_ablation(metrics, asset_paths["matcher_ablation"])
@@ -1048,8 +1148,13 @@ def main(
         plot_precision_recall_scatter(metrics, asset_paths["pr_scatter"])
         plot_topic_recall_bars(opportunities_df, asset_paths["topic_bars"])
         plot_model_comparison(metrics, asset_paths["model_comparison"])
+        
+        # Per-misconception analysis
+        misconception_stats = compute_misconception_recall(opportunities_df, groundtruth)
+        if not misconception_stats.empty:
+            plot_misconception_recall_bars(misconception_stats, asset_paths["misconception_recall"])
 
-    report_text = generate_report(metrics, ci, opportunities_df, detections_df, asset_paths)
+    report_text = generate_report(metrics, ci, opportunities_df, detections_df, asset_paths, misconception_stats)
     REPORT_PATH.write_text(report_text)
     JSON_EXPORT_PATH.write_text(
         json.dumps(
