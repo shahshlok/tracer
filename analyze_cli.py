@@ -1,9 +1,10 @@
 """
 Revamped analysis CLI for misconception detection.
 
-- Builds a tidy dataframe of all detections with hybrid matching.
-- Computes rich metrics (precision/recall/F1, calibration, agreement, CIs).
-- Generates figures (heatmaps, calibration curves, hallucination bars).
+- Builds a tidy dataframe of all detections with configurable matching modes.
+- Supports matcher ablation: fuzzy_only, semantic_only, hybrid, or all.
+- Computes rich metrics (precision/recall/F1, agreement, CIs).
+- Generates figures (heatmaps, scatter plots, bar charts).
 - Writes a thesis-grade markdown report that links to generated assets.
 """
 
@@ -12,7 +13,9 @@ from __future__ import annotations
 import json
 import math
 import random
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path
 from typing import Any, Iterable, Tuple
 
@@ -32,7 +35,65 @@ from utils.matching.hybrid import (
     hybrid_match_misconception,
     precompute_gt_embeddings_for_hybrid,
 )
+from utils.matching.fuzzy import fuzzy_match_misconception
+from utils.matching.semantic import semantic_match_misconception
 from utils.matching.classifier import MatchResult
+
+
+# ---------------------------------------------------------------------------
+# Match Mode Configuration
+# ---------------------------------------------------------------------------
+class MatchMode(str, Enum):
+    FUZZY_ONLY = "fuzzy_only"
+    SEMANTIC_ONLY = "semantic_only"
+    HYBRID = "hybrid"
+    ALL = "all"
+
+
+@dataclass
+class MatchResult_:
+    """Unified match result across all matchers."""
+    matched_id: str | None
+    score: float
+    detail: str
+
+
+def dispatch_matcher(
+    detection: dict[str, Any],
+    groundtruth: list[dict[str, Any]],
+    match_mode: MatchMode,
+    gt_embeddings: dict[str, list[float]] | None = None,
+) -> MatchResult_:
+    """
+    Dispatch to the appropriate matcher based on match_mode.
+    Returns a unified MatchResult_ regardless of which matcher is used.
+    """
+    name = detection.get("name", "")
+    description = detection.get("description", "")
+    student_belief = detection.get("student_belief", "")
+    
+    if match_mode == MatchMode.FUZZY_ONLY:
+        matched_id, score, method = fuzzy_match_misconception(
+            name, description, groundtruth, threshold=0.5
+        )
+        return MatchResult_(matched_id, score, f"fuzzy:{method}")
+    
+    elif match_mode == MatchMode.SEMANTIC_ONLY:
+        matched_id, score, method = semantic_match_misconception(
+            name, description, student_belief, groundtruth, threshold=0.5
+        )
+        return MatchResult_(matched_id, score, f"semantic:{method}")
+    
+    elif match_mode == MatchMode.HYBRID:
+        result: HybridMatchResult = hybrid_match_misconception(
+            {**detection, "topic": detection.get("topic", "")},
+            groundtruth,
+            gt_embeddings=gt_embeddings,
+        )
+        return MatchResult_(result.matched_id, result.score, result.detail)
+    
+    else:
+        raise ValueError(f"Unknown match mode: {match_mode}")
 
 app = typer.Typer(help="Analyze LLM misconception detections against ground truth (revamped)")
 console = Console()
@@ -96,108 +157,121 @@ def build_dataframes(
     strategies: Iterable[str],
     manifest: dict[str, Any],
     groundtruth: list[dict[str, Any]],
+    match_mode: MatchMode = MatchMode.HYBRID,
     use_embeddings: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Return (detections_df, opportunities_df)
 
     detections_df columns:
-      strategy, model, student, question, expected_id, matched_id, result,
+      match_mode, strategy, model, student, question, expected_id, matched_id, result,
       confidence, match_score, match_detail, is_clean, detected_name, detected_topic
 
     opportunities_df columns:
-      strategy, model, student, question, expected_id, topic, success
+      match_mode, strategy, model, student, question, expected_id, topic, success
+    
+    If match_mode is ALL, runs all three matchers and includes match_mode column.
     """
     gt_map = {m["id"]: m for m in groundtruth}
     gt_embeddings = precompute_gt_embeddings_for_hybrid(groundtruth) if use_embeddings else None
 
+    # Determine which modes to run
+    if match_mode == MatchMode.ALL:
+        modes_to_run = [MatchMode.FUZZY_ONLY, MatchMode.SEMANTIC_ONLY, MatchMode.HYBRID]
+    else:
+        modes_to_run = [match_mode]
+
     detection_rows: list[dict[str, Any]] = []
     opportunity_rows: list[dict[str, Any]] = []
 
-    for strategy in strategies:
-        strategy_dir = detections_dir / strategy
-        if not strategy_dir.exists():
-            console.print(f"[yellow]Strategy directory missing: {strategy_dir}[/yellow]")
-            continue
+    for current_mode in modes_to_run:
+        console.print(f"[cyan]Running matcher: {current_mode.value}[/cyan]")
+        
+        for strategy in strategies:
+            strategy_dir = detections_dir / strategy
+            if not strategy_dir.exists():
+                console.print(f"[yellow]Strategy directory missing: {strategy_dir}[/yellow]")
+                continue
 
-        detections = load_detections_for_strategy(strategy_dir)
-        for det in detections:
-            student = det.get("student", "")
-            question = det.get("question", "")
-            models = det.get("models", {})
-            expected_id, is_clean = get_expected(manifest, student, question)
-            expected_topic = gt_map.get(expected_id, {}).get("category", "") if expected_id else ""
+            detections = load_detections_for_strategy(strategy_dir)
+            for det in detections:
+                student = det.get("student", "")
+                question = det.get("question", "")
+                models = det.get("models", {})
+                expected_id, is_clean = get_expected(manifest, student, question)
+                expected_topic = gt_map.get(expected_id, {}).get("category", "") if expected_id else ""
 
-            for model, payload in models.items():
-                mis_list = payload.get("misconceptions", []) or []
-                has_tp = False
+                for model, payload in models.items():
+                    mis_list = payload.get("misconceptions", []) or []
+                    has_tp = False
 
-                for mis in mis_list:
-                    hybrid: HybridMatchResult = hybrid_match_misconception(
-                        {**mis, "topic": mis.get("topic", "")},
-                        groundtruth,
-                        gt_embeddings=gt_embeddings,
-                    )
+                    for mis in mis_list:
+                        match_result = dispatch_matcher(
+                            mis, groundtruth, current_mode, gt_embeddings
+                        )
 
-                    if is_clean:
-                        result = MatchResult.INTERESTING if hybrid.matched_id else MatchResult.FALSE_POSITIVE
-                    elif hybrid.matched_id == expected_id:
-                        result = MatchResult.TRUE_POSITIVE
-                        has_tp = True
-                    else:
-                        result = MatchResult.FALSE_POSITIVE
+                        if is_clean:
+                            result = MatchResult.INTERESTING if match_result.matched_id else MatchResult.FALSE_POSITIVE
+                        elif match_result.matched_id == expected_id:
+                            result = MatchResult.TRUE_POSITIVE
+                            has_tp = True
+                        else:
+                            result = MatchResult.FALSE_POSITIVE
 
-                    detection_rows.append(
-                        {
-                            "strategy": strategy,
-                            "model": model,
-                            "student": student,
-                            "question": question,
-                            "expected_id": expected_id,
-                            "matched_id": hybrid.matched_id,
-                            "match_score": hybrid.score,
-                            "match_detail": hybrid.detail,
-                            "result": result.value,
-                            "is_clean": is_clean,
-                            "confidence": mis.get("confidence"),
-                            "detected_name": mis.get("name", ""),
-                            "detected_topic": mis.get("topic", ""),
-                            "expected_topic": expected_topic,
-                        }
-                    )
-
-                # Record opportunity and possible FN
-                if not is_clean and expected_id:
-                    opportunity_rows.append(
-                        {
-                            "strategy": strategy,
-                            "model": model,
-                            "student": student,
-                            "question": question,
-                            "expected_id": expected_id,
-                            "topic": expected_topic,
-                            "success": has_tp,
-                        }
-                    )
-                    if not has_tp:
                         detection_rows.append(
                             {
+                                "match_mode": current_mode.value,
                                 "strategy": strategy,
                                 "model": model,
                                 "student": student,
                                 "question": question,
                                 "expected_id": expected_id,
-                                "matched_id": None,
-                                "match_score": 0.0,
-                                "match_detail": "missed_injection",
-                                "result": MatchResult.FALSE_NEGATIVE.value,
-                                "is_clean": False,
-                                "confidence": None,
-                                "detected_name": "",
-                                "detected_topic": "",
+                                "matched_id": match_result.matched_id,
+                                "match_score": match_result.score,
+                                "match_detail": match_result.detail,
+                                "result": result.value,
+                                "is_clean": is_clean,
+                                "confidence": mis.get("confidence"),
+                                "detected_name": mis.get("name", ""),
+                                "detected_topic": mis.get("topic", ""),
                                 "expected_topic": expected_topic,
                             }
                         )
+
+                    # Record opportunity and possible FN
+                    if not is_clean and expected_id:
+                        opportunity_rows.append(
+                            {
+                                "match_mode": current_mode.value,
+                                "strategy": strategy,
+                                "model": model,
+                                "student": student,
+                                "question": question,
+                                "expected_id": expected_id,
+                                "topic": expected_topic,
+                                "success": has_tp,
+                            }
+                        )
+                        if not has_tp:
+                            detection_rows.append(
+                                {
+                                    "match_mode": current_mode.value,
+                                    "strategy": strategy,
+                                    "model": model,
+                                    "student": student,
+                                    "question": question,
+                                    "expected_id": expected_id,
+                                    "matched_id": None,
+                                    "match_score": 0.0,
+                                    "match_detail": "missed_injection",
+                                    "result": MatchResult.FALSE_NEGATIVE.value,
+                                    "is_clean": False,
+                                    "confidence": None,
+                                    "detected_name": "",
+                                    "detected_topic": "",
+                                    "expected_topic": expected_topic,
+                                }
+                            )
 
     detections_df = pd.DataFrame(detection_rows)
     opportunities_df = pd.DataFrame(opportunity_rows)
@@ -382,7 +456,7 @@ def plot_calibration(df: pd.DataFrame, path: Path) -> Path:
 
 
 def plot_hallucinations(df: pd.DataFrame, path: Path) -> Path:
-    fps = df[df["result"] == MatchResult.FALSE_POSITIVE.value]
+    fps = df[df["result"] == MatchResult.FALSE_POSITIVE.value].copy()
     if fps.empty:
         return path
     fps["label"] = fps["detected_name"].fillna("").replace("", "<unknown>")
@@ -546,23 +620,153 @@ def plot_model_comparison(metrics: pd.DataFrame, path: Path) -> Path:
     return path
 
 
+def plot_matcher_ablation(metrics: pd.DataFrame, path: Path) -> Path:
+    """
+    Create a grouped bar chart comparing matchers (fuzzy_only, semantic_only, hybrid).
+    Shows F1 averaged across strategies and models.
+    """
+    if metrics.empty or "match_mode" not in metrics.columns:
+        return path
+    
+    # Average F1 by match_mode
+    matcher_avg = metrics.groupby("match_mode")[["precision", "recall", "f1"]].mean().reset_index()
+    
+    plt.figure(figsize=(10, 6))
+    x = np.arange(len(matcher_avg))
+    width = 0.25
+    
+    colors = {"fuzzy_only": "#e74c3c", "semantic_only": "#3498db", "hybrid": "#2ecc71"}
+    
+    # Plot precision, recall, F1 side by side for each matcher
+    for i, metric in enumerate(["precision", "recall", "f1"]):
+        values = matcher_avg[metric].values
+        bars = plt.bar(x + i * width, values, width, label=metric.capitalize(),
+                      color=[colors.get(m, "#999") for m in matcher_avg["match_mode"]] if i == 0 else None,
+                      alpha=0.8 if i == 0 else 0.6 + i * 0.15)
+        for bar, val in zip(bars, values):
+            plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
+                    f'{val:.2f}', ha='center', va='bottom', fontsize=9)
+    
+    plt.xlabel("Matcher")
+    plt.ylabel("Score")
+    plt.title("Matcher Ablation: Fuzzy vs Semantic vs Hybrid")
+    plt.xticks(x + width, matcher_avg["match_mode"])
+    plt.ylim(0, 1.0)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(path, dpi=200)
+    plt.close()
+    return path
+
+
+def plot_matcher_pr_scatter(metrics: pd.DataFrame, path: Path) -> Path:
+    """
+    Precision-Recall scatter colored by matcher.
+    Each point is a (strategy, model) combination.
+    """
+    if metrics.empty or "match_mode" not in metrics.columns:
+        return path
+    
+    plt.figure(figsize=(10, 8))
+    
+    colors = {"fuzzy_only": "#e74c3c", "semantic_only": "#3498db", "hybrid": "#2ecc71"}
+    markers = {"fuzzy_only": "o", "semantic_only": "s", "hybrid": "^"}
+    
+    for match_mode in metrics["match_mode"].unique():
+        subset = metrics[metrics["match_mode"] == match_mode]
+        plt.scatter(
+            subset["recall"], subset["precision"],
+            c=colors.get(match_mode, "#999"),
+            marker=markers.get(match_mode, "o"),
+            s=100, alpha=0.7,
+            label=match_mode
+        )
+    
+    # Add F1 iso-curves
+    for f1 in [0.4, 0.5, 0.6, 0.7]:
+        p = np.linspace(0.01, 1, 100)
+        r = (f1 * p) / (2 * p - f1)
+        valid = (r > 0) & (r <= 1)
+        plt.plot(r[valid], p[valid], '--', color='gray', alpha=0.3, linewidth=1)
+    
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.title("Precision-Recall by Matcher (each point = strategy × model)")
+    plt.xlim(0.3, 1.0)
+    plt.ylim(0.3, 0.85)
+    plt.legend(title="Matcher")
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(path, dpi=200)
+    plt.close()
+    return path
+
+
 # ---------------------------------------------------------------------------
 # Reporting
 # ---------------------------------------------------------------------------
-def render_metrics_table(metrics: pd.DataFrame, ci: pd.DataFrame | None) -> str:
+def render_metrics_table(metrics: pd.DataFrame, ci: pd.DataFrame | None, include_match_mode: bool = False) -> str:
     merged = metrics.copy()
+    
+    # Determine merge columns based on whether match_mode is present
+    if include_match_mode and "match_mode" in metrics.columns:
+        merge_cols = ["match_mode", "strategy", "model"]
+        header = "| Matcher | Strategy | Model | TP | FP | FN | Precision | Recall | F1 | CI (F1) |"
+        separator = "|---------|----------|-------|----|----|----|-----------|--------|----|---------|"
+    else:
+        merge_cols = ["strategy", "model"]
+        header = "| Strategy | Model | TP | FP | FN | Precision | Recall | F1 | CI (Precision) | CI (Recall) | CI (F1) |"
+        separator = "|----------|-------|----|----|----|-----------|--------|----|----------------|-------------|---------|"
+    
     if ci is not None and not ci.empty:
-        merged = merged.merge(ci, on=["strategy", "model"], how="left")
-    lines = ["| Strategy | Model | TP | FP | FN | Precision | Recall | F1 | CI (Precision) | CI (Recall) | CI (F1) |"]
-    lines.append("|----------|-------|----|----|----|-----------|--------|----|----------------|-------------|---------|")
+        merged = merged.merge(ci, on=merge_cols, how="left")
+    
+    lines = [header, separator]
+    
     for _, row in merged.iterrows():
-        prec_ci = f"{row['precision_lo']:.2f}–{row['precision_hi']:.2f}" if "precision_lo" in row else "-"
-        rec_ci = f"{row['recall_lo']:.2f}–{row['recall_hi']:.2f}" if "recall_lo" in row else "-"
-        f1_ci = f"{row['f1_lo']:.2f}–{row['f1_hi']:.2f}" if "f1_lo" in row else "-"
+        f1_ci = f"{row['f1_lo']:.2f}–{row['f1_hi']:.2f}" if "f1_lo" in row and not pd.isna(row.get("f1_lo")) else "-"
+        
+        if include_match_mode and "match_mode" in row:
+            lines.append(
+                f"| {row['match_mode']} | {row['strategy']} | {row['model'].split('/')[-1]} | "
+                f"{int(row['tp'])} | {int(row['fp'])} | {int(row['fn'])} | "
+                f"{row['precision']:.3f} | {row['recall']:.3f} | {row['f1']:.3f} | {f1_ci} |"
+            )
+        else:
+            prec_ci = f"{row['precision_lo']:.2f}–{row['precision_hi']:.2f}" if "precision_lo" in row and not pd.isna(row.get("precision_lo")) else "-"
+            rec_ci = f"{row['recall_lo']:.2f}–{row['recall_hi']:.2f}" if "recall_lo" in row and not pd.isna(row.get("recall_lo")) else "-"
+            lines.append(
+                f"| {row['strategy']} | {row['model'].split('/')[-1]} | {int(row['tp'])} | {int(row['fp'])} | {int(row['fn'])} | "
+                f"{row['precision']:.3f} | {row['recall']:.3f} | {row['f1']:.3f} | {prec_ci} | {rec_ci} | {f1_ci} |"
+            )
+    return "\n".join(lines)
+
+
+def render_ablation_summary(metrics: pd.DataFrame) -> str:
+    """Render a summary table comparing matchers averaged across strategies and models."""
+    if "match_mode" not in metrics.columns:
+        return ""
+    
+    summary = metrics.groupby("match_mode").agg({
+        "tp": "sum",
+        "fp": "sum",
+        "fn": "sum",
+        "precision": "mean",
+        "recall": "mean",
+        "f1": "mean"
+    }).reset_index()
+    
+    lines = [
+        "| Matcher | Total TP | Total FP | Total FN | Avg Precision | Avg Recall | Avg F1 |",
+        "|---------|----------|----------|----------|---------------|------------|--------|"
+    ]
+    
+    for _, row in summary.iterrows():
         lines.append(
-            f"| {row['strategy']} | {row['model'].split('/')[-1]} | {int(row['tp'])} | {int(row['fp'])} | {int(row['fn'])} | "
-            f"{row['precision']:.3f} | {row['recall']:.3f} | {row['f1']:.3f} | {prec_ci} | {rec_ci} | {f1_ci} |"
+            f"| {row['match_mode']} | {int(row['tp'])} | {int(row['fp'])} | {int(row['fn'])} | "
+            f"{row['precision']:.3f} | {row['recall']:.3f} | {row['f1']:.3f} |"
         )
+    
     return "\n".join(lines)
 
 
@@ -600,28 +804,74 @@ def generate_report(
     asset_paths: dict[str, Path],
 ) -> str:
     ts = datetime.now(timezone.utc).isoformat()
+    is_ablation = "match_mode" in metrics.columns
 
     report = [
-        "# LLM Misconception Detection: Revamped Analysis",
+        "# LLM Misconception Detection: Analysis Report",
         f"_Generated: {ts}_",
         "",
-        "## Executive Highlights",
-        "- Hybrid matcher (fuzzy + semantic + topic prior) applied across all strategies/models.",
-        "- Bootstrap CIs included for statistical rigor.",
-        "",
-        "## Model Comparison Overview",
-        f"![Model Comparison]({asset_paths.get('model_comparison', '')})" if asset_paths.get("model_comparison") else "",
-        "",
-        "## Strategy × Model Performance",
-        render_metrics_table(metrics, ci),
-        "",
-        f"![F1 by Strategy]({asset_paths.get('strategy_f1', '')})" if asset_paths.get("strategy_f1") else "",
-        "",
-        "### Precision-Recall Tradeoff",
-        f"![Precision-Recall Scatter]({asset_paths.get('pr_scatter', '')})" if asset_paths.get("pr_scatter") else "",
-        "",
+    ]
+    
+    # Executive highlights differ for ablation vs single-matcher
+    if is_ablation:
+        report.extend([
+            "## Executive Highlights",
+            "- **Matcher Ablation Study**: Comparing fuzzy_only, semantic_only, and hybrid matchers.",
+            "- Bootstrap CIs included for statistical rigor.",
+            "- Same detection data, different matching strategies.",
+            "",
+        ])
+    else:
+        report.extend([
+            "## Executive Highlights",
+            "- Hybrid matcher (fuzzy + semantic + topic prior) applied across all strategies/models.",
+            "- Bootstrap CIs included for statistical rigor.",
+            "",
+        ])
+    
+    # Ablation section (only when running all matchers)
+    if is_ablation:
+        report.extend([
+            "## Matcher Ablation: Fuzzy vs Semantic vs Hybrid",
+            "",
+            "### Summary (averaged across strategies and models)",
+            render_ablation_summary(metrics),
+            "",
+            f"![Matcher Ablation]({asset_paths.get('matcher_ablation', '')})" if asset_paths.get("matcher_ablation") else "",
+            "",
+            "### Precision-Recall by Matcher",
+            f"![Matcher PR Scatter]({asset_paths.get('matcher_pr_scatter', '')})" if asset_paths.get("matcher_pr_scatter") else "",
+            "",
+            "### Full Results Table",
+            render_metrics_table(metrics, ci, include_match_mode=True),
+            "",
+        ])
+    else:
+        # Non-ablation: standard report structure
+        report.extend([
+            "## Model Comparison Overview",
+            f"![Model Comparison]({asset_paths.get('model_comparison', '')})" if asset_paths.get("model_comparison") else "",
+            "",
+            "## Strategy × Model Performance",
+            render_metrics_table(metrics, ci),
+            "",
+            f"![F1 by Strategy]({asset_paths.get('strategy_f1', '')})" if asset_paths.get("strategy_f1") else "",
+            "",
+            "### Precision-Recall Tradeoff",
+            f"![Precision-Recall Scatter]({asset_paths.get('pr_scatter', '')})" if asset_paths.get("pr_scatter") else "",
+            "",
+        ])
+    
+    # Topic analysis (filter to hybrid for ablation, or use all)
+    if is_ablation:
+        hybrid_opps = opportunities[opportunities["match_mode"] == "hybrid"]
+        topic_opps = hybrid_opps if not hybrid_opps.empty else opportunities
+    else:
+        topic_opps = opportunities
+    
+    report.extend([
         "## Topic Difficulty (Recall)",
-        render_topic_table(opportunities),
+        render_topic_table(topic_opps),
         "",
         f"![Topic Recall]({asset_paths.get('topic_bars', '')})" if asset_paths.get("topic_bars") else "",
         "",
@@ -636,13 +886,23 @@ def generate_report(
         "## Methods",
         "- Data: 60 students × 4 questions (seeded/clean) with manifest-driven ground truth.",
         "- Detection: GPT-5.1 and Gemini 2.5 Flash across strategies (baseline, minimal, rubric_only, socratic).",
-        "- Matching: Hybrid fusion of fuzzy similarity, semantic embeddings (OpenAI/OpenRouter optional), and topic priors.",
-        "- Metrics: Precision/Recall/F1 with bootstrap CIs; agreement via κ; significance via McNemar where applicable.",
-    ]
+    ])
+    
+    if is_ablation:
+        report.append("- Matching: Ablation comparing fuzzy-only, semantic-only (text-embedding-3-large), and hybrid (fuzzy + semantic + topic prior).")
+    else:
+        report.append("- Matching: Hybrid fusion of fuzzy similarity, semantic embeddings, and topic priors.")
+    
+    report.append("- Metrics: Precision/Recall/F1 with bootstrap CIs; agreement via κ; significance via McNemar where applicable.")
 
-    # Agreement & significance
+    # Agreement & significance (use hybrid for ablation)
+    if is_ablation:
+        opps_for_agreement = opportunities[opportunities["match_mode"] == "hybrid"]
+    else:
+        opps_for_agreement = opportunities
+    
     agreements = []
-    for strategy, grp in opportunities.groupby("strategy"):
+    for strategy, grp in opps_for_agreement.groupby("strategy"):
         models = sorted(grp["model"].unique())
         if len(models) < 2:
             continue
@@ -668,11 +928,20 @@ def display_summary(metrics: pd.DataFrame):
     if metrics.empty:
         console.print("[red]No metrics to display[/red]")
         return
+    
+    has_match_mode = "match_mode" in metrics.columns
+    
     table = Table(title="Strategy × Model Performance", show_header=True, header_style="bold")
+    if has_match_mode:
+        table.add_column("Matcher")
     for col in ["Strategy", "Model", "TP", "FP", "FN", "Precision", "Recall", "F1"]:
         table.add_column(col)
+    
     for _, row in metrics.iterrows():
-        table.add_row(
+        row_data = []
+        if has_match_mode:
+            row_data.append(row["match_mode"])
+        row_data.extend([
             row["strategy"],
             row["model"].split("/")[-1],
             str(int(row["tp"])),
@@ -681,7 +950,8 @@ def display_summary(metrics: pd.DataFrame):
             f"{row['precision']:.3f}",
             f"{row['recall']:.3f}",
             f"{row['f1']:.3f}",
-        )
+        ])
+        table.add_row(*row_data)
     console.print(table)
 
 
@@ -693,12 +963,16 @@ def main(
     detections_dir: Path = typer.Option(DEFAULT_DETECTIONS_DIR, help="Detections root", show_default=True),
     manifest_path: Path = typer.Option(DEFAULT_MANIFEST_PATH, help="Manifest path", show_default=True),
     groundtruth_path: Path = typer.Option(DEFAULT_GROUNDTRUTH_PATH, help="Ground truth path", show_default=True),
-    quick: bool = typer.Option(False, help="Quick mode (reuse cached assets if available)"),
+    match_mode: MatchMode = typer.Option(MatchMode.HYBRID, help="Matching mode: fuzzy_only, semantic_only, hybrid, or all"),
+    quick: bool = typer.Option(False, help="Quick mode (fewer bootstrap iterations)"),
 ):
     """
-    Interactive-ish analysis: discovers strategies, runs hybrid matching, writes report + assets.
+    Analyze LLM misconception detections with configurable matching modes.
+    
+    Use --match-mode all to run matcher ablation (fuzzy vs semantic vs hybrid).
     """
     console.rule("[bold green]Revamped Analysis[/bold green]")
+    console.print(f"[cyan]Match mode:[/cyan] {match_mode.value}")
 
     strategies = discover_strategies(detections_dir)
     if not strategies:
@@ -714,13 +988,20 @@ def main(
         strategies=strategies,
         manifest=manifest,
         groundtruth=groundtruth,
-        use_embeddings=not quick,
+        match_mode=match_mode,
+        use_embeddings=True,  # Always use embeddings for semantic/hybrid
     )
 
-    metrics = summarize_metrics(detections_df, ["strategy", "model"])
+    # Determine grouping columns based on match mode
+    if match_mode == MatchMode.ALL:
+        group_cols = ["match_mode", "strategy", "model"]
+    else:
+        group_cols = ["strategy", "model"]
+
+    metrics = summarize_metrics(detections_df, group_cols)
     ci = bootstrap_metrics(
         detections_df,
-        group_cols=["strategy", "model"],
+        group_cols=group_cols,
         unit_cols=["student", "question"],
         iters=150 if quick else 400,
     )
@@ -736,12 +1017,37 @@ def main(
         "topic_bars": ASSET_DIR / "topic_recall_bars.png",
         "model_comparison": ASSET_DIR / "model_comparison.png",
     }
-    plot_topic_heatmap(opportunities_df, asset_paths["heatmap"])
-    plot_hallucinations(detections_df, asset_paths["hallucinations"])
-    plot_strategy_f1_comparison(metrics, asset_paths["strategy_f1"])
-    plot_precision_recall_scatter(metrics, asset_paths["pr_scatter"])
-    plot_topic_recall_bars(opportunities_df, asset_paths["topic_bars"])
-    plot_model_comparison(metrics, asset_paths["model_comparison"])
+    
+    # For ablation mode, use hybrid data for topic plots; add ablation-specific plots
+    if match_mode == MatchMode.ALL:
+        asset_paths["matcher_ablation"] = ASSET_DIR / "matcher_ablation.png"
+        asset_paths["matcher_pr_scatter"] = ASSET_DIR / "matcher_pr_scatter.png"
+        
+        # Filter to hybrid for topic-related plots
+        hybrid_opps = opportunities_df[opportunities_df["match_mode"] == "hybrid"]
+        hybrid_dets = detections_df[detections_df["match_mode"] == "hybrid"]
+        
+        plot_topic_heatmap(hybrid_opps, asset_paths["heatmap"])
+        plot_hallucinations(hybrid_dets, asset_paths["hallucinations"])
+        plot_topic_recall_bars(hybrid_opps, asset_paths["topic_bars"])
+        
+        # Ablation-specific plots
+        plot_matcher_ablation(metrics, asset_paths["matcher_ablation"])
+        plot_matcher_pr_scatter(metrics, asset_paths["matcher_pr_scatter"])
+        
+        # For strategy/model comparison, filter to hybrid
+        hybrid_metrics = metrics[metrics["match_mode"] == "hybrid"].copy()
+        if not hybrid_metrics.empty:
+            plot_strategy_f1_comparison(hybrid_metrics, asset_paths["strategy_f1"])
+            plot_precision_recall_scatter(hybrid_metrics, asset_paths["pr_scatter"])
+            plot_model_comparison(hybrid_metrics, asset_paths["model_comparison"])
+    else:
+        plot_topic_heatmap(opportunities_df, asset_paths["heatmap"])
+        plot_hallucinations(detections_df, asset_paths["hallucinations"])
+        plot_strategy_f1_comparison(metrics, asset_paths["strategy_f1"])
+        plot_precision_recall_scatter(metrics, asset_paths["pr_scatter"])
+        plot_topic_recall_bars(opportunities_df, asset_paths["topic_bars"])
+        plot_model_comparison(metrics, asset_paths["model_comparison"])
 
     report_text = generate_report(metrics, ci, opportunities_df, detections_df, asset_paths)
     REPORT_PATH.write_text(report_text)

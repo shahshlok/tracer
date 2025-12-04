@@ -1,53 +1,63 @@
-# LLM Misconception Detection: Revamped Analysis
-_Generated: 2025-12-04T08:33:15.264459+00:00_
+# LLM Misconception Detection: Analysis Report
+_Generated: 2025-12-04T17:35:27.949713+00:00_
 
 ## Executive Highlights
-- Hybrid matcher (fuzzy + semantic + topic prior) applied across all strategies/models.
+- **Matcher Ablation Study**: Comparing fuzzy_only, semantic_only, and hybrid matchers.
 - Bootstrap CIs included for statistical rigor.
+- Same detection data, different matching strategies.
 
-## Model Comparison Overview
-![Model Comparison](docs/report_assets/model_comparison.png)
+## Matcher Ablation: Fuzzy vs Semantic vs Hybrid
 
-## Strategy × Model Performance
-| Strategy | Model | TP | FP | FN | Precision | Recall | F1 | CI (Precision) | CI (Recall) | CI (F1) |
-|----------|-------|----|----|----|-----------|--------|----|----------------|-------------|---------|
-| baseline | gemini-2.5-flash | 43 | 36 | 14 | 0.544 | 0.754 | 0.632 | 0.44–0.64 | 0.63–0.86 | 0.52–0.72 |
-| baseline | gpt-5.1 | 38 | 16 | 18 | 0.704 | 0.679 | 0.691 | 0.59–0.80 | 0.55–0.79 | 0.58–0.79 |
-| minimal | gemini-2.5-flash | 38 | 43 | 18 | 0.469 | 0.679 | 0.555 | 0.36–0.57 | 0.55–0.80 | 0.44–0.67 |
-| minimal | gpt-5.1 | 34 | 23 | 20 | 0.596 | 0.630 | 0.613 | 0.47–0.71 | 0.49–0.76 | 0.48–0.73 |
-| rubric_only | gemini-2.5-flash | 39 | 40 | 20 | 0.494 | 0.661 | 0.565 | 0.38–0.62 | 0.53–0.78 | 0.44–0.69 |
-| rubric_only | gpt-5.1 | 35 | 30 | 19 | 0.538 | 0.648 | 0.588 | 0.44–0.65 | 0.54–0.77 | 0.49–0.69 |
-| socratic | gemini-2.5-flash | 45 | 46 | 15 | 0.495 | 0.750 | 0.596 | 0.41–0.60 | 0.65–0.86 | 0.50–0.70 |
-| socratic | gpt-5.1 | 37 | 23 | 17 | 0.617 | 0.685 | 0.649 | 0.51–0.70 | 0.55–0.80 | 0.53–0.74 |
+### Summary (averaged across strategies and models)
+| Matcher | Total TP | Total FP | Total FN | Avg Precision | Avg Recall | Avg F1 |
+|---------|----------|----------|----------|---------------|------------|--------|
+| fuzzy_only | 34 | 798 | 400 | 0.042 | 0.078 | 0.053 |
+| hybrid | 298 | 268 | 151 | 0.538 | 0.664 | 0.591 |
+| semantic_only | 305 | 271 | 144 | 0.542 | 0.679 | 0.598 |
 
-### Key Takeaways (Strategies × Models)
-- Across all strategies, GPT-5.1 consistently achieves **higher precision** (≈0.54–0.70) than Gemini (≈0.47–0.55), meaning its detections are more likely to correspond to the seeded misconception when it fires.
-- Gemini-2.5-Flash tends to achieve **slightly higher recall** (up to ≈0.75) at the cost of more false positives, acting more like a “broad net” compared to GPT-5.1’s more conservative behavior.
-- F1 scores are in the **0.55–0.69** range, indicating that LLMs are helpful as misconception detectors but still far from perfect: they miss a non-trivial fraction of injected misconceptions and generate many extra flags.
-- Confidence intervals are relatively wide, reflecting the small dataset, but the **relative ordering (GPT higher precision, Gemini higher recall)** is stable across strategies.
-- None of the prompting strategies stands out as a clear, uniformly best option: differences exist but are modest, suggesting that **model choice matters more than prompting style** in this setup.
+![Matcher Ablation](docs/report_assets/matcher_ablation.png)
 
-### Precision-Recall Tradeoff
-![Precision-Recall Scatter](docs/report_assets/precision_recall_scatter.png)
+### Precision-Recall by Matcher
+![Matcher PR Scatter](docs/report_assets/matcher_pr_scatter.png)
 
-![F1 by Strategy](docs/report_assets/strategy_f1_comparison.png)
+### Full Results Table
+| Matcher | Strategy | Model | TP | FP | FN | Precision | Recall | F1 | CI (F1) |
+|---------|----------|-------|----|----|----|-----------|--------|----|---------|
+| fuzzy_only | baseline | gemini-2.5-flash | 6 | 118 | 48 | 0.048 | 0.111 | 0.067 | 0.02–0.12 |
+| fuzzy_only | baseline | gpt-5.1 | 4 | 53 | 50 | 0.070 | 0.074 | 0.072 | 0.02–0.15 |
+| fuzzy_only | minimal | gemini-2.5-flash | 6 | 160 | 49 | 0.036 | 0.109 | 0.054 | 0.01–0.11 |
+| fuzzy_only | minimal | gpt-5.1 | 2 | 69 | 52 | 0.028 | 0.037 | 0.032 | 0.00–0.08 |
+| fuzzy_only | rubric_only | gemini-2.5-flash | 4 | 118 | 50 | 0.033 | 0.074 | 0.045 | 0.01–0.09 |
+| fuzzy_only | rubric_only | gpt-5.1 | 6 | 66 | 48 | 0.083 | 0.111 | 0.095 | 0.03–0.17 |
+| fuzzy_only | socratic | gemini-2.5-flash | 6 | 147 | 49 | 0.039 | 0.109 | 0.058 | 0.01–0.12 |
+| fuzzy_only | socratic | gpt-5.1 | 0 | 67 | 54 | 0.000 | 0.000 | 0.000 | 0.00–0.00 |
+| hybrid | baseline | gemini-2.5-flash | 41 | 38 | 16 | 0.519 | 0.719 | 0.603 | 0.49–0.71 |
+| hybrid | baseline | gpt-5.1 | 34 | 20 | 22 | 0.630 | 0.607 | 0.618 | 0.50–0.73 |
+| hybrid | minimal | gemini-2.5-flash | 39 | 42 | 17 | 0.481 | 0.696 | 0.569 | 0.48–0.67 |
+| hybrid | minimal | gpt-5.1 | 33 | 24 | 21 | 0.579 | 0.611 | 0.595 | 0.48–0.71 |
+| hybrid | rubric_only | gemini-2.5-flash | 37 | 42 | 22 | 0.468 | 0.627 | 0.536 | 0.42–0.68 |
+| hybrid | rubric_only | gpt-5.1 | 39 | 26 | 16 | 0.600 | 0.709 | 0.650 | 0.54–0.75 |
+| hybrid | socratic | gemini-2.5-flash | 39 | 52 | 19 | 0.429 | 0.672 | 0.523 | 0.44–0.62 |
+| hybrid | socratic | gpt-5.1 | 36 | 24 | 18 | 0.600 | 0.667 | 0.632 | 0.52–0.75 |
+| semantic_only | baseline | gemini-2.5-flash | 41 | 38 | 15 | 0.519 | 0.732 | 0.607 | 0.49–0.72 |
+| semantic_only | baseline | gpt-5.1 | 34 | 20 | 22 | 0.630 | 0.607 | 0.618 | 0.50–0.73 |
+| semantic_only | minimal | gemini-2.5-flash | 41 | 44 | 16 | 0.482 | 0.719 | 0.577 | 0.46–0.69 |
+| semantic_only | minimal | gpt-5.1 | 33 | 25 | 21 | 0.569 | 0.611 | 0.589 | 0.47–0.70 |
+| semantic_only | rubric_only | gemini-2.5-flash | 41 | 39 | 18 | 0.512 | 0.695 | 0.590 | 0.49–0.71 |
+| semantic_only | rubric_only | gpt-5.1 | 39 | 26 | 16 | 0.600 | 0.709 | 0.650 | 0.55–0.76 |
+| semantic_only | socratic | gemini-2.5-flash | 40 | 55 | 18 | 0.421 | 0.690 | 0.523 | 0.42–0.62 |
+| semantic_only | socratic | gpt-5.1 | 36 | 24 | 18 | 0.600 | 0.667 | 0.632 | 0.51–0.74 |
 
 ## Topic Difficulty (Recall)
 | Topic | Recall | N |
 |-------|--------|---|
-| Input | 0.362 | 80 |
-| State / Variables | 0.413 | 104 |
-| Algebraic Reasoning | 0.750 | 24 |
-| Data Types | 0.841 | 88 |
+| Input | 0.287 | 80 |
+| State / Variables | 0.385 | 104 |
+| Algebraic Reasoning | 0.792 | 24 |
+| Data Types | 0.852 | 88 |
+| Input / Data Types | 0.889 | 72 |
 | State / Input | 0.906 | 32 |
-| Input / Data Types | 0.917 | 72 |
-| Methods | 1.000 | 32 |
-
-### Topic-Level Observations
-- The lowest recall appears on **Input** (0.36) and **State / Variables** (0.41), suggesting that LLMs struggle most with misconceptions involving I/O protocols and state representation.
-- Mixed categories such as **Input / Data Types** and **State / Input** are detected much more reliably (recall ≥0.90), likely because they involve more explicit, surface-level API misuse.
-- **Methods** show perfect recall in this dataset, but the small number of opportunities (N=32) and synthetic nature of the tasks mean we should treat this as a promising but tentative result.
-- Overall, these patterns mirror CS1 intuition: subtle state and input-handling bugs are harder to reliably detect than straightforward type or arithmetic issues.
+| Methods | 0.969 | 32 |
 
 ![Topic Recall](docs/report_assets/topic_recall_bars.png)
 
@@ -57,39 +67,20 @@ _Generated: 2025-12-04T08:33:15.264459+00:00_
 ## Hallucination Analysis
 ![Hallucinations](docs/report_assets/hallucinations.png)
 
-- **Incorrect data type for input variables** (5 times)
-- **Unnecessary absolute value check for Math.sqrt result** (4 times)
-- **Incomplete input reading for multiple variables** (4 times)
-- **Incomplete Input Reading** (4 times)
-- **Integer Division in Cost Calculation** (3 times)
+- **Incorrect order of input reading** (18 times)
+- **Incorrect data type for input variables** (17 times)
+- **Incorrect Scanner method for double input** (13 times)
+- **Unnecessary absolute value check for Math.sqrt result** (12 times)
+- **Incomplete Input Reading** (12 times)
 
 ## Methods
 - Data: 60 students × 4 questions (seeded/clean) with manifest-driven ground truth.
 - Detection: GPT-5.1 and Gemini 2.5 Flash across strategies (baseline, minimal, rubric_only, socratic).
-- Matching: Hybrid fusion of fuzzy similarity, semantic embeddings (OpenAI/OpenRouter optional), and topic priors.
+- Matching: Ablation comparing fuzzy-only, semantic-only (text-embedding-3-large), and hybrid (fuzzy + semantic + topic prior).
 - Metrics: Precision/Recall/F1 with bootstrap CIs; agreement via κ; significance via McNemar where applicable.
 
 ## Agreement & Significance
-
-### Summary
-- Across strategies, Cohen’s κ values range from **≈0.20 to ≈0.47**, indicating **low-to-moderate agreement** between GPT-5.1 and Gemini on which seeded misconceptions they successfully detect.
-- McNemar p-values are all **> 0.05**, so we do not find strong evidence that one model has systematically higher recall than the other on this dataset; they tend to succeed and fail on overlapping but non-identical subsets of opportunities.
-- Higher agreement on baseline/minimal strategies and lower agreement on rubric_only/socratic suggests that richer prompts encourage more idiosyncratic behavior, which may be useful for ensemble-style analysis but complicates model comparison.
-
-- baseline: κ=0.471, McNemar p=0.3123 (stat=1.021) | table={'both_correct': 32, 'only_a': 8, 'only_b': 4, 'both_wrong': 10}
-- minimal: κ=0.432, McNemar p=0.6885 (stat=0.161) | table={'both_correct': 28, 'only_a': 8, 'only_b': 6, 'both_wrong': 12}
-- rubric_only: κ=0.238, McNemar p=0.9087 (stat=0.013) | table={'both_correct': 25, 'only_a': 9, 'only_b': 10, 'both_wrong': 10}
-- socratic: κ=0.202, McNemar p=0.7237 (stat=0.125) | table={'both_correct': 29, 'only_a': 10, 'only_b': 8, 'both_wrong': 7}
-
-## Limitations & Implications
-
-### Limitations
-- The dataset is **synthetic**, with misconceptions injected into LLM-generated CS1 submissions; real student code may exhibit different patterns and noise.
-- The misconception taxonomy is **narrow (≈15–18 items)** and focused on a single assignment and a small set of topics (input, state, types, arithmetic), limiting generalizability.
-- Only two base models (GPT-5.1, Gemini 2.5 Flash) and four prompting strategies are evaluated; results may not transfer to other models, prompts, or fine-tuned systems.
-- The number of students and opportunities is modest, so confidence intervals are wide and some apparent effects may be unstable.
-
-### Implications for Practice and Research
-- In this setup, LLMs can correctly detect a substantial fraction of seeded misconceptions but still show **many false positives and missed cases**, so they are better suited as **decision-support tools** for instructors rather than autonomous graders.
-- The strong topic dependence (poor recall on Input and State / Variables) suggests that **future work should prioritize these harder concepts**, both in prompt design and in specialized training.
-- Moderate inter-model agreement and differing precision/recall profiles point to potential benefits of **ensembling or cross-checking models**, where disagreements highlight cases deserving human attention.
+- baseline: κ=0.279, McNemar p=0.1949 (stat=1.681) | table={'both_correct': 26, 'only_a': 12, 'only_b': 6, 'both_wrong': 10}
+- minimal: κ=0.354, McNemar p=0.3816 (stat=0.766) | table={'both_correct': 27, 'only_a': 10, 'only_b': 6, 'both_wrong': 11}
+- rubric_only: κ=0.279, McNemar p=0.1949 (stat=1.681) | table={'both_correct': 26, 'only_a': 6, 'only_b': 12, 'both_wrong': 10}
+- socratic: κ=0.548, McNemar p=0.8802 (stat=0.023) | table={'both_correct': 30, 'only_a': 5, 'only_b': 6, 'both_wrong': 13}

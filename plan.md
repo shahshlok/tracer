@@ -1,192 +1,160 @@
-# Plan: ITiCSE-Ready Misconception Detection Framework
+# Plan: Matcher Ablation – Fuzzy vs Semantic vs Hybrid
 
-**Goal:** Produce a rigorous evaluation framework for LLM-based CS1 misconception detection.
+**Goal:** Compare three misconception-matching strategies on the *same* dataset and analysis pipeline so we can make a clear, defensible claim about whether our hybrid matcher actually adds value beyond simpler baselines.
 
-**Contribution:** The hybrid matcher (fuzzy + semantic + topic prior) and evaluation methodology, not the generation approach.
+**Matchers to compare**
+- `fuzzy_only` – uses only string-based similarity on names/descriptions (current `fuzzy_match_misconception`).
+- `semantic_only` – uses only embedding-based semantic similarity on detection/ground-truth texts.
+- `hybrid` – current fusion of fuzzy + semantic + topic prior.
 
-**Scope constraints:** See `future.md` for deferred items (confidence calibration, difficulty labels, multi-misconception files, severity analysis).
-
----
-
-## Phase 1: Fix Dataset Distribution (Day 1)
-
-### 1.1 Update `generate_manifest()` in `utils/generators/dataset_generator.py`
-
-**Current distribution:**
-- 70% seeded, 30% clean
-- Avg 2.8 misconceptions/student
-
-**Target distribution:**
-- 35% seeded, 65% clean
-- Avg 0.8-1.0 misconceptions/student
-- **One misconception per file maximum**
-
-**Student breakdown (60 students):**
-| Type | Count | Misconceptions | Files |
-|------|-------|----------------|-------|
-| Perfect students | 24 (40%) | 0 | 96 clean |
-| Single-issue | 21 (35%) | 1 | 21 seeded, 63 clean |
-| Struggling | 12 (20%) | 2 | 24 seeded, 24 clean |
-| Severely struggling | 3 (5%) | 3 | 9 seeded, 3 clean |
-
-**Result:** ~54 seeded files, ~186 clean files (~22% seeded)
-
-**Key constraint:** Each file has AT MOST one seeded misconception. Struggling students have misconceptions spread across different questions, not stacked in one file.
-
-### 1.2 Keep deterministic seeding
-
-Explicit instructions stay (e.g., "DO NOT use Scanner, hardcode values"). This ensures ground truth is reliable.
-
-Add persona-driven **style noise** only:
-- "Write as a student who uses inconsistent indentation"
-- "Include a debug print statement the student forgot to remove"
-- "Use unhelpful variable names like `x` and `temp`"
-
-The misconception is deterministic; the noise is cosmetic.
+Everything else (dataset, manifest, ground truth, detections, metrics) remains fixed while we vary the matcher.
 
 ---
 
-## Phase 2: Simplify Analysis (Day 1-2)
+## Phase 0 – Fix and Freeze the Experimental Ground
 
-### 2.1 Remove from current analysis:
-- **Confidence calibration** (ECE, Brier) - moved to `future.md`
-- **Severity field** - not used in metrics
-- **Difficulty stratification** - no defensible labels yet
+Before ablation, we assume (or enforce) that:
 
-### 2.2 Keep in analysis:
-- Precision / Recall / F1 per (strategy, model)
-- Bootstrap CIs
-- Topic-based breakdown (using existing `category` field from groundtruth)
-- Cohen's κ for inter-model agreement
-- McNemar's test for strategy comparison
-- Hallucination analysis (FP breakdown)
-- Topic heatmap
+- Dataset distribution is stable and realistic: 60 students × 4 questions, ~20–25% seeded files, **max one injected misconception per file**.
+- `uv run pipeline` completes end-to-end and produces coherent detection JSONs and a working `thesis_report.md` for the hybrid matcher.
+- The analysis code can already compute:
+  - Precision/recall/F1 per (strategy, model) with bootstrap CIs.
+  - Topic-wise recall.
+  - Hallucination patterns.
+  - Agreement (κ, McNemar) for model comparisons.
 
-### 2.3 Update `analyze_cli.py`:
-- Remove `expected_calibration_error()` and `brier_score()` calls from report generation
-- Remove calibration curves visualization
-- Keep everything else
+We do not change dataset generation or prompting while doing matcher ablation.
 
 ---
 
-## Phase 3: Regenerate Dataset (Day 2)
+## Phase 1 – Wire Match Modes into the Analyzer
 
-1. `uv run pipeline --students 60 --strategies all --force`
-2. Spot-check 10-15 generated files manually to verify misconceptions present
-3. Document any files where generation failed
+**Objective:** Allow the analysis to run in `fuzzy_only`, `semantic_only`, and `hybrid` modes with identical downstream evaluation.
 
----
+1. **Define match modes**
+   - Introduce a small enum/constant set: `match_mode ∈ {"fuzzy_only", "semantic_only", "hybrid"}`.
+   - Implement a dispatcher that, given a detection and `match_mode`, returns `(matched_id, match_score, detail)` by calling:
+     - `fuzzy_match_misconception` for `fuzzy_only`.
+     - `semantic_match_misconception` for `semantic_only`.
+     - `hybrid_match_misconception` for `hybrid`.
 
-## Phase 4: Re-run Analysis and Validate (Day 3)
+2. **Keep evaluation logic identical**
+   - TP/FP/FN classification must be the same logic for all modes:
+     - Same notion of “expected ID”, seeded vs clean, hallucination vs interesting.
+   - Only the way we obtain `matched_id` and `match_score` changes between modes.
 
-1. `uv run analyze`
-2. Review metrics - expect:
-   - Lower overall recall (fewer seeded files)
-   - Higher precision (fewer FPs on clean files)
-   - Topic-based variation in recall
-3. Validate that clean files don't generate excessive FPs (hallucination check)
-
----
-
-## Phase 5: Update Report for ITiCSE Framing (Day 3-4)
-
-### Key sections to emphasize:
-
-1. **Contribution:** "We present an evaluation framework for LLM-based misconception detection, featuring a novel hybrid matcher that combines fuzzy string matching, semantic embeddings, and topic priors."
-
-2. **Methodology:** 
-   - Controlled synthetic dataset (acknowledge limitation)
-   - Multiple prompting strategies
-   - Bootstrap CIs, inter-model agreement (κ), McNemar tests
-   - Topic-based analysis
-
-3. **Findings:**
-   - Which strategy works best?
-   - Which misconception categories (topics) are detectable?
-   - Where do LLMs hallucinate?
-   - Do models agree on what they detect?
-
-4. **Limitations:**
-   - Synthetic data (future: real student submissions)
-   - Limited misconception taxonomy (future: broader coverage)
-   - Two models only (future: more models, fine-tuned approaches)
-   - No confidence calibration analysis (future work)
+3. **CLI interface**
+   - Add an option to `uv run analyze`, e.g. `--match-mode`:
+     - Values: `fuzzy_only`, `semantic_only`, `hybrid`, or `all`.
+   - In `match-mode=all`, run all three matchers in one invocation and carry forward an explicit `match_mode` column in the resulting dataframe(s).
 
 ---
 
-## Files to Modify
+## Phase 2 – Compute Metrics per Matcher
 
-| File | Changes |
-|------|---------|
-| `utils/generators/dataset_generator.py` | New distribution logic (40/35/20/5 split), one misconception per file max |
-| `analyze_cli.py` | Remove calibration analysis, keep topic-based metrics |
-| `thesis_report.md` | Updated framing, remove calibration section |
+**Objective:** For each matcher, compute the same metrics so we can compare them apples-to-apples.
+
+For each `match_mode`:
+
+1. **Global metrics by strategy × model**
+   - TP, FP, FN.
+   - Precision, recall, F1.
+   - Bootstrap confidence intervals for precision/recall/F1 using (student, question) as the resampling unit (same procedure as current hybrid).
+
+2. **Topic-wise recall**
+   - For each topic and (strategy, model, match_mode), compute recall over opportunities.
+   - This shows whether certain matchers are better/worse on specific conceptual areas (Input, State, Data Types, etc.).
+
+3. **Hallucination profile**
+   - For each matcher, compute:
+     - Total FP count.
+     - Top hallucinated misconception names and their counts.
+   - This allows statements like “semantic-only hallucinates fewer ‘Input’ misconceptions but more ‘Data Types’ ones” or vice versa.
+
+4. **(Optional) Model agreement within a matcher**
+   - Keep κ/McNemar focused on model comparisons within each matcher.
+   - Cross-matcher agreement (e.g., hybrid vs fuzzy on the same model) can be explored later if it turns out to be interesting.
+
+All metrics should be stored in a way that we can filter/slice by `match_mode` in code and in the JSON export.
+
+---
+
+## Phase 3 – Extend the Report with Matcher Ablation
+
+**Objective:** Integrate matcher comparisons into `thesis_report.md` so a reader can see the impact without reading code.
+
+1. **New section: “Matcher Ablation: Fuzzy vs Semantic vs Hybrid”**
+   - Add a table summarizing overall performance:
+     - Columns: `Matcher`, `Strategy`, `Model`, `TP`, `FP`, `FN`, `Precision`, `Recall`, `F1`, and CIs.
+   - Optionally include a small figure (e.g., precision vs recall scatter) with points colored by `match_mode`.
+
+2. **Matcher-level narrative**
+   - Add bullets such as:
+     - “Hybrid improves recall on Input and State / Variables by X–Y percentage points over fuzzy-only, with only a modest increase in FPs.”
+     - “Semantic-only underperforms on short, idiosyncratic misconception names where fuzzy matching excels,” or vice versa depending on results.
+   - If hybrid is not clearly superior, be honest and adjust our framing (“hybrid behaves similarly”; “benefits are modest but present on specific topics”).
+
+3. **Topic-by-matcher comparison**
+   - Either:
+     - Add a topic × matcher × model recall heatmap, or
+     - Present a smaller table for key topics (Input, State / Variables, Data Types) showing recall per matcher.
+   - Use this to argue about where hybrid helps (or fails) conceptually, not just numerically.
+
+---
+
+## Phase 4 – Qualitative Case Studies
+
+**Objective:** Show concrete examples where matchers behave differently and why that matters.
+
+1. **Select representative cases**
+   - Identify 2–3 interesting detection instances where:
+     - Fuzzy-only mislabels but semantic-only/hybrid get it right.
+     - Semantic-only fails but fuzzy-only/hybrid succeed.
+     - Hybrid chooses the correct ID where fuzzy and semantic disagree, aided by topic prior or blended score.
+
+2. **Document each case**
+   - For each:
+     - Note student ID (or pseudonym), question, injected misconception ID and name.
+     - Include detection text (name/description/student belief).
+     - Show matcher outputs: `(matched_id, score)` for fuzzy-only, semantic-only, hybrid.
+   - Add 1–2 sentences explaining why hybrid behaves differently and what that tells us about the underlying representations (string vs semantics vs topic priors).
+
+Placed in the report (or paper) these act as “mini vignettes” that make the quantitative differences human-readable.
+
+---
+
+## Phase 5 – Interpret Results and Refine Contribution
+
+**Objective:** Use the ablation results to sharpen what we claim in the thesis/paper.
+
+1. **Refine our main claim about the matcher**
+   - If hybrid clearly improves recall (especially on hard topics) with acceptable FP cost:
+     - Emphasize hybrid as a substantive methodological contribution.
+   - If gains are marginal or inconsistent:
+     - Reframe: our contribution becomes more about the **evaluation framework and experimental setup** than about the hybrid heuristic itself.
+
+2. **Position relative to future work**
+   - Based on what we learn, decide how much energy to invest in:
+     - More sophisticated hybridization (e.g., learned weights).
+     - Difficulty labels and multi-misconception files (`future.md`).
+     - Real student data collection and model fine-tuning.
+
+3. **Update ITiCSE narrative**
+   - Ensure the matcher ablation results are clearly visible in:
+     - Abstract (one sentence).
+     - Results section (a table + figure + interpretation).
+     - Discussion (how this informs using LLMs for misconception detection).
 
 ---
 
 ## Success Criteria
 
-Before submitting to ITiCSE:
+We consider this ablation plan successful when:
 
-- [x] Distribution is realistic (~22% seeded, ~78% clean) ✓ Verified: 22.5% seeded, 77.5% clean
-- [x] Perfect students included (40% of cohort) ✓ Verified: 24/60 = 40%
-- [x] One misconception per file maximum ✓ Implemented in generate_manifest()
-- [ ] Clean file FP rate is reasonable (<20%)
-- [ ] Topic-based analysis shows variation
-- [ ] Limitations are explicit and honest
-- [x] Inter-model agreement (κ) is reported ✓ Already in analyze_cli.py
-- [x] Calibration analysis removed (deferred to future.md) ✓ Removed from analyze_cli.py and pipeline.py
-
----
-
-## Timeline
-
-| Day | Task |
-|-----|------|
-| 1 | Phase 1: Fix distribution in dataset_generator.py |
-| 2 | Phase 2-3: Simplify analysis, regenerate dataset |
-| 3 | Phase 4-5: Re-run analysis, update report framing |
-| 4 | Buffer / polish |
-
-**Total: ~4 days**
-
----
-
-## Decision Log
-
-- **Q1 (Validation):** Option D - deterministic misconceptions, persona for style noise only
-- **Q2 (Contribution):** Option B - evaluation methodology, not generation
-- **Q3 (Scale):** 60 students for now, scale later if needed
-- **Q4 (Subtlety):** Keep all misconceptions, report by topic (not difficulty)
-- **Q5 (Re-run):** Yes, committed to re-running
-
----
-
-## Deferred Items
-
-See `future.md` for:
-- Confidence calibration analysis
-- Difficulty labels for misconceptions
-- Multiple misconceptions per file
-- Severity analysis
-
----
-
-## Next Immediate Step
-
-Start with Phase 1: modify `utils/generators/dataset_generator.py` to implement the new distribution.
-
-Ready when you are.
-
----
-
-## Addendum (Archived)
-
-_The following items were discussed but deferred. See `future.md` for current status._
-
-- Difficulty labeling procedure → deferred (no defensible labels without classroom data)
-- Multi-misconception files → deferred (one per file max for tractable analysis)
-- Difficulty-integrated statistics → deferred (using topic-based analysis instead)
-- Severity analysis → deferred (not used in metrics)
-- Confidence calibration → deferred (future work)
-- Threats to validity → kept in report, but simplified
+- [ ] `uv run analyze --match-mode all` (or equivalent) runs end-to-end and produces metrics and JSON that include `match_mode` as a first-class dimension.
+- [ ] `thesis_report.md` has a clear “Matcher Ablation” section with:
+  - A comparative table across `fuzzy_only`, `semantic_only`, and `hybrid`.
+  - At least one figure (e.g., precision–recall scatter) contrasting matchers.
+  - A short narrative highlighting where hybrid helps or does not.
+- [ ] At least 2–3 qualitative case studies are documented showing distinct matcher behavior.
+- [ ] We can state, in one or two precise sentences, how hybrid compares to fuzzy-only and semantic-only (e.g., “Hybrid improves recall on Input/State misconceptions by ~X points with similar precision”), or explicitly acknowledge that it does *not* outperform simpler baselines and adjust our claimed contribution accordingly.

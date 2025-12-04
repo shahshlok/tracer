@@ -22,7 +22,7 @@ def get_client() -> OpenAI:
     return _client
 
 
-def get_embedding(text: str, model: str = "text-embedding-3-small") -> list[float]:
+def get_embedding(text: str, model: str = "text-embedding-3-large") -> list[float]:
     """Get embedding for text, with caching."""
     cache_key = f"{model}:{text[:100]}"
     if cache_key in _embedding_cache:
