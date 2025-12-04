@@ -1364,6 +1364,8 @@ def save_run(
     manifest_meta: dict[str, Any],
     dataset_summary: dict[str, Any],
     metrics: pd.DataFrame,
+    ci: pd.DataFrame,
+    opportunities_df: pd.DataFrame,
     report_text: str,
     asset_paths: dict[str, Path],
     match_mode: str,
@@ -1406,10 +1408,15 @@ def save_run(
     # Save files
     (run_dir / "config.json").write_text(json.dumps(config, indent=2, default=str))
     (run_dir / "manifest.json").write_text(json.dumps(manifest_full, indent=2, default=str))
-    (run_dir / "metrics.json").write_text(
-        json.dumps(metrics.to_dict(orient="records"), indent=2, default=str)
-    )
     (run_dir / "report.md").write_text(report_text)
+    
+    # Save full data export (metrics, ci, opportunities)
+    full_export = {
+        "metrics": metrics.to_dict(orient="records"),
+        "ci": ci.to_dict(orient="records"),
+        "opportunities": opportunities_df.to_dict(orient="records"),
+    }
+    (run_dir / "data.json").write_text(json.dumps(full_export, indent=2, default=str))
 
     # Copy assets
     import shutil
@@ -1525,18 +1532,20 @@ def main(
     ),
     quick: bool = typer.Option(False, help="Quick mode (fewer bootstrap iterations)"),
     run_tag: str = typer.Option(
-        None, "--run-tag", "-t", help="Tag for this run (e.g., 'baseline_v1'). Saves to runs/<tag>/"
+        None, "--run-tag", "-t", help="Tag for this run (e.g., 'run1'). Auto-generated from seed if not provided."
     ),
     notes: str = typer.Option("", "--notes", "-n", help="Notes to attach to this run"),
-    save_run_flag: bool = typer.Option(
-        True, "--save/--no-save", help="Save run to runs/ directory"
-    ),
 ):
     """
     Analyze LLM misconception detections with configurable matching modes.
+    
+    All results are saved to runs/<run_id>/ with:
+    - report.md: Full analysis report with embedded figures
+    - data.json: Complete metrics, CIs, and opportunities data
+    - config.json: Run configuration for reproducibility
+    - assets/: All generated plots
 
     Use --match-mode all to run matcher ablation (fuzzy vs semantic vs hybrid).
-    Use --run-tag to save results to runs/<tag>/ for comparison.
     """
     console.rule("[bold green]Revamped Analysis[/bold green]")
     console.print(f"[cyan]Match mode:[/cyan] {match_mode.value}")
@@ -1638,47 +1647,39 @@ def main(
         if not misconception_stats.empty:
             plot_misconception_recall_bars(misconception_stats, asset_paths["misconception_recall"])
 
+    # Build asset paths for run-local report (relative to run directory)
+    run_asset_paths = {k: Path("assets") / v.name for k, v in asset_paths.items()}
+    
     report_text = generate_report(
         metrics,
         ci,
         opportunities_df,
         detections_df,
-        asset_paths,
+        run_asset_paths,  # Use run-local paths for the report
         misconception_stats=misconception_stats,
         dataset_summary=dataset_summary,
         manifest_meta=manifest_meta,
         match_mode=match_mode.value,
     )
-    REPORT_PATH.write_text(report_text)
-    JSON_EXPORT_PATH.write_text(
-        json.dumps(
-            {
-                "metrics": metrics.to_dict(orient="records"),
-                "ci": ci.to_dict(orient="records"),
-                "opportunities": opportunities_df.to_dict(orient="records"),
-            },
-            indent=2,
-            default=str,
-        )
-    )
-    console.print(f"[green]Report saved to {REPORT_PATH}[/green]")
-    console.print(f"[dim]Assets: {asset_paths}[/dim]")
 
     # Save run to runs/ directory
-    if save_run_flag:
-        run_id = generate_run_id(run_tag, manifest_meta.get("seed"))
-        run_dir = save_run(
-            run_id=run_id,
-            manifest_full=manifest_full,
-            manifest_meta=manifest_meta,
-            dataset_summary=dataset_summary,
-            metrics=metrics,
-            report_text=report_text,
-            asset_paths=asset_paths,
-            match_mode=match_mode.value,
-            notes=notes,
-        )
-        console.print(f"[green]Run saved to {run_dir}[/green]")
+    run_id = generate_run_id(run_tag, manifest_meta.get("seed"))
+    run_dir = save_run(
+        run_id=run_id,
+        manifest_full=manifest_full,
+        manifest_meta=manifest_meta,
+        dataset_summary=dataset_summary,
+        metrics=metrics,
+        ci=ci,
+        opportunities_df=opportunities_df,
+        report_text=report_text,
+        asset_paths=asset_paths,  # Original paths for copying
+        match_mode=match_mode.value,
+        notes=notes,
+    )
+    console.print(f"[green]Run saved to {run_dir}[/green]")
+    console.print(f"[dim]Report: {run_dir / 'report.md'}[/dim]")
+    console.print(f"[dim]Data: {run_dir / 'data.json'}[/dim]")
 
 
 @app.command("list-runs")
@@ -1688,7 +1689,7 @@ def list_runs():
 
     if not runs:
         console.print(
-            "[yellow]No runs found. Use 'analyze --run-tag <name>' to save a run.[/yellow]"
+            "[yellow]No runs found. Run 'analyze analyze --match-mode all' to create one.[/yellow]"
         )
         return
 
