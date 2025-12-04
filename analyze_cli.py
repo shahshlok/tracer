@@ -453,8 +453,6 @@ def generate_report(
     asset_paths: dict[str, Path],
 ) -> str:
     ts = datetime.now(timezone.utc).isoformat()
-    ece_overall = expected_calibration_error(detections)
-    brier = brier_score(detections)
 
     report = [
         "# LLM Misconception Detection: Revamped Analysis",
@@ -462,8 +460,7 @@ def generate_report(
         "",
         "## Executive Highlights",
         "- Hybrid matcher (fuzzy + semantic + topic prior) applied across all strategies/models.",
-        "- Bootstrap CIs and calibration metrics included; heavy computations allowed.",
-        f"- Overall ECE: {ece_overall:.3f} | Brier: {brier:.3f}",
+        "- Bootstrap CIs included for statistical rigor.",
         "",
         "## Strategy × Model Performance",
         render_metrics_table(metrics, ci),
@@ -471,8 +468,7 @@ def generate_report(
         "## Topic Difficulty (Recall)",
         render_topic_table(opportunities),
         "",
-        "## Calibration & Hallucinations",
-        f"- Calibration curves: see `{asset_paths.get('calibration', '')}`",
+        "## Hallucination Analysis",
         f"- Hallucination bar chart: see `{asset_paths.get('hallucinations', '')}`",
         "",
         render_hallucination_snippets(detections),
@@ -484,7 +480,7 @@ def generate_report(
         "- Data: 60 students × 4 questions (seeded/clean) with manifest-driven ground truth.",
         "- Detection: GPT-5.1 and Gemini 2.5 Flash across strategies (baseline, minimal, rubric_only, socratic).",
         "- Matching: Hybrid fusion of fuzzy similarity, semantic embeddings (OpenAI/OpenRouter optional), and topic priors.",
-        "- Metrics: Precision/Recall/F1 with bootstrap CIs; calibration (ECE/Brier); agreement via κ; significance via McNemar where applicable.",
+        "- Metrics: Precision/Recall/F1 with bootstrap CIs; agreement via κ; significance via McNemar where applicable.",
     ]
 
     # Agreement & significance
@@ -577,11 +573,9 @@ def main(
     ensure_asset_dir()
     asset_paths = {
         "heatmap": ASSET_DIR / "topic_heatmap.png",
-        "calibration": ASSET_DIR / "calibration.png",
         "hallucinations": ASSET_DIR / "hallucinations.png",
     }
     plot_topic_heatmap(opportunities_df, asset_paths["heatmap"])
-    plot_calibration(detections_df, asset_paths["calibration"])
     plot_hallucinations(detections_df, asset_paths["hallucinations"])
 
     report_text = generate_report(metrics, ci, opportunities_df, detections_df, asset_paths)

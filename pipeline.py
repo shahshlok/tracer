@@ -34,7 +34,6 @@ from analyze_cli import (
     generate_report,
     load_groundtruth,
     load_manifest,
-    plot_calibration,
     plot_hallucinations,
     plot_topic_heatmap,
     summarize_metrics,
@@ -196,11 +195,9 @@ async def run_pipeline_async(
         ensure_asset_dir()
         asset_paths = {
             "heatmap": ASSET_DIR / "topic_heatmap.png",
-            "calibration": ASSET_DIR / "calibration.png",
             "hallucinations": ASSET_DIR / "hallucinations.png",
         }
         plot_topic_heatmap(opportunities_df, asset_paths["heatmap"])
-        plot_calibration(detections_df, asset_paths["calibration"])
         plot_hallucinations(detections_df, asset_paths["hallucinations"])
 
         report_text = generate_report(metrics, ci, opportunities_df, detections_df, asset_paths)

@@ -192,44 +192,83 @@ def generate_manifest(
     seed: int,
     student_count: int = DEFAULT_STUDENT_COUNT,
 ) -> dict[str, Any]:
-    """Construct the manifest structure."""
+    """Construct the manifest structure.
+
+    Distribution (realistic classroom):
+    - 40% perfect students: 0 misconceptions (all clean files)
+    - 35% single-issue: 1 misconception (1 seeded, 3 clean)
+    - 20% struggling: 2 misconceptions spread across questions (2 seeded, 2 clean)
+    - 5% severely struggling: 3 misconceptions spread across questions (3 seeded, 1 clean)
+
+    Key constraint: Each file has AT MOST one seeded misconception.
+    """
     random.seed(seed)
     faker = Faker()
     faker.seed_instance(seed)
 
+    # Calculate student counts per category
+    n_perfect = int(student_count * 0.40)
+    n_single = int(student_count * 0.35)
+    n_struggling = int(student_count * 0.20)
+    n_severe = student_count - n_perfect - n_single - n_struggling  # remainder (~5%)
+
+    # Create student type assignments
+    student_types: list[int] = (
+        [0] * n_perfect +      # 0 misconceptions
+        [1] * n_single +       # 1 misconception
+        [2] * n_struggling +   # 2 misconceptions
+        [3] * n_severe         # 3 misconceptions
+    )
+    random.shuffle(student_types)
+
     used_ids = set()
     students: list[dict[str, Any]] = []
+    questions = list(QUESTION_FILES.keys())
 
-    for _ in range(student_count):
+    for misconception_count in student_types:
         first = faker.first_name()
         last = faker.last_name()
-        # Ensure 6-digit uniqueness
         student_id = random.randint(100000, 999999)
         while student_id in used_ids:
             student_id = random.randint(100000, 999999)
         used_ids.add(student_id)
 
         persona = random.choice(PERSONAS)
-        assigned = random.sample(misconceptions, k=random.randint(1, 2))
         files: dict[str, dict[str, Any]] = {}
+        assigned_misconception_ids: list[str] = []
 
-        for q in QUESTION_FILES:
-            applicable = [m for m in assigned if question_applies(m, q)]
-            if not applicable:
+        if misconception_count == 0:
+            # Perfect student: all clean files
+            for q in questions:
                 files[q] = {"type": "CLEAN", "misconception_id": None, "instruction": None}
-                continue
+        else:
+            # Assign misconceptions to specific questions (one per file max)
+            # Shuffle questions to randomly distribute misconceptions
+            shuffled_qs = questions.copy()
+            random.shuffle(shuffled_qs)
+            seeded_questions = shuffled_qs[:misconception_count]
 
-            chosen = random.choice(applicable)
-            instructions = chosen.get("instructions", {}) or {}
-            specific = instruction_for_question(instructions, q)
-            # Fallback to explanation if a direct instruction isn't provided.
-            fallback = chosen.get("misconception_explanation") or chosen.get("misconception_name")
-            files[q] = {
-                "type": "SEEDED",
-                "misconception_id": chosen.get("id"),
-                "misconception_name": chosen.get("misconception_name"),
-                "instruction": specific or fallback,
-            }
+            for q in questions:
+                if q in seeded_questions:
+                    # Find a misconception applicable to this question
+                    applicable = [m for m in misconceptions if question_applies(m, q)]
+                    if applicable:
+                        chosen = random.choice(applicable)
+                        instructions = chosen.get("instructions", {}) or {}
+                        specific = instruction_for_question(instructions, q)
+                        fallback = chosen.get("misconception_explanation") or chosen.get("misconception_name")
+                        files[q] = {
+                            "type": "SEEDED",
+                            "misconception_id": chosen.get("id"),
+                            "misconception_name": chosen.get("misconception_name"),
+                            "instruction": specific or fallback,
+                        }
+                        assigned_misconception_ids.append(chosen.get("id"))
+                    else:
+                        # No applicable misconception for this question, make it clean
+                        files[q] = {"type": "CLEAN", "misconception_id": None, "instruction": None}
+                else:
+                    files[q] = {"type": "CLEAN", "misconception_id": None, "instruction": None}
 
         folder_name = f"{last}_{first}_{student_id}"
         students.append(
@@ -239,7 +278,7 @@ def generate_manifest(
                 "last_name": last,
                 "student_id": student_id,
                 "persona": persona,
-                "assigned_misconceptions": [m.get("id") for m in assigned],
+                "assigned_misconceptions": assigned_misconception_ids,
                 "files": files,
             }
         )
