@@ -20,6 +20,13 @@ from rich.text import Text
 
 from utils.matching import classify_detection, MatchResult
 from utils.matching.classifier import compute_metrics, StudentQuestionAnalysis
+from utils.analysis_helpers import (
+    ConfidenceAnalysis,
+    MisconceptionStats,
+    StrategyComparison,
+    cluster_false_positives,
+    compute_misconception_stats,
+)
 
 app = typer.Typer(help="Analyze LLM misconception detections against ground truth")
 console = Console()
@@ -88,6 +95,7 @@ def analyze_strategy(
     
     analyses: list[StudentQuestionAnalysis] = []
     interesting_discoveries: list[dict] = []
+    confidence_analysis = ConfidenceAnalysis()
     
     for det in detections:
         student = det.get("student", "")
@@ -124,6 +132,10 @@ def analyze_strategy(
                 )
                 analysis.classifications.append(classification)
                 
+                # Track confidence
+                conf = m.get("confidence", 0.0)
+                confidence_analysis.add_detection(classification, conf)
+                
                 # Track interesting discoveries
                 if classification.result == MatchResult.INTERESTING:
                     interesting_discoveries.append({
@@ -143,6 +155,15 @@ def analyze_strategy(
     metrics["strategy"] = strategy
     metrics["interesting_discoveries"] = interesting_discoveries
     metrics["total_detections_files"] = len(detections)
+    
+    # Advanced stats
+    metrics["misconception_stats"] = compute_misconception_stats(analyses, groundtruth)
+    metrics["fp_clusters"] = cluster_false_positives(analyses)
+    metrics["confidence_stats"] = {
+        "avg_tp_confidence": confidence_analysis.avg_tp_confidence,
+        "avg_fp_confidence": confidence_analysis.avg_fp_confidence,
+        "calibration_gap": confidence_analysis.calibration_gap,
+    }
     
     return metrics
 
@@ -170,207 +191,113 @@ def display_metrics(metrics: dict[str, Any], strategy: str):
     console.print(table)
     console.print()
     
-    # Per-model breakdown
-    if metrics.get("per_model"):
-        model_table = Table(box=box.SIMPLE, title="Per-Model Breakdown", title_style="bold")
-        model_table.add_column("Model", style="white")
-        model_table.add_column("TP", justify="right", style="green")
-        model_table.add_column("FP", justify="right", style="red")
-        model_table.add_column("Interesting", justify="right", style="magenta")
-        model_table.add_column("Total", justify="right", style="cyan")
-        
-        for model, stats in metrics["per_model"].items():
-            short_name = model.split("/")[-1]
-            model_table.add_row(
-                short_name,
-                str(stats["tp"]),
-                str(stats["fp"]),
-                str(stats["interesting"]),
-                str(stats["total"]),
-            )
-        
-        console.print(model_table)
-        console.print()
-    
-    # Interesting discoveries preview
-    discoveries = metrics.get("interesting_discoveries", [])
-    if discoveries:
-        console.print(f"[bold magenta]Interesting Discoveries ({len(discoveries)} found)[/bold magenta]")
-        console.print()
-        for i, d in enumerate(discoveries[:5], 1):
-            console.print(f"  {i}. [cyan]{d['student']}[/cyan] {d['question']} ({d['model'].split('/')[-1]})")
-            console.print(f"     [dim]{d['detected_name'][:60]}...[/dim]" if len(d.get('detected_name', '')) > 60 else f"     [dim]{d.get('detected_name', 'N/A')}[/dim]")
-        if len(discoveries) > 5:
-            console.print(f"  [dim]... and {len(discoveries) - 5} more[/dim]")
-        console.print()
+    # Confidence stats
+    conf = metrics.get("confidence_stats", {})
+    console.print(f"Confidence Gap: [bold]{conf.get('calibration_gap', 0):.3f}[/bold] (TP: {conf.get('avg_tp_confidence', 0):.2f} vs FP: {conf.get('avg_fp_confidence', 0):.2f})")
+    console.print()
 
 
-def generate_report(
+def generate_thesis_report(
     all_metrics: dict[str, dict],
     output_path: Path,
 ):
-    """Generate markdown report."""
+    """Generate comprehensive thesis-quality markdown report."""
     lines = [
-        "# LLM Misconception Detection Analysis Report",
+        "# LLM Misconception Detection: Research Analysis",
         f"\nGenerated: {datetime.now(timezone.utc).isoformat()}",
-        "\n## Summary\n",
+        "\n## Executive Summary\n",
     ]
     
-    # Summary table
-    lines.append("| Strategy | TP | FP | FN | Precision | Recall | F1 |")
-    lines.append("|----------|----|----|----|-----------|---------|----|")
+    # Strategy Comparison Matrix
+    lines.append("### Strategy Comparison Matrix")
+    lines.append("| Strategy | Precision | Recall | F1 Score | TP | FP | FN | Conf. Gap |")
+    lines.append("|----------|-----------|--------|----------|----|----|----|-----------|")
     
     for strategy, metrics in all_metrics.items():
         if "error" in metrics:
-            lines.append(f"| {strategy} | ERROR | - | - | - | - | - |")
+            lines.append(f"| {strategy} | ERROR | - | - | - | - | - | - |")
         else:
+            conf = metrics.get("confidence_stats", {})
             lines.append(
-                f"| {strategy} | {metrics['true_positives']} | {metrics['false_positives']} | "
-                f"{metrics['false_negatives']} | {metrics['precision']:.3f} | "
-                f"{metrics['recall']:.3f} | {metrics['f1_score']:.3f} |"
+                f"| **{strategy}** | {metrics['precision']:.3f} | {metrics['recall']:.3f} | "
+                f"**{metrics['f1_score']:.3f}** | {metrics['true_positives']} | "
+                f"{metrics['false_positives']} | {metrics['false_negatives']} | "
+                f"{conf.get('calibration_gap', 0):.3f} |"
             )
+            
+    lines.append("\n## Deep Dive: Misconception Difficulty\n")
+    lines.append("Analysis of which misconceptions were easiest and hardest to detect across all strategies.")
     
-    lines.append("\n## Per-Strategy Details\n")
+    # Aggregate misconception stats across strategies
+    agg_stats = {}
+    for metrics in all_metrics.values():
+        if "error" in metrics: continue
+        for mid, stat in metrics.get("misconception_stats", {}).items():
+            if mid not in agg_stats:
+                agg_stats[mid] = {"tp": 0, "fn": 0, "fp": 0, "name": stat.name, "topic": stat.topic}
+            agg_stats[mid]["tp"] += stat.true_positives
+            agg_stats[mid]["fn"] += stat.false_negatives
+            agg_stats[mid]["fp"] += stat.false_positives
+            
+    # Sort by Recall (Hardest first)
+    sorted_stats = sorted(
+        agg_stats.items(), 
+        key=lambda x: x[1]["tp"] / (x[1]["tp"] + x[1]["fn"]) if (x[1]["tp"] + x[1]["fn"]) > 0 else 0
+    )
+    
+    lines.append("\n### Hardest Misconceptions (Low Recall)")
+    lines.append("| ID | Name | Topic | Recall | TP | FN |")
+    lines.append("|----|------|-------|--------|----|----|")
+    
+    for mid, s in sorted_stats[:5]:
+        total = s["tp"] + s["fn"]
+        recall = s["tp"] / total if total > 0 else 0
+        lines.append(f"| {mid} | {s['name']} | {s['topic']} | {recall:.2f} | {s['tp']} | {s['fn']} |")
+        
+    lines.append("\n### Most Confusing Misconceptions (High FP)")
+    # Sort by FP count
+    sorted_fp = sorted(agg_stats.items(), key=lambda x: x[1]["fp"], reverse=True)
+    
+    lines.append("| ID | Name | Topic | FP Count |")
+    lines.append("|----|------|-------|----------|")
+    
+    for mid, s in sorted_fp[:5]:
+        if s["fp"] > 0:
+            lines.append(f"| {mid} | {s['name']} | {s['topic']} | {s['fp']} |")
+            
+    lines.append("\n## Hallucination Analysis\n")
+    lines.append("Recurring false positives that do not match any known misconception ID.")
     
     for strategy, metrics in all_metrics.items():
-        lines.append(f"### {strategy.title()}\n")
-        
-        if "error" in metrics:
-            lines.append(f"Error: {metrics['error']}\n")
-            continue
-        
-        lines.append(f"- Total detection files: {metrics.get('total_detections_files', 'N/A')}")
-        lines.append(f"- True Positives: {metrics['true_positives']}")
-        lines.append(f"- False Positives: {metrics['false_positives']}")
-        lines.append(f"- False Negatives: {metrics['false_negatives']}")
-        lines.append(f"- Precision: {metrics['precision']:.3f}")
-        lines.append(f"- Recall: {metrics['recall']:.3f}")
-        lines.append(f"- F1 Score: {metrics['f1_score']:.3f}")
-        lines.append("")
-        
-        # Per-model
-        if metrics.get("per_model"):
-            lines.append("#### Per-Model Breakdown\n")
-            lines.append("| Model | TP | FP | Interesting | Total |")
-            lines.append("|-------|----|----|-------------|-------|")
-            for model, stats in metrics["per_model"].items():
-                lines.append(f"| {model.split('/')[-1]} | {stats['tp']} | {stats['fp']} | {stats['interesting']} | {stats['total']} |")
-            lines.append("")
-    
-    # Interesting discoveries section
-    lines.append("\n## Interesting Discoveries\n")
-    lines.append("These are misconceptions detected in CLEAN files (no injection). They may represent:")
-    lines.append("- Genuine issues in the generated 'correct' code")
-    lines.append("- LLM over-detection / false alarms")
-    lines.append("- Edge cases worth investigating\n")
+        clusters = metrics.get("fp_clusters", [])
+        if clusters:
+            lines.append(f"\n### {strategy.title()} Hallucinations")
+            for c in clusters[:3]:
+                lines.append(f"- **\"{c['name']}\"** ({c['count']} times)")
+                lines.append(f"  - Example: {c['example_student']} {c['example_question']}")
+                lines.append(f"  - Models: {', '.join(c['models'])}")
+
+    lines.append("\n## Interesting Discoveries (Clean Files)\n")
+    lines.append("Potential genuine issues found in clean files.")
     
     for strategy, metrics in all_metrics.items():
         discoveries = metrics.get("interesting_discoveries", [])
         if discoveries:
-            lines.append(f"### {strategy.title()} ({len(discoveries)} discoveries)\n")
-            for d in discoveries[:10]:
-                lines.append(f"- **{d['student']}** {d['question']} ({d['model'].split('/')[-1]})")
-                lines.append(f"  - Detected: {d['detected_name']}")
-                lines.append(f"  - Matched to: {d.get('matched_to', 'None')} (score: {d.get('match_score', 0):.2f})")
-            if len(discoveries) > 10:
-                lines.append(f"\n*... and {len(discoveries) - 10} more*\n")
-            lines.append("")
+            lines.append(f"### {strategy.title()}")
+            for d in discoveries[:5]:
+                lines.append(f"- **{d['student']}** {d['question']}: {d['detected_name']}")
+                lines.append(f"  - Matched to: {d.get('matched_to', 'None')} ({d.get('match_score', 0):.2f})")
     
     output_path.write_text("\n".join(lines))
-
-
-def interactive_main():
-    """Interactive analysis CLI."""
-    console.print(Panel(
-        Text("LLM Misconception Analysis", style="bold white on blue", justify="center"),
-        box=box.DOUBLE,
-        border_style="blue",
-    ))
-    console.print()
-    
-    # Check for detections
-    if not DEFAULT_DETECTIONS_DIR.exists():
-        console.print("[red]No detections directory found. Run 'uv run llm-miscons' first.[/red]")
-        return
-    
-    strategies = [d.name for d in DEFAULT_DETECTIONS_DIR.iterdir() if d.is_dir() and not d.name.startswith("_")]
-    if not strategies:
-        console.print("[red]No strategy directories found in detections/[/red]")
-        return
-    
-    console.print(f"[green]Found strategies: {', '.join(strategies)}[/green]")
-    console.print()
-    
-    # Load groundtruth and manifest
-    try:
-        groundtruth = load_groundtruth(DEFAULT_GROUNDTRUTH_PATH)
-        manifest = load_manifest(DEFAULT_MANIFEST_PATH)
-    except Exception as e:
-        console.print(f"[red]Error loading data: {e}[/red]")
-        return
-    
-    console.print(f"[dim]Loaded {len(groundtruth)} misconception definitions[/dim]")
-    console.print(f"[dim]Loaded manifest with {manifest.get('student_count', '?')} students[/dim]")
-    console.print()
-    
-    # Select strategies to analyze
-    console.print("[bold]Analyze:[/bold]")
-    console.print("  [1] All strategies")
-    console.print("  [2] Select specific strategy")
-    choice = Prompt.ask("Choice", choices=["1", "2"], default="1")
-    
-    if choice == "2":
-        console.print(f"Available: {', '.join(strategies)}")
-        selected = Prompt.ask("Strategy name", default=strategies[0])
-        strategies = [selected] if selected in strategies else strategies[:1]
-    
-    console.print()
-    
-    # Run analysis
-    all_metrics = {}
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
-        for strategy in strategies:
-            task = progress.add_task(f"Analyzing {strategy}...", total=None)
-            metrics = analyze_strategy(
-                strategy=strategy,
-                detections_dir=DEFAULT_DETECTIONS_DIR,
-                manifest=manifest,
-                groundtruth=groundtruth,
-            )
-            all_metrics[strategy] = metrics
-            progress.remove_task(task)
-    
-    # Display results
-    for strategy, metrics in all_metrics.items():
-        if "error" in metrics:
-            console.print(f"[red]{strategy}: {metrics['error']}[/red]")
-        else:
-            display_metrics(metrics, strategy)
-    
-    # Save report
-    console.print()
-    if typer.confirm("Save detailed report?", default=True):
-        report_path = Path("analysis_report.md")
-        generate_report(all_metrics, report_path)
-        console.print(f"[green]Report saved to {report_path}[/green]")
-        
-        # Also save JSON
-        json_path = Path("analysis_report.json")
-        # Convert non-serializable items
-        for strategy in all_metrics:
-            if "interesting_discoveries" in all_metrics[strategy]:
-                pass  # Already serializable
-        json_path.write_text(json.dumps(all_metrics, indent=2, default=str))
-        console.print(f"[green]JSON saved to {json_path}[/green]")
 
 
 @app.command()
 def analyze(
     strategy: str = typer.Option(None, help="Specific strategy to analyze (default: all)"),
     detections_dir: Path = typer.Option(DEFAULT_DETECTIONS_DIR, help="Detections directory"),
-    output: Path = typer.Option(Path("analysis_report.md"), help="Output report path"),
+    output: Path = typer.Option(Path("thesis_report.md"), help="Output report path"),
 ):
-    """Analyze detections and generate report (non-interactive)."""
+    """Analyze detections and generate thesis-quality report."""
     groundtruth = load_groundtruth(DEFAULT_GROUNDTRUTH_PATH)
     manifest = load_manifest(DEFAULT_MANIFEST_PATH)
     
@@ -383,20 +310,11 @@ def analyze(
     for s in strategies:
         console.print(f"[cyan]Analyzing {s}...[/cyan]")
         all_metrics[s] = analyze_strategy(s, detections_dir, manifest, groundtruth)
+        if "error" not in all_metrics[s]:
+            display_metrics(all_metrics[s], s)
     
-    for s, m in all_metrics.items():
-        if "error" not in m:
-            display_metrics(m, s)
-    
-    generate_report(all_metrics, output)
-    console.print(f"[green]Report saved to {output}[/green]")
-
-
-@app.callback(invoke_without_command=True)
-def main(ctx: typer.Context):
-    """Analyze LLM misconception detections."""
-    if ctx.invoked_subcommand is None:
-        interactive_main()
+    generate_thesis_report(all_metrics, output)
+    console.print(f"[green]Thesis report saved to {output}[/green]")
 
 
 if __name__ == "__main__":
