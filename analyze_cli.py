@@ -399,6 +399,153 @@ def plot_hallucinations(df: pd.DataFrame, path: Path) -> Path:
     return path
 
 
+def plot_strategy_f1_comparison(metrics: pd.DataFrame, path: Path) -> Path:
+    """Grouped bar chart: F1 by strategy, colored by model."""
+    if metrics.empty:
+        return path
+    df = metrics.copy()
+    df["model_short"] = df["model"].apply(lambda m: m.split("/")[-1])
+    
+    plt.figure(figsize=(10, 6))
+    strategies = df["strategy"].unique()
+    models = df["model_short"].unique()
+    x = np.arange(len(strategies))
+    width = 0.35
+    
+    colors = ["#2ecc71", "#3498db"]  # Green for GPT, Blue for Gemini
+    for i, model in enumerate(models):
+        model_data = df[df["model_short"] == model].set_index("strategy").reindex(strategies)
+        bars = plt.bar(x + i * width, model_data["f1"], width, label=model, color=colors[i % len(colors)])
+        # Add value labels on bars
+        for bar, val in zip(bars, model_data["f1"]):
+            if not np.isnan(val):
+                plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, 
+                        f'{val:.2f}', ha='center', va='bottom', fontsize=9)
+    
+    plt.xlabel("Strategy")
+    plt.ylabel("F1 Score")
+    plt.title("F1 Score by Strategy and Model")
+    plt.xticks(x + width/2, strategies)
+    plt.ylim(0, 1)
+    plt.legend(title="Model")
+    plt.tight_layout()
+    plt.savefig(path, dpi=200)
+    plt.close()
+    return path
+
+
+def plot_precision_recall_scatter(metrics: pd.DataFrame, path: Path) -> Path:
+    """Scatter plot showing precision vs recall for each strategy×model."""
+    if metrics.empty:
+        return path
+    df = metrics.copy()
+    df["model_short"] = df["model"].apply(lambda m: m.split("/")[-1])
+    
+    plt.figure(figsize=(8, 8))
+    
+    # Color by model, marker by strategy
+    models = df["model_short"].unique()
+    strategies = df["strategy"].unique()
+    colors = {"gpt-5.1": "#2ecc71", "gemini-2.5-flash": "#3498db"}
+    markers = {"baseline": "o", "minimal": "s", "rubric_only": "^", "socratic": "D"}
+    
+    for _, row in df.iterrows():
+        model = row["model_short"]
+        strategy = row["strategy"]
+        plt.scatter(row["recall"], row["precision"], 
+                   c=colors.get(model, "#999"),
+                   marker=markers.get(strategy, "o"),
+                   s=150, alpha=0.8,
+                   label=f"{strategy} / {model}")
+    
+    # Add diagonal lines for F1 iso-curves
+    for f1 in [0.5, 0.6, 0.7, 0.8]:
+        p = np.linspace(0.01, 1, 100)
+        r = (f1 * p) / (2 * p - f1)
+        valid = (r > 0) & (r <= 1)
+        plt.plot(r[valid], p[valid], '--', color='gray', alpha=0.3, linewidth=1)
+        # Label the iso-curve
+        idx = np.argmin(np.abs(r - 0.9))
+        if valid[idx]:
+            plt.text(r[idx], p[idx], f'F1={f1}', fontsize=8, color='gray')
+    
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.title("Precision-Recall Tradeoff by Strategy and Model")
+    plt.xlim(0.4, 1.0)
+    plt.ylim(0.4, 0.85)
+    plt.legend(loc='lower left', fontsize=8)
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(path, dpi=200)
+    plt.close()
+    return path
+
+
+def plot_topic_recall_bars(opportunities: pd.DataFrame, path: Path) -> Path:
+    """Horizontal bar chart showing recall by topic, sorted by difficulty."""
+    if opportunities.empty:
+        return path
+    
+    topic_stats = opportunities.groupby("topic").agg(
+        recall=("success", "mean"),
+        n=("success", "count")
+    ).reset_index().sort_values("recall")
+    
+    plt.figure(figsize=(10, 6))
+    colors = plt.cm.RdYlGn(topic_stats["recall"])  # Red=low, Green=high
+    bars = plt.barh(topic_stats["topic"], topic_stats["recall"], color=colors)
+    
+    # Add count labels
+    for bar, n in zip(bars, topic_stats["n"]):
+        plt.text(bar.get_width() + 0.02, bar.get_y() + bar.get_height()/2,
+                f'n={int(n)}', va='center', fontsize=9, color='gray')
+    
+    plt.xlabel("Recall")
+    plt.ylabel("Topic")
+    plt.title("Detection Recall by Topic (sorted by difficulty)")
+    plt.xlim(0, 1.15)
+    plt.axvline(x=0.5, color='gray', linestyle='--', alpha=0.5, label='50% threshold')
+    plt.tight_layout()
+    plt.savefig(path, dpi=200)
+    plt.close()
+    return path
+
+
+def plot_model_comparison(metrics: pd.DataFrame, path: Path) -> Path:
+    """Side-by-side comparison of GPT vs Gemini on P/R/F1 (averaged across strategies)."""
+    if metrics.empty:
+        return path
+    
+    df = metrics.copy()
+    df["model_short"] = df["model"].apply(lambda m: m.split("/")[-1])
+    
+    # Average across strategies
+    model_avg = df.groupby("model_short")[["precision", "recall", "f1"]].mean().reset_index()
+    
+    plt.figure(figsize=(8, 6))
+    x = np.arange(3)  # precision, recall, f1
+    width = 0.35
+    
+    colors = ["#2ecc71", "#3498db"]
+    for i, (_, row) in enumerate(model_avg.iterrows()):
+        values = [row["precision"], row["recall"], row["f1"]]
+        bars = plt.bar(x + i * width, values, width, label=row["model_short"], color=colors[i])
+        for bar, val in zip(bars, values):
+            plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
+                    f'{val:.2f}', ha='center', va='bottom', fontsize=10, fontweight='bold')
+    
+    plt.ylabel("Score")
+    plt.title("Model Comparison (averaged across strategies)")
+    plt.xticks(x + width/2, ["Precision", "Recall", "F1"])
+    plt.ylim(0, 0.9)
+    plt.legend(title="Model")
+    plt.tight_layout()
+    plt.savefig(path, dpi=200)
+    plt.close()
+    return path
+
+
 # ---------------------------------------------------------------------------
 # Reporting
 # ---------------------------------------------------------------------------
@@ -462,19 +609,29 @@ def generate_report(
         "- Hybrid matcher (fuzzy + semantic + topic prior) applied across all strategies/models.",
         "- Bootstrap CIs included for statistical rigor.",
         "",
+        "## Model Comparison Overview",
+        f"![Model Comparison]({asset_paths.get('model_comparison', '')})" if asset_paths.get("model_comparison") else "",
+        "",
         "## Strategy × Model Performance",
         render_metrics_table(metrics, ci),
+        "",
+        f"![F1 by Strategy]({asset_paths.get('strategy_f1', '')})" if asset_paths.get("strategy_f1") else "",
+        "",
+        "### Precision-Recall Tradeoff",
+        f"![Precision-Recall Scatter]({asset_paths.get('pr_scatter', '')})" if asset_paths.get("pr_scatter") else "",
         "",
         "## Topic Difficulty (Recall)",
         render_topic_table(opportunities),
         "",
-        "## Hallucination Analysis",
-        f"- Hallucination bar chart: see `{asset_paths.get('hallucinations', '')}`",
-        "",
-        render_hallucination_snippets(detections),
+        f"![Topic Recall]({asset_paths.get('topic_bars', '')})" if asset_paths.get("topic_bars") else "",
         "",
         "## Topic Heatmap",
         f"![Topic Heatmap]({asset_paths.get('heatmap', '')})" if asset_paths.get("heatmap") else "_No heatmap generated_",
+        "",
+        "## Hallucination Analysis",
+        f"![Hallucinations]({asset_paths.get('hallucinations', '')})" if asset_paths.get("hallucinations") else "",
+        "",
+        render_hallucination_snippets(detections),
         "",
         "## Methods",
         "- Data: 60 students × 4 questions (seeded/clean) with manifest-driven ground truth.",
@@ -574,9 +731,17 @@ def main(
     asset_paths = {
         "heatmap": ASSET_DIR / "topic_heatmap.png",
         "hallucinations": ASSET_DIR / "hallucinations.png",
+        "strategy_f1": ASSET_DIR / "strategy_f1_comparison.png",
+        "pr_scatter": ASSET_DIR / "precision_recall_scatter.png",
+        "topic_bars": ASSET_DIR / "topic_recall_bars.png",
+        "model_comparison": ASSET_DIR / "model_comparison.png",
     }
     plot_topic_heatmap(opportunities_df, asset_paths["heatmap"])
     plot_hallucinations(detections_df, asset_paths["hallucinations"])
+    plot_strategy_f1_comparison(metrics, asset_paths["strategy_f1"])
+    plot_precision_recall_scatter(metrics, asset_paths["pr_scatter"])
+    plot_topic_recall_bars(opportunities_df, asset_paths["topic_bars"])
+    plot_model_comparison(metrics, asset_paths["model_comparison"])
 
     report_text = generate_report(metrics, ci, opportunities_df, detections_df, asset_paths)
     REPORT_PATH.write_text(report_text)
