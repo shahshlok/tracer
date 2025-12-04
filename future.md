@@ -127,3 +127,8 @@ So the 3 things to do are and in no particular order:
   2. Multiple assignments
   3. multiple seeded pipeline runs per assignment
   4. Per misconception analysis to find what misconceptions are easily caught by the models and which ones are not .
+
+ A higher-level synthesis document/chapter that:
+          - Summarizes patterns across runs and assignments.
+          - Pulls out the key per-misconception and per-topic findings that are stable.
+          - Connects them to CS ed literature.

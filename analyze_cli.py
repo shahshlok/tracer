@@ -911,6 +911,78 @@ def plot_misconception_recall_bars(stats: pd.DataFrame, path: Path) -> Path:
     return path
 
 
+def compute_dataset_summary(manifest: list[dict[str, Any]]) -> dict[str, Any]:
+    """Compute dataset summary statistics from manifest."""
+    if not manifest:
+        return {}
+    
+    # Get metadata from first entry's parent structure if available
+    # The manifest is a list of students
+    total_students = len(manifest)
+    
+    # Count questions per student (assume all have same questions)
+    first_student = manifest[0] if manifest else {}
+    questions = list(first_student.get("files", {}).keys())
+    total_questions = len(questions)
+    total_files = total_students * total_questions
+    
+    # Count seeded vs clean
+    seeded_count = 0
+    clean_count = 0
+    for student in manifest:
+        for q, file_info in student.get("files", {}).items():
+            if file_info.get("type") == "SEEDED":
+                seeded_count += 1
+            else:
+                clean_count += 1
+    
+    seeded_pct = (seeded_count / total_files * 100) if total_files > 0 else 0
+    
+    return {
+        "total_students": total_students,
+        "total_questions": total_questions,
+        "total_files": total_files,
+        "seeded_count": seeded_count,
+        "clean_count": clean_count,
+        "seeded_pct": seeded_pct,
+        "questions": questions,
+    }
+
+
+def render_dataset_summary(
+    summary: dict[str, Any],
+    manifest_meta: dict[str, Any],
+    match_mode: str,
+    opportunities_count: int,
+) -> str:
+    """Render dataset summary section for the report."""
+    if not summary:
+        return ""
+    
+    lines = [
+        "## Dataset & Run Configuration",
+        "",
+        "### Dataset Summary",
+        f"- **Assignment:** A2 – Kinematics & Geometry (CS1)",
+        f"- **Students:** {summary.get('total_students', 'N/A')}",
+        f"- **Questions:** {summary.get('total_questions', 'N/A')} ({', '.join(summary.get('questions', []))})",
+        f"- **Total files:** {summary.get('total_files', 'N/A')}",
+        f"- **Seeded files:** {summary.get('seeded_count', 0)} ({summary.get('seeded_pct', 0):.1f}%)",
+        f"- **Clean files:** {summary.get('clean_count', 0)} ({100 - summary.get('seeded_pct', 0):.1f}%)",
+        f"- **Detection opportunities:** {opportunities_count}",
+        "",
+        "### Run Configuration",
+        f"- **Generation seed:** {manifest_meta.get('seed', 'N/A')}",
+        f"- **Generation model:** {manifest_meta.get('model', 'N/A')}",
+        f"- **Match mode:** {match_mode}",
+        f"- **Embedding model:** text-embedding-3-large (OpenAI)",
+        f"- **Detection models:** GPT-5.1, Gemini 2.5 Flash",
+        f"- **Strategies:** baseline, minimal, rubric_only, socratic",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def generate_report(
     metrics: pd.DataFrame,
     ci: pd.DataFrame,
@@ -918,6 +990,9 @@ def generate_report(
     detections: pd.DataFrame,
     asset_paths: dict[str, Path],
     misconception_stats: pd.DataFrame | None = None,
+    dataset_summary: dict[str, Any] | None = None,
+    manifest_meta: dict[str, Any] | None = None,
+    match_mode: str = "hybrid",
 ) -> str:
     ts = datetime.now(timezone.utc).isoformat()
     is_ablation = "match_mode" in metrics.columns
@@ -927,6 +1002,21 @@ def generate_report(
         f"_Generated: {ts}_",
         "",
     ]
+    
+    # Dataset & Run Configuration section
+    if dataset_summary and manifest_meta:
+        # For ablation, count opportunities from hybrid only
+        if is_ablation:
+            opp_count = len(opportunities[opportunities["match_mode"] == "hybrid"]) if "match_mode" in opportunities.columns else len(opportunities)
+        else:
+            opp_count = len(opportunities)
+        
+        report.append(render_dataset_summary(
+            dataset_summary, 
+            manifest_meta, 
+            match_mode if not is_ablation else "all (ablation)",
+            opp_count
+        ))
     
     # Executive highlights differ for ablation vs single-matcher
     if is_ablation:
@@ -1116,12 +1206,21 @@ def main(
 
     console.print(f"[cyan]Strategies discovered:[/cyan] {', '.join(strategies)}")
     groundtruth = load_groundtruth(groundtruth_path)
-    manifest = load_manifest(manifest_path)
+    manifest_full = load_manifest(manifest_path)
+    
+    # Extract metadata and students list from manifest
+    manifest_meta = {
+        "seed": manifest_full.get("seed"),
+        "model": manifest_full.get("model"),
+        "generated_at": manifest_full.get("generated_at"),
+    }
+    manifest = manifest_full.get("students", [])
+    dataset_summary = compute_dataset_summary(manifest)
 
     detections_df, opportunities_df = build_dataframes(
         detections_dir=detections_dir,
         strategies=strategies,
-        manifest=manifest,
+        manifest=manifest_full,  # Pass full manifest, not just students list
         groundtruth=groundtruth,
         match_mode=match_mode,
         use_embeddings=True,  # Always use embeddings for semantic/hybrid
@@ -1197,7 +1296,13 @@ def main(
         if not misconception_stats.empty:
             plot_misconception_recall_bars(misconception_stats, asset_paths["misconception_recall"])
 
-    report_text = generate_report(metrics, ci, opportunities_df, detections_df, asset_paths, misconception_stats)
+    report_text = generate_report(
+        metrics, ci, opportunities_df, detections_df, asset_paths,
+        misconception_stats=misconception_stats,
+        dataset_summary=dataset_summary,
+        manifest_meta=manifest_meta,
+        match_mode=match_mode.value,
+    )
     REPORT_PATH.write_text(report_text)
     JSON_EXPORT_PATH.write_text(
         json.dumps(
