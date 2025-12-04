@@ -95,8 +95,25 @@ def dispatch_matcher(
     else:
         raise ValueError(f"Unknown match mode: {match_mode}")
 
-app = typer.Typer(help="Analyze LLM misconception detections against ground truth (revamped)")
+app = typer.Typer(
+    help="Analyze LLM misconception detections against ground truth (revamped)",
+    invoke_without_command=True,
+)
 console = Console()
+
+
+@app.callback()
+def callback(ctx: typer.Context):
+    """
+    Main entry point. Use 'analyze' subcommand to run analysis,
+    or 'list-runs' to view saved runs.
+    """
+    if ctx.invoked_subcommand is None:
+        console.print("[yellow]Usage: analyze <command> [options][/yellow]")
+        console.print("Commands:")
+        console.print("  analyze    Run misconception detection analysis")
+        console.print("  list-runs  List all saved runs")
+        console.print("\nRun 'analyze --help' for more info.")
 
 DEFAULT_DETECTIONS_DIR = Path("detections")
 DEFAULT_MANIFEST_PATH = Path("authentic_seeded/manifest.json")
@@ -104,6 +121,8 @@ DEFAULT_GROUNDTRUTH_PATH = Path("data/a2/groundtruth.json")
 ASSET_DIR = Path("docs/report_assets")
 REPORT_PATH = Path("thesis_report.md")
 JSON_EXPORT_PATH = Path("thesis_report.json")
+RUNS_DIR = Path("runs")
+RUNS_INDEX_PATH = RUNS_DIR / "index.json"
 
 
 # ---------------------------------------------------------------------------
@@ -1147,6 +1166,159 @@ def generate_report(
 
 
 # ---------------------------------------------------------------------------
+# Run Storage
+# ---------------------------------------------------------------------------
+def generate_run_id(run_tag: str | None, seed: int | None) -> str:
+    """Generate a unique run ID from tag or timestamp + seed."""
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    if run_tag:
+        return f"run_{run_tag}"
+    elif seed:
+        return f"run_{date_str}_seed{seed}"
+    else:
+        return f"run_{date_str}_{datetime.now().strftime('%H%M%S')}"
+
+
+def compute_results_summary(metrics: pd.DataFrame) -> dict[str, Any]:
+    """Compute summary results for config.json."""
+    if metrics.empty:
+        return {}
+    
+    results: dict[str, Any] = {}
+    
+    # Per-matcher summary (if ablation mode)
+    if "match_mode" in metrics.columns:
+        by_matcher = {}
+        for mode in metrics["match_mode"].unique():
+            mode_df = metrics[metrics["match_mode"] == mode]
+            by_matcher[mode] = {
+                "avg_f1": float(mode_df["f1"].mean()),
+                "avg_precision": float(mode_df["precision"].mean()),
+                "avg_recall": float(mode_df["recall"].mean()),
+            }
+        results["by_matcher"] = by_matcher
+    
+    # Best overall config
+    best_idx = metrics["f1"].idxmax()
+    best_row = metrics.loc[best_idx]
+    results["best_overall"] = {
+        "matcher": best_row.get("match_mode", "hybrid"),
+        "strategy": best_row["strategy"],
+        "model": best_row["model"],
+        "f1": float(best_row["f1"]),
+    }
+    
+    return results
+
+
+def save_run(
+    run_id: str,
+    manifest_full: dict[str, Any],
+    manifest_meta: dict[str, Any],
+    dataset_summary: dict[str, Any],
+    metrics: pd.DataFrame,
+    report_text: str,
+    asset_paths: dict[str, Path],
+    match_mode: str,
+    notes: str = "",
+) -> Path:
+    """Save a complete run to runs/<run_id>/."""
+    run_dir = RUNS_DIR / run_id
+    assets_dir = run_dir / "assets"
+    
+    run_dir.mkdir(parents=True, exist_ok=True)
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Build config.json
+    config = {
+        "run_id": run_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "dataset": {
+            "assignment": "A2",
+            "seed": manifest_meta.get("seed"),
+            "generation_model": manifest_meta.get("model"),
+            "generated_at": manifest_meta.get("generated_at"),
+            "students": dataset_summary.get("total_students"),
+            "questions": dataset_summary.get("total_questions"),
+            "total_files": dataset_summary.get("total_files"),
+            "seeded_files": dataset_summary.get("seeded_count"),
+            "seeded_pct": dataset_summary.get("seeded_pct"),
+        },
+        "pipeline": {
+            "detection_models": ["gpt-5.1", "gemini-2.5-flash"],
+            "strategies": ["baseline", "minimal", "rubric_only", "socratic"],
+            "matchers": ["fuzzy_only", "semantic_only", "hybrid"] if match_mode == "all" else [match_mode],
+            "embedding_model": "text-embedding-3-large",
+        },
+        "results": compute_results_summary(metrics),
+        "notes": notes,
+    }
+    
+    # Save files
+    (run_dir / "config.json").write_text(json.dumps(config, indent=2, default=str))
+    (run_dir / "manifest.json").write_text(json.dumps(manifest_full, indent=2, default=str))
+    (run_dir / "metrics.json").write_text(json.dumps(metrics.to_dict(orient="records"), indent=2, default=str))
+    (run_dir / "report.md").write_text(report_text)
+    
+    # Copy assets
+    import shutil
+    for name, src_path in asset_paths.items():
+        if src_path.exists():
+            shutil.copy(src_path, assets_dir / src_path.name)
+    
+    # Update index
+    update_runs_index(run_id, config)
+    
+    return run_dir
+
+
+def update_runs_index(run_id: str, config: dict[str, Any]) -> None:
+    """Update runs/index.json with a new run entry."""
+    RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Load existing index or create new
+    if RUNS_INDEX_PATH.exists():
+        index = json.loads(RUNS_INDEX_PATH.read_text())
+    else:
+        index = {"runs": []}
+    
+    # Build summary entry
+    results = config.get("results", {})
+    by_matcher = results.get("by_matcher", {})
+    best = results.get("best_overall", {})
+    
+    entry = {
+        "run_id": run_id,
+        "created_at": config.get("created_at"),
+        "seed": config.get("dataset", {}).get("seed"),
+        "seeded_pct": config.get("dataset", {}).get("seeded_pct"),
+        "fuzzy_f1": by_matcher.get("fuzzy_only", {}).get("avg_f1"),
+        "semantic_f1": by_matcher.get("semantic_only", {}).get("avg_f1"),
+        "hybrid_f1": by_matcher.get("hybrid", {}).get("avg_f1"),
+        "best_f1": best.get("f1"),
+        "best_config": f"{best.get('strategy')}+{best.get('model', '').split('/')[-1]}",
+        "notes": config.get("notes", ""),
+    }
+    
+    # Remove existing entry with same run_id (if re-running)
+    index["runs"] = [r for r in index["runs"] if r.get("run_id") != run_id]
+    index["runs"].append(entry)
+    
+    # Sort by created_at
+    index["runs"].sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    
+    RUNS_INDEX_PATH.write_text(json.dumps(index, indent=2, default=str))
+
+
+def load_runs_index() -> list[dict[str, Any]]:
+    """Load runs index for display."""
+    if not RUNS_INDEX_PATH.exists():
+        return []
+    index = json.loads(RUNS_INDEX_PATH.read_text())
+    return index.get("runs", [])
+
+
+# ---------------------------------------------------------------------------
 # Display helpers
 # ---------------------------------------------------------------------------
 def display_summary(metrics: pd.DataFrame):
@@ -1183,18 +1355,22 @@ def display_summary(metrics: pd.DataFrame):
 # ---------------------------------------------------------------------------
 # CLI entrypoint
 # ---------------------------------------------------------------------------
-@app.command()
+@app.command("analyze")
 def main(
     detections_dir: Path = typer.Option(DEFAULT_DETECTIONS_DIR, help="Detections root", show_default=True),
     manifest_path: Path = typer.Option(DEFAULT_MANIFEST_PATH, help="Manifest path", show_default=True),
     groundtruth_path: Path = typer.Option(DEFAULT_GROUNDTRUTH_PATH, help="Ground truth path", show_default=True),
     match_mode: MatchMode = typer.Option(MatchMode.HYBRID, help="Matching mode: fuzzy_only, semantic_only, hybrid, or all"),
     quick: bool = typer.Option(False, help="Quick mode (fewer bootstrap iterations)"),
+    run_tag: str = typer.Option(None, "--run-tag", "-t", help="Tag for this run (e.g., 'baseline_v1'). Saves to runs/<tag>/"),
+    notes: str = typer.Option("", "--notes", "-n", help="Notes to attach to this run"),
+    save_run_flag: bool = typer.Option(True, "--save/--no-save", help="Save run to runs/ directory"),
 ):
     """
     Analyze LLM misconception detections with configurable matching modes.
     
     Use --match-mode all to run matcher ablation (fuzzy vs semantic vs hybrid).
+    Use --run-tag to save results to runs/<tag>/ for comparison.
     """
     console.rule("[bold green]Revamped Analysis[/bold green]")
     console.print(f"[cyan]Match mode:[/cyan] {match_mode.value}")
@@ -1317,6 +1493,58 @@ def main(
     )
     console.print(f"[green]Report saved to {REPORT_PATH}[/green]")
     console.print(f"[dim]Assets: {asset_paths}[/dim]")
+    
+    # Save run to runs/ directory
+    if save_run_flag:
+        run_id = generate_run_id(run_tag, manifest_meta.get("seed"))
+        run_dir = save_run(
+            run_id=run_id,
+            manifest_full=manifest_full,
+            manifest_meta=manifest_meta,
+            dataset_summary=dataset_summary,
+            metrics=metrics,
+            report_text=report_text,
+            asset_paths=asset_paths,
+            match_mode=match_mode.value,
+            notes=notes,
+        )
+        console.print(f"[green]Run saved to {run_dir}[/green]")
+
+
+@app.command("list-runs")
+def list_runs():
+    """List all saved runs with comparison table."""
+    runs = load_runs_index()
+    
+    if not runs:
+        console.print("[yellow]No runs found. Use 'analyze --run-tag <name>' to save a run.[/yellow]")
+        return
+    
+    table = Table(title="Saved Runs", show_header=True, header_style="bold")
+    table.add_column("Run ID")
+    table.add_column("Seed")
+    table.add_column("Seeded%")
+    table.add_column("Fuzzy F1")
+    table.add_column("Semantic F1")
+    table.add_column("Hybrid F1")
+    table.add_column("Best F1")
+    table.add_column("Best Config")
+    table.add_column("Notes")
+    
+    for run in runs:
+        table.add_row(
+            run.get("run_id", ""),
+            str(run.get("seed", "")),
+            f"{run.get('seeded_pct', 0):.1f}%",
+            f"{run.get('fuzzy_f1', 0):.3f}" if run.get("fuzzy_f1") else "-",
+            f"{run.get('semantic_f1', 0):.3f}" if run.get("semantic_f1") else "-",
+            f"{run.get('hybrid_f1', 0):.3f}" if run.get("hybrid_f1") else "-",
+            f"{run.get('best_f1', 0):.3f}" if run.get("best_f1") else "-",
+            run.get("best_config", ""),
+            run.get("notes", "")[:30],
+        )
+    
+    console.print(table)
 
 
 if __name__ == "__main__":
