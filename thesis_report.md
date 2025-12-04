@@ -1,156 +1,56 @@
-# LLM Misconception Detection: Research Analysis
+# LLM Misconception Detection: Revamped Analysis
+_Generated: 2025-12-04T06:24:30.586836+00:00_
 
-Generated: 2025-12-04T05:11:14.090288+00:00
+## Executive Highlights
+- Hybrid matcher (fuzzy + semantic + topic prior) applied across all strategies/models.
+- Bootstrap CIs and calibration metrics included; heavy computations allowed.
+- Overall ECE: 0.443 | Brier: 0.445
 
-## Executive Summary
+## Strategy × Model Performance
+| Strategy | Model | TP | FP | FN | Precision | Recall | F1 | CI (Precision) | CI (Recall) | CI (F1) |
+|----------|-------|----|----|----|-----------|--------|----|----------------|-------------|---------|
+| baseline | gemini-2.5-flash | 111 | 114 | 46 | 0.493 | 0.707 | 0.581 | 0.43–0.55 | 0.63–0.77 | 0.51–0.64 |
+| baseline | gpt-5.1 | 89 | 53 | 59 | 0.627 | 0.601 | 0.614 | 0.55–0.70 | 0.52–0.67 | 0.53–0.68 |
+| minimal | gemini-2.5-flash | 123 | 144 | 56 | 0.461 | 0.687 | 0.552 | 0.40–0.51 | 0.61–0.75 | 0.49–0.61 |
+| minimal | gpt-5.1 | 109 | 69 | 61 | 0.612 | 0.641 | 0.626 | 0.55–0.68 | 0.57–0.71 | 0.56–0.69 |
+| rubric_only | gemini-2.5-flash | 108 | 138 | 68 | 0.439 | 0.614 | 0.512 | 0.38–0.51 | 0.54–0.69 | 0.45–0.58 |
+| rubric_only | gpt-5.1 | 107 | 92 | 68 | 0.538 | 0.611 | 0.572 | 0.47–0.61 | 0.54–0.68 | 0.51–0.64 |
+| socratic | gemini-2.5-flash | 51 | 66 | 33 | 0.436 | 0.607 | 0.507 | 0.35–0.54 | 0.50–0.73 | 0.41–0.61 |
+| socratic | gpt-5.1 | 45 | 51 | 36 | 0.469 | 0.556 | 0.508 | 0.38–0.57 | 0.44–0.67 | 0.41–0.61 |
 
-### Strategy Comparison Matrix
-| Strategy | Precision | Recall | F1 Score | TP | FP | FN | Conf. Gap |
-|----------|-----------|--------|----------|----|----|----|-----------|
-| **rubric_only** | 0.313 | 0.638 | **0.420** | 141 | 310 | 80 | 0.007 |
-| **baseline** | 0.346 | 0.653 | **0.452** | 128 | 242 | 68 | 0.021 |
-| **minimal** | 0.343 | 0.704 | **0.462** | 159 | 304 | 67 | 0.017 |
-| **socratic** | 0.311 | 0.642 | **0.418** | 68 | 151 | 38 | 0.020 |
+## Topic Difficulty (Recall)
+| Topic | Recall | N |
+|-------|--------|---|
+| Input | 0.230 | 178 |
+| State / Variables | 0.443 | 334 |
+| State / Representation | 0.500 | 6 |
+| Algebraic Reasoning | 0.773 | 132 |
+| Data Types | 0.788 | 198 |
+| State / Input | 0.845 | 110 |
+| Input / Data Types | 0.875 | 96 |
+| Methods | 1.000 | 72 |
 
-## Model Showdown: GPT-5.1 vs Gemini-2.5-Flash
+## Calibration & Hallucinations
+- Calibration curves: see `docs/report_assets/calibration.png`
+- Hallucination bar chart: see `docs/report_assets/hallucinations.png`
 
-Aggregate performance comparison across all strategies.
+- **Hardcoding Input Values Instead of Reading from User** (14 times)
+- **Incorrect data type for input variables** (11 times)
+- **Incomplete Input Reading** (10 times)
+- **Missing input for 'price'** (8 times)
+- **Division by zero** (6 times)
 
-### Aggregate Metrics
-| Model | TP | FP | Precision | Recall (est) |
-|-------|----|----|-----------|--------------|
-| **gemini-2.5-flash** | 281 | 604 | 0.318 | 0.499 |
-| **gpt-5.1** | 215 | 403 | 0.348 | 0.382 |
+## Topic Heatmap
+![Topic Heatmap](docs/report_assets/topic_heatmap.png)
 
-### Statistical Significance (McNemar's Test)
-Testing the null hypothesis that both models have equal sensitivity (recall).
+## Methods
+- Data: 60 students × 4 questions (seeded/clean) with manifest-driven ground truth.
+- Detection: GPT-5.1 and Gemini 2.5 Flash across strategies (baseline, minimal, rubric_only, socratic).
+- Matching: Hybrid fusion of fuzzy similarity, semantic embeddings (OpenAI/OpenRouter optional), and topic priors.
+- Metrics: Precision/Recall/F1 with bootstrap CIs; calibration (ECE/Brier); agreement via κ; significance via McNemar where applicable.
 
-**Comparison: gpt-5.1 vs gemini-2.5-flash**
-- **Statistic**: 23.3011
-- **P-Value**: 1.3852e-06
-- **Result**: Statistically Significant Difference (p < 0.05)
-
-**Contingency Table**
-| | gemini-2.5-flash Correct | gemini-2.5-flash Wrong |
-|---|---|---|
-| **gpt-5.1 Correct** | 173 | 40 |
-| **gpt-5.1 Wrong** | 97 | 253 |
-
-## Performance by Category
-
-Breakdown of detection performance by misconception category (Topic).
-| Category | Recall | Precision | TP | FN | FP |
-|----------|--------|-----------|----|----|----|
-| Algebraic Reasoning | 0.61 | 1.00 | 40 | 26 | 0 |
-| Data Types | 0.80 | 0.48 | 79 | 20 | 85 |
-| Input | 0.18 | 0.29 | 16 | 73 | 39 |
-| Input / Data Types | 0.88 | 0.55 | 42 | 6 | 35 |
-| Methods | 0.53 | 1.00 | 19 | 17 | 0 |
-| State / Input | 0.96 | 0.93 | 53 | 2 | 4 |
-| State / Representation | 1.00 | 0.27 | 3 | 0 | 8 |
-| State / Variables | 0.35 | 0.51 | 58 | 109 | 55 |
-
-## Deep Dive: Misconception Difficulty
-
-
-### Hardest Misconceptions (Low Recall)
-| ID | Name | Topic | Recall | TP | FN |
-|----|------|-------|--------|----|----|
-| INP-02 | One Scanner Call Reads All | Input | 0.04 | 2 | 47 |
-| STA-02 | Concrete Instance Fallacy | State / Variables | 0.05 | 3 | 57 |
-| STA-01 | Spreadsheet View | State / Variables | 0.15 | 4 | 22 |
-| API-01 | Argument Commutativity | Methods | 0.30 | 3 | 7 |
-| INP-01 | Prompt-Logic Mismatch | Input | 0.35 | 14 | 26 |
-
-### Most Confusing Misconceptions (High FP)
-| ID | Name | Topic | FP Count |
-|----|------|-------|----------|
-| STA-07 | Swapped Variables After Read | State / Variables | 47 |
-| TYP-02 | Integer Coordinates | Data Types | 37 |
-| INP-03 | Scanner Type Mismatch | Input / Data Types | 35 |
-| INP-01 | Prompt-Logic Mismatch | Input | 30 |
-| TYP-05 | Narrowing Cast in Division | Data Types | 18 |
-
-## Hallucination Analysis
-
-Recurring false positives that do not match any known misconception ID.
-
-### Rubric_Only Hallucinations
-- **"Hardcoding Input Values Instead of Reading from User"** (7 times)
-  - Example: Thompson_Erica_221372 Q3
-  - Models: google/gemini-2.5-flash
-- **"Incorrect data type for input variables"** (6 times)
-  - Example: Singh_Valerie_623807 Q3
-  - Models: google/gemini-2.5-flash
-- **"Operator Precedence Error in Semi-Perimeter Calculation"** (5 times)
-  - Example: Lawson_Jonathan_767435 Q4
-  - Models: google/gemini-2.5-flash
-
-### Baseline Hallucinations
-- **"Hardcoding Input Values"** (5 times)
-  - Example: Kennedy_Beverly_992649 Q4
-  - Models: google/gemini-2.5-flash
-- **"Incorrect operator precedence in semi-perimeter formula"** (4 times)
-  - Example: Lawson_Jonathan_767435 Q4
-  - Models: openai/gpt-5.1
-- **"Hardcoding sample values instead of reading user input"** (4 times)
-  - Example: Thompson_Erica_221372 Q3
-  - Models: openai/gpt-5.1
-
-### Minimal Hallucinations
-- **"Hardcoding Input Values Instead of Reading from User"** (5 times)
-  - Example: Kennedy_Beverly_992649 Q4
-  - Models: google/gemini-2.5-flash
-- **"Incorrect Data Type for Input Variables"** (4 times)
-  - Example: Adams_Jennifer_401503 Q3
-  - Models: google/gemini-2.5-flash
-- **"Hardcoding Input Values"** (4 times)
-  - Example: Murphy_Julie_887463 Q3
-  - Models: google/gemini-2.5-flash
-
-### Socratic Hallucinations
-- **"Incorrect data type for input variables"** (4 times)
-  - Example: Adams_Jennifer_401503 Q3
-  - Models: google/gemini-2.5-flash
-- **"Operator Precedence Error in Semi-Perimeter Calculation"** (3 times)
-  - Example: Lawson_Jonathan_767435 Q4
-  - Models: google/gemini-2.5-flash
-- **"Division by zero"** (3 times)
-  - Example: Martin_Melissa_602227 Q1
-  - Models: google/gemini-2.5-flash
-
-## Interesting Discoveries (Clean Files)
-
-Potential genuine issues found in clean files.
-### Rubric_Only
-- **Cruz_Jeremy_130806** Q4: Incorrect handling of two numeric inputs on single line
-  - Matched to: INP-02 (0.72)
-- **Graves_Mary_457617** Q4: Incorrect Scanner usage for paired inputs
-  - Matched to: INP-02 (0.71)
-- **Adams_Courtney_257740** Q4: Incorrect input parsing for multiple values on one line
-  - Matched to: INP-01 (0.72)
-### Baseline
-- **Fisher_Laura_816341** Q4: Sequential nextDouble calls for two inputs on one line
-  - Matched to: INP-01 (0.72)
-### Minimal
-- **Schmidt_Tara_761866** Q2: Lack of output formatting
-  - Matched to: STA-05 (0.77)
-- **Herrera_Glenda_448690** Q4: Incorrect Scanner usage for paired inputs
-  - Matched to: INP-01 (0.73)
-- **Fisher_Laura_816341** Q4: Incorrect Scanner usage for paired inputs
-  - Matched to: INP-01 (0.73)
-- **Keith_Brady_216822** Q4: Incorrect Scanner usage for paired inputs
-  - Matched to: INP-01 (0.73)
-- **Campbell_Lonnie_394543** Q4: Incorrect Scanner usage for paired inputs (x, y)
-  - Matched to: INP-02 (0.70)
-### Socratic
-- **Daniels_Holly_275197** Q2: Floating point precision and formatting for currency
-  - Matched to: STA-05 (0.79)
-- **Moore_Nancy_573046** Q2: Floating-point precision in output
-  - Matched to: STA-05 (0.78)
-- **Fitzgerald_Jamie_203673** Q4: Incorrect input prompt alignment for multiple values on one line
-  - Matched to: INP-01 (0.73)
-- **Cruz_Jeremy_130806** Q4: Incorrect Scanner usage for paired inputs
-  - Matched to: INP-02 (0.71)
-- **Adams_Courtney_257740** Q4: Incorrect Scanner usage for multiple double inputs on one line
-  - Matched to: INP-02 (0.75)
+## Agreement & Significance
+- baseline: κ=0.515, McNemar p=0.0296 (stat=4.735) | table={'both_correct': 78, 'only_a': 23, 'only_b': 10, 'both_wrong': 36}
+- minimal: κ=0.282, McNemar p=0.5440 (stat=0.368) | table={'both_correct': 83, 'only_a': 30, 'only_b': 25, 'both_wrong': 31}
+- rubric_only: κ=0.459, McNemar p=0.9399 (stat=0.006) | table={'both_correct': 79, 'only_a': 22, 'only_b': 22, 'both_wrong': 46}
+- socratic: κ=0.611, McNemar p=0.5186 (stat=0.417) | table={'both_correct': 36, 'only_a': 9, 'only_b': 6, 'both_wrong': 27}

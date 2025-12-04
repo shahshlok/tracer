@@ -23,12 +23,21 @@ from rich.table import Table
 from rich.text import Text
 
 from analyze_cli import (
+    ASSET_DIR,
     DEFAULT_GROUNDTRUTH_PATH,
-    analyze_strategy,
-    display_metrics,
-    generate_thesis_report,
+    DEFAULT_MANIFEST_PATH,
+    JSON_EXPORT_PATH,
+    REPORT_PATH,
+    bootstrap_metrics,
+    build_dataframes,
+    ensure_asset_dir,
+    generate_report,
     load_groundtruth,
     load_manifest,
+    plot_calibration,
+    plot_hallucinations,
+    plot_topic_heatmap,
+    summarize_metrics,
 )
 from llm_miscons_cli import (
     DEFAULT_OUTPUT_DIR as DETECTIONS_DIR,
@@ -149,7 +158,7 @@ async def run_pipeline_async(
         console.print()
 
     # -------------------------------------------------------------------------
-    # Step 3: Analysis (synchronous, no async needed)
+    # Step 3: Analysis (revamped)
     # -------------------------------------------------------------------------
     if not skip_analysis:
         console.rule("[bold cyan]Step 3: Analysis & Report Generation[/bold cyan]")
@@ -158,7 +167,6 @@ async def run_pipeline_async(
         groundtruth = load_groundtruth(DEFAULT_GROUNDTRUTH_PATH)
         manifest = load_manifest(DEFAULT_MANIFEST_PATH)
 
-        # Find which strategies have detections
         available_strategies = [
             d.name for d in DETECTIONS_DIR.iterdir() if d.is_dir() and not d.name.startswith("_")
         ]
@@ -170,24 +178,52 @@ async def run_pipeline_async(
         console.print(f"[dim]Analyzing strategies: {', '.join(available_strategies)}[/dim]")
         console.print()
 
-        all_metrics = {}
-        for strategy in available_strategies:
-            console.print(f"[cyan]Analyzing {strategy}...[/cyan]")
-            metrics = analyze_strategy(strategy, DETECTIONS_DIR, manifest, groundtruth)
-            all_metrics[strategy] = metrics
-            if "error" not in metrics:
-                display_metrics(metrics, strategy)
+        detections_df, opportunities_df = build_dataframes(
+            detections_dir=DETECTIONS_DIR,
+            strategies=available_strategies,
+            manifest=manifest,
+            groundtruth=groundtruth,
+            use_embeddings=True,
+        )
+        metrics = summarize_metrics(detections_df, ["strategy", "model"])
+        ci = bootstrap_metrics(
+            detections_df,
+            group_cols=["strategy", "model"],
+            unit_cols=["student", "question"],
+            iters=400,
+        )
 
-        # Generate thesis report
-        generate_thesis_report(all_metrics, output_report)
-        console.print(f"[green]✓ Thesis report saved to {output_report}[/green]")
-        console.print()
+        ensure_asset_dir()
+        asset_paths = {
+            "heatmap": ASSET_DIR / "topic_heatmap.png",
+            "calibration": ASSET_DIR / "calibration.png",
+            "hallucinations": ASSET_DIR / "hallucinations.png",
+        }
+        plot_topic_heatmap(opportunities_df, asset_paths["heatmap"])
+        plot_calibration(detections_df, asset_paths["calibration"])
+        plot_hallucinations(detections_df, asset_paths["hallucinations"])
 
-        # Also save JSON
+        report_text = generate_report(metrics, ci, opportunities_df, detections_df, asset_paths)
+        output_report.write_text(report_text)
         json_report = output_report.with_suffix(".json")
-        json_report.write_text(json.dumps(all_metrics, indent=2, default=str))
+        json_report.write_text(
+            json.dumps(
+                {
+                    "metrics": metrics.to_dict(orient="records"),
+                    "ci": ci.to_dict(orient="records"),
+                    "opportunities": opportunities_df.to_dict(orient="records"),
+                },
+                indent=2,
+                default=str,
+            )
+        )
+
+        console.print(f"[green]✓ Thesis report saved to {output_report}[/green]")
         console.print(f"[dim]JSON data saved to {json_report}[/dim]")
-        results["analysis"] = all_metrics
+        results["analysis"] = {
+            "metrics": metrics.to_dict(orient="records"),
+            "ci": ci.to_dict(orient="records"),
+        }
     else:
         console.print("[dim]Skipping analysis[/dim]")
 
