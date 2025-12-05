@@ -1457,8 +1457,8 @@ def save_run(
             "seeded_pct": dataset_summary.get("seeded_pct"),
         },
         "pipeline": {
-            "detection_models": ["gpt-5.1", "gemini-2.5-flash"],
-            "strategies": ["baseline", "minimal", "rubric_only", "socratic"],
+            "detection_models": sorted(metrics["model"].unique().tolist()),
+            "strategies": sorted(metrics["strategy"].unique().tolist()),
             "matchers": ["fuzzy_only", "semantic_only", "hybrid"]
             if match_mode == "all"
             else [match_mode],
