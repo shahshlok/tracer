@@ -1,124 +1,47 @@
-# Future Work
+# Future Work & Research Roadmap
 
-Items explicitly deferred from the current evaluation framework to maintain scope and defensibility.
+This document outlines the strategic direction for the thesis, moving from "Does it work?" to "Where exactly does it break?".
 
----
+## core Research Strategy: The "State Complexity" Progression
 
-## 1. Confidence Score Analysis
+Current findings suggest LLMs struggle with variable state (e.g., `v1` vs `v0`). To prove this is a fundamental limitation rather than a fluke, we will replicate the study across a spectrum of increasing state complexity.
 
-**Current status:** The LLM schema includes a `confidence` field, but we do not analyze calibration (ECE, Brier) in this version.
+### 1. Assignment 2 (A2): Mathematical State [DONE]
+- **Focus:** Variables, Arithmetic, Precedence.
+- **State Complexity:** Low (Single assignments, linear flow).
+- **Hypothesis:** LLMs handle syntax well but fail at invisible logic errors (e.g., operator precedence).
 
-**Rationale:** LLM self-reported confidence is inherently subjective and may be uninformative (e.g., always 1.0). Without validation that confidence correlates with actual correctness, including it risks a reviewer asking "how did you validate the confidence scale?" which we cannot answer.
+### 2. Assignment 3 (A3): Temporal State [NEXT]
+- **Focus:** Loops, Conditionals, Boolean Logic.
+- **State Complexity:** Medium (Variables change values over time/iterations).
+- **Hypothesis:** LLMs will struggle to trace execution flow (e.g., off-by-one errors, infinite loops).
 
-**Future direction:**
-- Run calibration analysis (ECE, Brier score) once we have a larger dataset
-- Experiment with prompts that elicit more thoughtful confidence estimates
-- Compare calibration across models to see if some are better calibrated than others
+### 3. Assignment 4 (A4): Memory State
+- **Focus:** Arrays, Strings.
+- **State Complexity:** High (Mutable data structures, indexing).
+- **Hypothesis:** Catastrophic failure on index-based logic (e.g., `arr[i]` vs `arr[i+1]`).
 
----
-
-## 2. Difficulty Labels for Misconceptions
-
-**Current status:** We do not assign "easy/medium/hard" labels to misconceptions.
-
-**Rationale:** Difficulty is subjective and requires either:
-- Large-scale classroom data showing error rates per misconception
-- Multiple expert raters with inter-rater reliability
-
-Neither is available for this version. A chair could ask "how did you determine difficulty?" and we would have no defensible answer.
-
-**Future direction:**
-- Collect real student submission data with labeled misconceptions
-- Compute empirical "miss rates" per misconception across models
-- Use data-driven difficulty labels (e.g., based on model recall)
-- Validate with multiple expert raters
+### 4. Assignment 5 (A5): Object State
+- **Focus:** Classes, References, `this`.
+- **State Complexity:** Very High (Shared references, heap vs stack).
+- **Hypothesis:** LLMs will fail to distinguish between object identity (`==`) and value equality (`.equals`).
 
 ---
 
-## 3. Multiple Misconceptions Per File
+## Technical Enhancements
 
-**Current status:** Each file has at most one seeded misconception.
+### 1. Robust Replication
+- **Current:** Single seed per run.
+- **Future:** 3-5 random seeds per assignment to generate error bars.
+- **Goal:** Prove that "LLM Blindness" is statistically significant, not just bad luck.
 
-**Rationale:** Multi-misconception files complicate:
-- Ground truth labeling (which detection maps to which misconception?)
-- Matching logic (need multi-label matching, not single-label)
-- Success/failure definitions (partial credit? all-or-nothing?)
+### 2. Cross-Assignment Synthesis
+- A meta-analysis script that aggregates Recall/Precision across A2, A3, A4.
+- **Key Deliverable:** A single chart showing "Recall vs State Complexity". If the line goes down as complexity goes up, the thesis is proven.
 
-Keeping it simple allows cleaner metrics and easier interpretation.
-
-**Future direction:**
-- Extend the hybrid matcher to return ranked list of matches
-- Define partial-credit metrics for multi-label scenarios
-- Analyze whether LLMs detect primary vs. secondary misconceptions differently
-
----
-
-## 4. Severity Field
-
-**Current status:** The LLM schema includes `severity`, but we do not analyze it.
-
-**Rationale:** Severity is:
-- Subjective (what makes a misconception "severe"?)
-- Not used in TP/FP/FN decisions
-- Potentially confusing with difficulty
-
-**Future direction:**
-- Define severity operationally (e.g., "would cause runtime error" vs "would cause wrong output" vs "stylistic")
-- Analyze whether LLMs assign severity consistently
-- Correlate severity with actual student outcomes if real data is available
+### 3. Advanced Metrics
+- **Potential Recall (The Ceiling):** The fraction of misconceptions found by *at least one* model/strategy configuration. Measures the theoretical maximum capability.
+- **Average Recall (The Reliability):** The standard mean recall across all runs. Measures how likely a single agent is to succeed.
+- **Consistency:** Measures stability. If we run the same model multiple times (or different models), do they agree? quantifying the "noise" in LLM grading.
 
 ---
-
-## 6. Broader Misconception Taxonomy
-
-**Current status:** ~15 misconceptions focused on input/output, types, and basic arithmetic.
-
-**Future direction:**
-- Expand to additional CS1 concepts: conditionals, loops, methods, arrays, parameter passing, etc.
-- Incorporate misconceptions from CS education literature (e.g., Sorva's taxonomy) and align our synthetic injectors with those definitions.
-- Cross-validate with other institutions' misconception lists to avoid overfitting to a single instructor/course, even if we remain in a fully synthetic regime.
-- Design multiple **synthetic assignments** (e.g., kinematics calculator, grade calculator, coordinate transforms) that each exercise overlapping subsets of the taxonomy, so we can study model behavior across different problem contexts.
-
----
-
-## 7. Replication Dimension
-
-**Current status:** Single random seed for dataset generation on a single synthetic assignment.
-
-**Future direction:**
-- Generate **3–5 independent synthetic cohorts** per assignment using different random seeds (same taxonomy, same assignment).
-- For each cohort, run the full pipeline (generation → detection → analysis) and store:
-  - The manifest used.
-  - A snapshot of key configuration (models, strategies, thresholds).
-  - The aggregated metrics JSON and report for that run.
-- Repeat this across **multiple synthetic assignments** (see Section 7), so we can:
-  - Estimate variance in metrics across seeds for a fixed assignment.
-  - Estimate variance across assignments (task sensitivity).
-  - Strengthen robustness claims by showing that key patterns (e.g., topic difficulty, matcher behavior, model ordering) are stable across seeds and assignments.
-
----
-
-## Priority Order for Future Work
-
-1. Broader taxonomy + multiple synthetic assignments (higher impact while staying within synthetic regime)
-2. Replication across seeds and assignments (robustness)
-3. Additional models and prompting variants
-4. Difficulty labels (data-driven, post-hoc, using synthetic performance)
-5. Confidence calibration (once we trust the numbers)
-6. Multiple misconceptions per file
-
-
-
-
-So the 3 things to do are and in no particular order:
-  1. Storage system
-  2. Multiple assignments
-  3. multiple seeded pipeline runs per assignment
-  4. Per misconception analysis to find what misconceptions are easily caught by the models and which ones are not .
-
- A higher-level synthesis document/chapter that:
-          - Summarizes patterns across runs and assignments.
-          - Pulls out the key per-misconception and per-topic findings that are stable.
-          - Connects them to CS ed literature.
-
-Potential recall
