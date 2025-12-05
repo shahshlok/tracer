@@ -35,7 +35,7 @@ load_dotenv()
 
 DEFAULT_MODEL = "gpt-5.1-2025-11-13"
 DEFAULT_STUDENT_COUNT = 60
-DEFAULT_OUTPUT_ROOT = Path("authentic_seeded")
+DEFAULT_OUTPUT_ROOT = Path("authentic_seeded/a3")
 DEFAULT_MANIFEST_PATH = DEFAULT_OUTPUT_ROOT / "manifest.json"
 
 # Assignment-specific question files and briefs
