@@ -1274,30 +1274,6 @@ def render_hallucination_snippets(df: pd.DataFrame, limit: int = 5) -> str:
     return "\n".join(lines)
 
 
-def compute_misconception_recall(
-    opportunities: pd.DataFrame, groundtruth: list[dict[str, Any]]
-) -> pd.DataFrame:
-    """Compute recall per misconception ID."""
-    if opportunities.empty:
-        return pd.DataFrame()
-
-    gt_map = {g["id"]: g for g in groundtruth}
-
-    stats = (
-        opportunities.groupby("expected_id")
-        .agg(recall=("success", "mean"), n=("success", "count"))
-        .reset_index()
-    )
-
-    # Add names and categories from groundtruth
-    stats["name"] = stats["expected_id"].map(
-        lambda x: gt_map.get(x, {}).get("misconception_name", x)
-    )
-    stats["category"] = stats["expected_id"].map(lambda x: gt_map.get(x, {}).get("category", ""))
-
-    return stats.sort_values("recall")
-
-
 def render_misconception_table(stats: pd.DataFrame) -> str:
     """Render markdown table of per-misconception recall."""
     if stats.empty:

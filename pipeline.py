@@ -100,6 +100,7 @@ async def run_pipeline_async(
     skip_analysis: bool,
     concurrency: int,
     force: bool,
+    include_reasoning: bool = False,
 ) -> dict[str, Any]:
     """Run the entire pipeline in a single async context."""
     results = {"generation": None, "detection": {}, "analysis": {}}
@@ -169,7 +170,7 @@ async def run_pipeline_async(
 
         for i, strategy in enumerate(strategy_list, 1):
             console.print(f"[bold][{i}/{len(strategy_list)}] Strategy: {strategy}[/bold]")
-            stats = await run_detection(student_list, strategy, DETECTIONS_DIR)
+            stats = await run_detection(student_list, strategy, DETECTIONS_DIR, include_reasoning)
             results["detection"][strategy] = stats
             display_detection_results(stats, strategy)
             console.print()
@@ -372,9 +373,14 @@ def interactive():
     console.print("[bold]Step 2: LLM Detection[/bold]")
     skip_detection = not Confirm.ask("Run LLM misconception detection?", default=True)
 
+    include_reasoning = False
+    if not skip_detection:
+        include_reasoning = Confirm.ask("Include reasoning model variants?", default=True)
+
     strategy_list = STRATEGIES  # All strategies
+    model_count = len(MODELS) * 2 if include_reasoning else len(MODELS)
     console.print(f"[dim]Strategies: {', '.join(STRATEGIES)}[/dim]")
-    console.print(f"[dim]Models: {', '.join(MODEL_SHORT_NAMES.values())}[/dim]")
+    console.print(f"[dim]Models: {model_count} ({len(MODELS)} standard{' + ' + str(len(MODELS)) + ' reasoning' if include_reasoning else ''})[/dim]")
 
     console.print()
 
@@ -404,7 +410,7 @@ def interactive():
         "2. Detection",
         "[green]SKIP[/green]"
         if skip_detection
-        else f"{len(strategy_list)} strategies × {len(MODELS)} models",
+        else f"{len(strategy_list)} strategies × {model_count} models",
     )
     summary.add_row(
         "3. Analysis", "[green]SKIP[/green]" if skip_analysis else "3 matchers (ablation)"
@@ -436,6 +442,7 @@ def interactive():
             skip_analysis=skip_analysis,
             concurrency=20,
             force=force,
+            include_reasoning=include_reasoning,
         )
     )
 
@@ -462,6 +469,7 @@ def run_cmd(
     concurrency: int = typer.Option(20, help="Max concurrent API requests"),
     force: bool = typer.Option(False, help="Overwrite existing manifest"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+    reasoning: bool = typer.Option(True, "--reasoning/--no-reasoning", help="Include reasoning model variants"),
 ):
     """
     Run the full research pipeline (non-interactive).
@@ -485,11 +493,12 @@ def run_cmd(
         "1. Dataset Generation",
         "[green]SKIP[/green]" if skip_generation else f"[cyan]{students} students[/cyan]",
     )
+    model_count = len(MODELS) * 2 if reasoning else len(MODELS)
     summary.add_row(
         "2. LLM Detection",
         "[green]SKIP[/green]"
         if skip_detection
-        else f"[cyan]{len(strategy_list)} strategies × {len(MODELS)} models[/cyan]",
+        else f"[cyan]{len(strategy_list)} strategies × {model_count} models[/cyan]",
     )
     summary.add_row(
         "3. Analysis",
@@ -521,6 +530,7 @@ def run_cmd(
             skip_analysis=skip_analysis,
             concurrency=concurrency,
             force=force,
+            include_reasoning=reasoning,
         )
     )
 

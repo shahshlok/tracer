@@ -25,6 +25,7 @@ from prompts.strategies import PromptStrategy, build_prompt
 from pydantic_models import LLMEvaluationResponse, Misconception
 from utils.grading import load_question, load_rubric
 from utils.llm.openrouter import get_structured_response
+from utils.llm.openrouter_reasoning import get_reasoning_response
 
 load_dotenv()
 
@@ -42,6 +43,12 @@ MODEL_SHORT_NAMES = {
     "google/gemini-2.5-flash-preview-09-2025": "Gemini-2.5-Flash-Preview",
     "anthropic/claude-haiku-4.5": "Haiku-4.5",
 }
+REASONING_SHORT_NAMES = {
+    "openai/gpt-5.1:reasoning": "GPT-5.1-Reasoning",
+    "google/gemini-2.5-flash-preview-09-2025:reasoning": "Gemini-2.5-Flash-Reasoning",
+    "anthropic/claude-haiku-4.5:reasoning": "Haiku-4.5-Reasoning",
+}
+ALL_MODEL_SHORT_NAMES = {**MODEL_SHORT_NAMES, **REASONING_SHORT_NAMES}
 STRATEGIES = ["minimal", "baseline", "socratic", "rubric_only"]
 MAX_CONCURRENCY = 30
 DEFAULT_OUTPUT_DIR = Path("detections")
@@ -128,16 +135,20 @@ async def detect_misconceptions_for_file(
     question_text: str,
     rubric_data: dict[str, Any],
     strategy: str,
+    use_reasoning: bool = False,
 ) -> list[Misconception]:
     """Run misconception detection for a single file with one model."""
     prompt = build_prompt(PromptStrategy(strategy), question_text, rubric_data, student_code)
     messages = [{"role": "user", "content": prompt}]
 
     try:
-        response = await get_structured_response(messages, LLMEvaluationResponse, model=model)
+        if use_reasoning:
+            response = await get_reasoning_response(messages, LLMEvaluationResponse, model=model)
+        else:
+            response = await get_structured_response(messages, LLMEvaluationResponse, model=model)
         return response.misconceptions
     except Exception as e:
-        console.print(f"[red]Error with {MODEL_SHORT_NAMES.get(model, model)}: {e}[/red]")
+        console.print(f"[red]Error with {ALL_MODEL_SHORT_NAMES.get(model, model)}: {e}[/red]")
         return []
 
 
@@ -146,6 +157,7 @@ async def process_student_question(
     question: str,
     strategy: str,
     semaphore: asyncio.Semaphore,
+    include_reasoning: bool = False,
 ) -> dict[str, Any]:
     """Process one student-question pair with all models."""
     async with semaphore:
@@ -174,18 +186,26 @@ async def process_student_question(
                 "reason": str(e),
             }
 
+        # Build list of (model_key, model_id, use_reasoning) tuples
+        model_configs = [(model, model, False) for model in MODELS]
+        if include_reasoning:
+            # Add reasoning variants with :reasoning suffix in the key
+            model_configs.extend(
+                [(f"{model}:reasoning", model, True) for model in MODELS]
+            )
+
         # Run all models in parallel
         tasks = [
             detect_misconceptions_for_file(
-                model, student_code, question_text, rubric_data, strategy
+                model_id, student_code, question_text, rubric_data, strategy, use_reasoning
             )
-            for model in MODELS
+            for (model_key, model_id, use_reasoning) in model_configs
         ]
         results = await asyncio.gather(*tasks)
 
         model_results = {}
-        for model, misconceptions in zip(MODELS, results):
-            model_results[model] = {
+        for (model_key, model_id, use_reasoning), misconceptions in zip(model_configs, results):
+            model_results[model_key] = {
                 "misconceptions": [m.model_dump() for m in misconceptions],
                 "count": len(misconceptions),
             }
@@ -203,6 +223,7 @@ async def run_detection(
     students: list[str],
     strategy: str,
     output_dir: Path,
+    include_reasoning: bool = False,
 ) -> dict[str, Any]:
     """Run misconception detection for all students."""
     semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
@@ -212,13 +233,19 @@ async def run_detection(
     questions = ["Q1", "Q2", "Q3", "Q4"]
     total_tasks = len(students) * len(questions)
 
+    # Build list of all model keys for stats tracking
+    all_model_keys = list(MODELS)
+    if include_reasoning:
+        all_model_keys.extend([f"{m}:reasoning" for m in MODELS])
+
     results = []
     stats = {
         "total_processed": 0,
         "successful": 0,
         "skipped": 0,
         "errors": 0,
-        "total_misconceptions": dict.fromkeys(MODELS, 0),
+        "total_misconceptions": dict.fromkeys(all_model_keys, 0),
+        "include_reasoning": include_reasoning,
     }
 
     with Progress(
@@ -235,7 +262,11 @@ async def run_detection(
         tasks = []
         for student_id in students:
             for question in questions:
-                tasks.append(process_student_question(student_id, question, strategy, semaphore))
+                tasks.append(
+                    process_student_question(
+                        student_id, question, strategy, semaphore, include_reasoning
+                    )
+                )
 
         # Process with progress updates
         for coro in asyncio.as_completed(tasks):
@@ -250,9 +281,10 @@ async def run_detection(
                 output_file = strategy_dir / f"{result['student']}_{result['question']}.json"
                 output_file.write_text(json.dumps(result, indent=2))
 
-                # Update model stats
-                for model in MODELS:
-                    stats["total_misconceptions"][model] += result["models"][model]["count"]
+                # Update model stats for all models in the result
+                for model_key in result["models"]:
+                    if model_key in stats["total_misconceptions"]:
+                        stats["total_misconceptions"][model_key] += result["models"][model_key]["count"]
             elif result["status"] == "skipped":
                 stats["skipped"] += 1
             else:
@@ -293,9 +325,9 @@ def display_results(stats: dict[str, Any], strategy: str):
     model_table.add_column("Model", style="white")
     model_table.add_column("Misconceptions Found", justify="right", style="magenta")
 
-    for model in MODELS:
-        short_name = MODEL_SHORT_NAMES.get(model, model)
-        count = stats["total_misconceptions"][model]
+    # Display all models from the stats (includes reasoning variants if present)
+    for model_key, count in stats["total_misconceptions"].items():
+        short_name = ALL_MODEL_SHORT_NAMES.get(model_key, model_key)
         model_table.add_row(short_name, str(count))
 
     console.print(model_table)
