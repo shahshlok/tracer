@@ -32,13 +32,14 @@ app = typer.Typer(help="LLM Misconception Detection CLI")
 console = Console()
 
 # Configuration
-MODELS = ["openai/gpt-5.1", "google/gemini-2.5-flash"]
+MODELS = ["openai/gpt-5.1", "google/gemini-2.5-flash", "deepseek/deepseek-v3.2-speciale"]
 MODEL_SHORT_NAMES = {
     "openai/gpt-5.1": "GPT-5.1",
     "google/gemini-2.5-flash": "Gemini-2.5-Flash",
+    "deepseek/deepseek-v3.2-speciale": "Deepseek-v3.2-Speciale",
 }
 STRATEGIES = ["minimal", "baseline", "socratic", "rubric_only"]
-MAX_CONCURRENCY = 10
+MAX_CONCURRENCY = 30
 DEFAULT_OUTPUT_DIR = Path("detections")
 SUBMISSION_DIR = Path("authentic_seeded")
 
