@@ -32,10 +32,10 @@ app = typer.Typer(help="LLM Misconception Detection CLI")
 console = Console()
 
 # Configuration
-MODELS = ["openai/gpt-5.1", "google/gemini-2.5-flash", "deepseek/deepseek-v3.2-speciale"]
+MODELS = ["openai/gpt-5.1", "google/gemini-2.5-flash-preview-09-2025", "deepseek/deepseek-v3.2-speciale"]
 MODEL_SHORT_NAMES = {
     "openai/gpt-5.1": "GPT-5.1",
-    "google/gemini-2.5-flash": "Gemini-2.5-Flash",
+    "google/gemini-2.5-flash-preview-09-2025": "Gemini-2.5-Flash-Preview",
     "deepseek/deepseek-v3.2-speciale": "Deepseek-v3.2-Speciale",
 }
 STRATEGIES = ["minimal", "baseline", "socratic", "rubric_only"]
