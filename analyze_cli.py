@@ -151,13 +151,13 @@ def callback(ctx: typer.Context):
         console.print("\nRun 'analyze --help' for more info.")
 
 
-DEFAULT_DETECTIONS_DIR = Path("detections")
-DEFAULT_MANIFEST_PATH = Path("authentic_seeded/manifest.json")
-DEFAULT_GROUNDTRUTH_PATH = Path("data/a2/groundtruth.json")
+DEFAULT_DETECTIONS_DIR = Path("detections/a3")
+DEFAULT_MANIFEST_PATH = Path("authentic_seeded/a3/manifest.json")
+DEFAULT_GROUNDTRUTH_PATH = Path("data/a3/groundtruth.json")
 ASSET_DIR = Path("docs/report_assets")
 REPORT_PATH = Path("thesis_report.md")
 JSON_EXPORT_PATH = Path("thesis_report.json")
-RUNS_DIR = Path("runs")
+RUNS_DIR = Path("runs/a3")
 RUNS_INDEX_PATH = RUNS_DIR / "index.json"
 
 

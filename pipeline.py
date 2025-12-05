@@ -125,7 +125,7 @@ async def run_pipeline_async(
         # Generate manifest
         console.print("[cyan]Generating manifest...[/cyan]")
         question_texts = load_question_texts()
-        misconceptions = load_misconceptions(Path("data/a2/groundtruth.json"))
+        misconceptions = load_misconceptions(Path("data/a3/groundtruth.json"))
         manifest_data = generate_manifest(
             misconceptions, question_texts, seed=seed, student_count=students
         )

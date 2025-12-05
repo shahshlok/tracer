@@ -51,8 +51,8 @@ REASONING_SHORT_NAMES = {
 ALL_MODEL_SHORT_NAMES = {**MODEL_SHORT_NAMES, **REASONING_SHORT_NAMES}
 STRATEGIES = ["minimal", "baseline", "socratic", "rubric_only"]
 MAX_CONCURRENCY = 30
-DEFAULT_OUTPUT_DIR = Path("detections")
-SUBMISSION_DIR = Path("authentic_seeded")
+DEFAULT_OUTPUT_DIR = Path("detections/a3")
+SUBMISSION_DIR = Path("authentic_seeded/a3")
 
 
 def get_student_list() -> list[str]:
@@ -162,8 +162,8 @@ async def process_student_question(
     """Process one student-question pair with all models."""
     async with semaphore:
         q_num = question.replace("Q", "")
-        question_file = f"data/a2/q{q_num}.md"
-        rubric_file = f"data/a2/rubric_q{q_num}.md"
+        question_file = f"data/a3/q{q_num}.md"
+        rubric_file = f"data/a3/rubric_q{q_num}.md"
         student_file = SUBMISSION_DIR / student_id / f"{question}.java"
 
         if not student_file.exists():
