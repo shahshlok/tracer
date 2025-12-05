@@ -52,6 +52,8 @@ from llm_miscons_cli import (
     DEFAULT_OUTPUT_DIR as DETECTIONS_DIR,
 )
 from llm_miscons_cli import (
+    MODELS,
+    MODEL_SHORT_NAMES,
     STRATEGIES,
     get_student_list,
     run_detection,
@@ -187,7 +189,7 @@ async def run_pipeline_async(
 
         groundtruth = load_groundtruth(DEFAULT_GROUNDTRUTH_PATH)
         manifest_full = load_manifest(DEFAULT_MANIFEST_PATH)
-        
+
         # Extract metadata
         manifest_meta = {
             "seed": manifest_full.get("seed"),
@@ -218,7 +220,7 @@ async def run_pipeline_async(
             match_mode=MatchMode.ALL,
             use_embeddings=True,
         )
-        
+
         # Compute metrics with match_mode grouping
         group_cols = ["match_mode", "strategy", "model"]
         metrics = summarize_metrics(detections_df, group_cols)
@@ -243,26 +245,26 @@ async def run_pipeline_async(
             "matcher_pr_scatter": ASSET_DIR / "matcher_pr_scatter.png",
             "matcher_strategy_grid": ASSET_DIR / "matcher_strategy_grid.png",
         }
-        
+
         # Filter to hybrid for topic-related plots
         hybrid_opps = opportunities_df[opportunities_df["match_mode"] == "hybrid"]
         hybrid_dets = detections_df[detections_df["match_mode"] == "hybrid"]
         hybrid_metrics = metrics[metrics["match_mode"] == "hybrid"].copy()
-        
+
         plot_topic_heatmap(hybrid_opps, asset_paths["heatmap"])
         plot_hallucinations(hybrid_dets, asset_paths["hallucinations"])
         plot_topic_recall_bars(hybrid_opps, asset_paths["topic_bars"])
-        
+
         # Per-misconception analysis
         misconception_stats = compute_misconception_recall(hybrid_opps, groundtruth)
         if not misconception_stats.empty:
             plot_misconception_recall_bars(misconception_stats, asset_paths["misconception_recall"])
-        
+
         # Ablation-specific plots
         plot_matcher_ablation(metrics, asset_paths["matcher_ablation"])
         plot_matcher_pr_scatter(metrics, asset_paths["matcher_pr_scatter"])
         plot_matcher_strategy_grid(metrics, asset_paths["matcher_strategy_grid"])
-        
+
         # Strategy/model comparison (use hybrid)
         if not hybrid_metrics.empty:
             plot_strategy_f1_comparison(hybrid_metrics, asset_paths["strategy_f1"])
@@ -271,15 +273,19 @@ async def run_pipeline_async(
 
         # Build asset paths for run-local report
         run_asset_paths = {k: Path("assets") / v.name for k, v in asset_paths.items()}
-        
+
         report_text = generate_report(
-            metrics, ci, opportunities_df, detections_df, run_asset_paths,
+            metrics,
+            ci,
+            opportunities_df,
+            detections_df,
+            run_asset_paths,
             misconception_stats=misconception_stats,
             dataset_summary=dataset_summary,
             manifest_meta=manifest_meta,
             match_mode="all",
         )
-        
+
         # Save run
         run_id = generate_run_id(run_tag, manifest_meta.get("seed"))
         run_dir = save_run(
@@ -299,7 +305,7 @@ async def run_pipeline_async(
         console.print(f"[green]✓ Run saved to {run_dir}[/green]")
         console.print(f"[dim]Report: {run_dir / 'report.md'}[/dim]")
         console.print(f"[dim]Data: {run_dir / 'data.json'}[/dim]")
-        
+
         results["analysis"] = {
             "run_id": run_id,
             "run_dir": str(run_dir),
@@ -342,72 +348,81 @@ def interactive():
     """Interactive mode - prompts for configuration before running."""
     console.print(create_pipeline_header())
     console.print()
-    
+
     console.print("[bold cyan]Interactive Pipeline Configuration[/bold cyan]")
     console.print()
-    
+
     # Step 1: Generation
     console.print("[bold]Step 1: Dataset Generation[/bold]")
     skip_generation = not Confirm.ask("Generate new student submissions?", default=False)
-    
+
     students = 60
     seed = None
     force = False
-    
+
     if not skip_generation:
         students = IntPrompt.ask("Number of students to generate", default=60)
         seed_input = Prompt.ask("Random seed (leave blank for auto)", default="")
         seed = int(seed_input) if seed_input else None
         force = Confirm.ask("Overwrite existing manifest if present?", default=True)
-    
+
     console.print()
-    
+
     # Step 2: Detection
     console.print("[bold]Step 2: LLM Detection[/bold]")
     skip_detection = not Confirm.ask("Run LLM misconception detection?", default=True)
-    
+
     strategy_list = STRATEGIES  # All strategies
     console.print(f"[dim]Strategies: {', '.join(STRATEGIES)}[/dim]")
-    console.print("[dim]Models: GPT-5.1, Gemini 2.5 Flash[/dim]")
-    
+    console.print(f"[dim]Models: {', '.join(MODEL_SHORT_NAMES.values())}[/dim]")
+
     console.print()
-    
+
     # Step 3: Analysis
     console.print("[bold]Step 3: Analysis[/bold]")
     skip_analysis = not Confirm.ask("Run analysis with matcher ablation?", default=True)
     console.print("[dim]Matchers: fuzzy_only, semantic_only, hybrid[/dim]")
-    
+
     console.print()
-    
+
     # Run tag
     console.print("[bold]Run Configuration[/bold]")
     run_tag = Prompt.ask("Run tag (e.g., 'run2', 'experiment_a')", default="")
     notes = Prompt.ask("Notes for this run", default="")
-    
+
     console.print()
-    
+
     # Summary
     summary = Table(box=box.SIMPLE, show_header=False)
     summary.add_column("Setting", style="bold")
     summary.add_column("Value", style="cyan")
-    
-    summary.add_row("1. Generation", "[green]SKIP[/green]" if skip_generation else f"{students} students")
-    summary.add_row("2. Detection", "[green]SKIP[/green]" if skip_detection else f"{len(strategy_list)} strategies × 2 models")
-    summary.add_row("3. Analysis", "[green]SKIP[/green]" if skip_analysis else "3 matchers (ablation)")
+
+    summary.add_row(
+        "1. Generation", "[green]SKIP[/green]" if skip_generation else f"{students} students"
+    )
+    summary.add_row(
+        "2. Detection",
+        "[green]SKIP[/green]"
+        if skip_detection
+        else f"{len(strategy_list)} strategies × {len(MODELS)} models",
+    )
+    summary.add_row(
+        "3. Analysis", "[green]SKIP[/green]" if skip_analysis else "3 matchers (ablation)"
+    )
     summary.add_row("Run tag", run_tag if run_tag else "(auto-generated)")
     if notes:
         summary.add_row("Notes", notes[:50])
-    
+
     console.print(Panel(summary, title="[bold]Configuration Summary[/bold]", border_style="blue"))
     console.print()
-    
+
     if not Confirm.ask("Proceed with pipeline?", default=True):
         console.print("[yellow]Cancelled.[/yellow]")
         return
-    
+
     console.print()
     start_time = datetime.now()
-    
+
     # Run pipeline
     asyncio.run(
         run_pipeline_async(
@@ -423,7 +438,7 @@ def interactive():
             force=force,
         )
     )
-    
+
     # Summary
     elapsed = datetime.now() - start_time
     console.print()
@@ -453,7 +468,7 @@ def run_cmd(
 
     Steps:
     1. Generate manifest + student submissions
-    2. Run misconception detection with GPT-5.1 and Gemini-2.5-Flash (4 strategies)
+    2. Run misconception detection with configured models (4 strategies)
     3. Analyze with matcher ablation and save to runs/
     """
     console.print(create_pipeline_header())
@@ -474,11 +489,11 @@ def run_cmd(
         "2. LLM Detection",
         "[green]SKIP[/green]"
         if skip_detection
-        else f"[cyan]{len(strategy_list)} strategies × 2 models[/cyan]",
+        else f"[cyan]{len(strategy_list)} strategies × {len(MODELS)} models[/cyan]",
     )
     summary.add_row(
         "3. Analysis",
-        "[green]SKIP[/green]" if skip_analysis else "[cyan]3 matchers (ablation)[/cyan]"
+        "[green]SKIP[/green]" if skip_analysis else "[cyan]3 matchers (ablation)[/cyan]",
     )
     summary.add_row("Strategies", ", ".join(strategy_list))
     summary.add_row("Run tag", run_tag if run_tag else "(auto-generated)")

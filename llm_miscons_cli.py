@@ -1,7 +1,7 @@
 """
 LLM Misconception Detection CLI
 
-Interactive CLI for detecting misconceptions in student code using GPT-5.1 and Gemini 2.5 Flash.
+Interactive CLI for detecting misconceptions in student code using multiple LLMs.
 Results are saved per prompting strategy for comparative analysis.
 """
 
@@ -32,7 +32,11 @@ app = typer.Typer(help="LLM Misconception Detection CLI")
 console = Console()
 
 # Configuration
-MODELS = ["openai/gpt-5.1", "google/gemini-2.5-flash-preview-09-2025", "deepseek/deepseek-v3.2-speciale"]
+MODELS = [
+    "openai/gpt-5.1",
+    "google/gemini-2.5-flash-preview-09-2025",
+    "deepseek/deepseek-v3.2-speciale",
+]
 MODEL_SHORT_NAMES = {
     "openai/gpt-5.1": "GPT-5.1",
     "google/gemini-2.5-flash-preview-09-2025": "Gemini-2.5-Flash-Preview",

@@ -17,6 +17,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+from itertools import combinations
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +40,37 @@ from utils.matching.hybrid import (
     precompute_gt_embeddings_for_hybrid,
 )
 from utils.matching.semantic import semantic_match_misconception
+
+from llm_miscons_cli import MODEL_SHORT_NAMES
+
+# ---------------------------------------------------------------------------
+# Model Color Palette (supports up to 8 models dynamically)
+# ---------------------------------------------------------------------------
+MODEL_COLOR_PALETTE = [
+    "#2ecc71",  # Green
+    "#3498db",  # Blue
+    "#e74c3c",  # Red
+    "#9b59b6",  # Purple
+    "#f39c12",  # Orange
+    "#1abc9c",  # Teal
+    "#e91e63",  # Pink
+    "#795548",  # Brown
+]
+
+
+def get_model_colors(models: list[str]) -> dict[str, str]:
+    """
+    Generate a color mapping for a list of model names.
+    Handles both full model names (openai/gpt-5.1) and short names (gpt-5.1).
+    """
+    colors = {}
+    for i, model in enumerate(models):
+        color = MODEL_COLOR_PALETTE[i % len(MODEL_COLOR_PALETTE)]
+        colors[model] = color
+        # Also add short name variant
+        short_name = model.split("/")[-1]
+        colors[short_name] = color
+    return colors
 
 
 # ---------------------------------------------------------------------------
@@ -533,16 +565,21 @@ def plot_strategy_f1_comparison(metrics: pd.DataFrame, path: Path) -> Path:
 
     plt.figure(figsize=(10, 6))
     strategies = df["strategy"].unique()
-    models = df["model_short"].unique()
+    models = list(df["model_short"].unique())
     x = np.arange(len(strategies))
-    width = 0.35
 
-    colors = ["#2ecc71", "#3498db"]  # Green for GPT, Blue for Gemini
+    # Dynamic width based on number of models
+    n_models = len(models)
+    total_width = 0.8  # Total width for all bars in a group
+    width = total_width / n_models
+
+    # Dynamic colors based on models
+    model_colors = get_model_colors(models)
+
     for i, model in enumerate(models):
         model_data = df[df["model_short"] == model].set_index("strategy").reindex(strategies)
-        bars = plt.bar(
-            x + i * width, model_data["f1"], width, label=model, color=colors[i % len(colors)]
-        )
+        offset = (i - (n_models - 1) / 2) * width  # Center bars around x tick
+        bars = plt.bar(x + offset, model_data["f1"], width, label=model, color=model_colors[model])
         # Add value labels on bars
         for bar, val in zip(bars, model_data["f1"]):
             if not np.isnan(val):
@@ -558,7 +595,7 @@ def plot_strategy_f1_comparison(metrics: pd.DataFrame, path: Path) -> Path:
     plt.xlabel("Strategy")
     plt.ylabel("F1 Score")
     plt.title("F1 Score by Strategy and Model")
-    plt.xticks(x + width / 2, strategies)
+    plt.xticks(x, strategies)
     plt.ylim(0, 1)
     plt.legend(title="Model")
     plt.tight_layout()
@@ -577,9 +614,11 @@ def plot_precision_recall_scatter(metrics: pd.DataFrame, path: Path) -> Path:
     plt.figure(figsize=(8, 8))
 
     # Color by model, marker by strategy
-    models = df["model_short"].unique()
+    models = list(df["model_short"].unique())
     strategies = df["strategy"].unique()
-    colors = {"gpt-5.1": "#2ecc71", "gemini-2.5-flash": "#3498db"}
+
+    # Dynamic colors based on models present in data
+    model_colors = get_model_colors(models)
     markers = {"baseline": "o", "minimal": "s", "rubric_only": "^", "socratic": "D"}
 
     for _, row in df.iterrows():
@@ -588,7 +627,7 @@ def plot_precision_recall_scatter(metrics: pd.DataFrame, path: Path) -> Path:
         plt.scatter(
             row["recall"],
             row["precision"],
-            c=colors.get(model, "#999"),
+            c=model_colors.get(model, "#999"),
             marker=markers.get(strategy, "o"),
             s=150,
             alpha=0.8,
@@ -658,7 +697,7 @@ def plot_topic_recall_bars(opportunities: pd.DataFrame, path: Path) -> Path:
 
 
 def plot_model_comparison(metrics: pd.DataFrame, path: Path) -> Path:
-    """Side-by-side comparison of GPT vs Gemini on P/R/F1 (averaged across strategies)."""
+    """Side-by-side comparison of all models on P/R/F1 (averaged across strategies)."""
     if metrics.empty:
         return path
 
@@ -667,15 +706,29 @@ def plot_model_comparison(metrics: pd.DataFrame, path: Path) -> Path:
 
     # Average across strategies
     model_avg = df.groupby("model_short")[["precision", "recall", "f1"]].mean().reset_index()
+    models = list(model_avg["model_short"])
+    n_models = len(models)
 
-    plt.figure(figsize=(8, 6))
+    plt.figure(figsize=(max(8, 2 * n_models), 6))
     x = np.arange(3)  # precision, recall, f1
-    width = 0.35
 
-    colors = ["#2ecc71", "#3498db"]
+    # Dynamic width based on number of models
+    total_width = 0.8
+    width = total_width / n_models
+
+    # Dynamic colors
+    model_colors = get_model_colors(models)
+
     for i, (_, row) in enumerate(model_avg.iterrows()):
         values = [row["precision"], row["recall"], row["f1"]]
-        bars = plt.bar(x + i * width, values, width, label=row["model_short"], color=colors[i])
+        offset = (i - (n_models - 1) / 2) * width
+        bars = plt.bar(
+            x + offset,
+            values,
+            width,
+            label=row["model_short"],
+            color=model_colors[row["model_short"]],
+        )
         for bar, val in zip(bars, values):
             plt.text(
                 bar.get_x() + bar.get_width() / 2,
@@ -689,7 +742,7 @@ def plot_model_comparison(metrics: pd.DataFrame, path: Path) -> Path:
 
     plt.ylabel("Score")
     plt.title("Model Comparison (averaged across strategies)")
-    plt.xticks(x + width / 2, ["Precision", "Recall", "F1"])
+    plt.xticks(x, ["Precision", "Recall", "F1"])
     plt.ylim(0, 0.9)
     plt.legend(title="Model")
     plt.tight_layout()
@@ -1096,7 +1149,7 @@ def render_dataset_summary(
         f"- **Generation model:** {manifest_meta.get('model', 'N/A')}",
         f"- **Match mode:** {match_mode}",
         "- **Embedding model:** text-embedding-3-large (OpenAI)",
-        "- **Detection models:** GPT-5.1, Gemini 2.5 Flash",
+        f"- **Detection models:** {', '.join(MODEL_SHORT_NAMES.values())}",
         "- **Strategies:** baseline, minimal, rubric_only, socratic",
         "",
     ]
@@ -1269,7 +1322,7 @@ def generate_report(
             "",
             "## Methods",
             "- Data: 60 students × 4 questions (seeded/clean) with manifest-driven ground truth.",
-            "- Detection: GPT-5.1 and Gemini 2.5 Flash across strategies (baseline, minimal, rubric_only, socratic).",
+            f"- Detection: {', '.join(MODEL_SHORT_NAMES.values())} across strategies (baseline, minimal, rubric_only, socratic).",
         ]
     )
 
@@ -1297,15 +1350,25 @@ def generate_report(
         models = sorted(grp["model"].unique())
         if len(models) < 2:
             continue
-        base = models[0]
-        other = models[1]
-        base_res = grp[grp["model"] == base]["success"].tolist()
-        other_res = grp[grp["model"] == other]["success"].tolist()
-        kappa = cohen_kappa(base_res, other_res)
-        stat, p, table = mcnemar(base_res, other_res)
-        agreements.append(
-            f"- {strategy}: κ={kappa:.3f}, McNemar p={p:.4f} (stat={stat:.3f}) | table={table}"
-        )
+
+        # Compare all pairs of models
+        for model_a, model_b in combinations(models, 2):
+            # Get short names for display
+            model_a_short = model_a.split("/")[-1]
+            model_b_short = model_b.split("/")[-1]
+
+            a_res = grp[grp["model"] == model_a]["success"].tolist()
+            b_res = grp[grp["model"] == model_b]["success"].tolist()
+
+            # Ensure same length (matching on student×question)
+            if len(a_res) != len(b_res):
+                continue
+
+            kappa = cohen_kappa(a_res, b_res)
+            stat, p, table = mcnemar(a_res, b_res)
+            agreements.append(
+                f"- {strategy} ({model_a_short} vs {model_b_short}): κ={kappa:.3f}, McNemar p={p:.4f} (stat={stat:.3f}) | table={table}"
+            )
     if agreements:
         report.extend(["", "## Agreement & Significance", *agreements])
 
@@ -1409,7 +1472,7 @@ def save_run(
     (run_dir / "config.json").write_text(json.dumps(config, indent=2, default=str))
     (run_dir / "manifest.json").write_text(json.dumps(manifest_full, indent=2, default=str))
     (run_dir / "report.md").write_text(report_text)
-    
+
     # Save full data export (metrics, ci, opportunities)
     full_export = {
         "metrics": metrics.to_dict(orient="records"),
@@ -1532,13 +1595,16 @@ def main(
     ),
     quick: bool = typer.Option(False, help="Quick mode (fewer bootstrap iterations)"),
     run_tag: str = typer.Option(
-        None, "--run-tag", "-t", help="Tag for this run (e.g., 'run1'). Auto-generated from seed if not provided."
+        None,
+        "--run-tag",
+        "-t",
+        help="Tag for this run (e.g., 'run1'). Auto-generated from seed if not provided.",
     ),
     notes: str = typer.Option("", "--notes", "-n", help="Notes to attach to this run"),
 ):
     """
     Analyze LLM misconception detections with configurable matching modes.
-    
+
     All results are saved to runs/<run_id>/ with:
     - report.md: Full analysis report with embedded figures
     - data.json: Complete metrics, CIs, and opportunities data
@@ -1649,7 +1715,7 @@ def main(
 
     # Build asset paths for run-local report (relative to run directory)
     run_asset_paths = {k: Path("assets") / v.name for k, v in asset_paths.items()}
-    
+
     report_text = generate_report(
         metrics,
         ci,
