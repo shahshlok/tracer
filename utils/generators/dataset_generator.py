@@ -35,17 +35,17 @@ load_dotenv()
 
 DEFAULT_MODEL = "gpt-5.1-2025-11-13"
 DEFAULT_STUDENT_COUNT = 60
-DEFAULT_OUTPUT_ROOT = Path("authentic_seeded/a3")
+DEFAULT_OUTPUT_ROOT = Path("authentic_seeded/a1")
 DEFAULT_MANIFEST_PATH = DEFAULT_OUTPUT_ROOT / "manifest.json"
 
 # Assignment-specific question files and briefs
 ASSIGNMENTS = {
-    "a2": {
+    "a1": {
         "question_files": {
-            "Q1": Path("data/a2/q1.md"),
-            "Q2": Path("data/a2/q2.md"),
-            "Q3": Path("data/a2/q3.md"),
-            "Q4": Path("data/a2/q4.md"),
+            "Q1": Path("data/a1/q1.md"),
+            "Q2": Path("data/a1/q2.md"),
+            "Q3": Path("data/a1/q3.md"),
+            "Q4": Path("data/a1/q4.md"),
         },
         "question_briefs": {
             "Q1": "Acceleration: compute (v1 - v0) / t using user input.",
@@ -53,28 +53,13 @@ ASSIGNMENTS = {
             "Q3": "Distance between two points using sqrt((x2-x1)^2 + (y2-y1)^2).",
             "Q4": "Triangle area with Heron's formula; sides from point distances (Q3 logic).",
         },
-        "groundtruth": Path("data/a2/groundtruth.json"),
-    },
-    "a3": {
-        "question_files": {
-            "Q1": Path("data/a3/q1.md"),
-            "Q2": Path("data/a3/q2.md"),
-            "Q3": Path("data/a3/q3.md"),
-            "Q4": Path("data/a3/q4.md"),
-        },
-        "question_briefs": {
-            "Q1": "Sum of Even Numbers: read 5 ints, sum only evens.",
-            "Q2": "Number Guessing Game: while loop until correct guess.",
-            "Q3": "Grade Calculator: if-else chain for letter grades.",
-            "Q4": "Right Triangle: nested loops to print asterisk pattern.",
-        },
-        "groundtruth": Path("data/a3/groundtruth.json"),
+        "groundtruth": Path("data/a1/groundtruth.json"),
     },
 }
 
 # Legacy aliases for backward compatibility
-QUESTION_FILES = ASSIGNMENTS["a2"]["question_files"]
-QUESTION_BRIEFS = ASSIGNMENTS["a2"]["question_briefs"]
+QUESTION_FILES = ASSIGNMENTS["a1"]["question_files"]
+QUESTION_BRIEFS = ASSIGNMENTS["a1"]["question_briefs"]
 
 PERSONAS = [
     "Single-letter variables, minimal whitespace, no comments.",
@@ -153,7 +138,7 @@ def choose_str(label: str, default: str) -> str:
 # --------------------------------------------------------------------------- #
 
 
-def load_question_texts(assignment: str = "a2") -> dict[str, str]:
+def load_question_texts(assignment: str = "a1") -> dict[str, str]:
     """Load full markdown for Q1-Q4 from disk for the specified assignment."""
     if assignment not in ASSIGNMENTS:
         raise ValueError(f"Unknown assignment: {assignment}. Valid: {list(ASSIGNMENTS.keys())}")
@@ -218,7 +203,7 @@ def generate_manifest(
     question_texts: dict[str, str],
     seed: int,
     student_count: int = DEFAULT_STUDENT_COUNT,
-    assignment: str = "a2",
+    assignment: str = "a1",
 ) -> dict[str, Any]:
     """Construct the manifest structure.
 
@@ -421,13 +406,8 @@ async def generate_file(
     output_path: Path,
     semaphore: asyncio.Semaphore | None = None,
     max_retries: int = 3,
-    harness: Any | None = None,
 ) -> None:
-    """Generate a single Java file.
-    
-    For SEEDED files with a harness, verifies that the output differs from
-    the clean reference. Regenerates up to max_retries times if outputs match.
-    """
+    """Generate a single Java file."""
 
     async def _call_api() -> str:
         messages = build_messages(persona, question, question_text, brief, file_entry)
@@ -449,17 +429,6 @@ async def generate_file(
             else:
                 text = await _call_api()
             cleaned = strip_code_fences(text)
-            
-            # Two-phase verification for SEEDED files
-            if harness is not None and file_entry.get("type") == "SEEDED":
-                misconception_id = file_entry.get("misconception_id")
-                is_valid, reason = await harness.verify_submission(cleaned, persona, question, misconception_id)
-                if not is_valid:
-                    # Verification failed, regenerate
-                    attempt += 1
-                    console.print(f"[yellow]{reason} for {output_path.name}, regenerating ({attempt}/{max_retries})...[/yellow]")
-                    continue
-            
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text(cleaned + "\n", encoding="utf-8")
             return
@@ -484,35 +453,16 @@ async def run_generation(
     model: str,
     concurrency: int,
     dry_run: bool = False,
-    verify: bool = True,
 ) -> None:
-    """Generate Java files from an existing manifest.
-    
-    Args:
-        verify: If True, run differential execution to verify seeded files.
-    """
+    """Generate Java files from an existing manifest."""
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assignment = manifest.get("assignment", "a2")
+    assignment = manifest.get("assignment", "a1")
     question_texts = manifest.get("question_texts") or load_question_texts(assignment)
     question_briefs = ASSIGNMENTS[assignment]["question_briefs"]
     students = manifest.get("students", [])
     semaphore = asyncio.Semaphore(concurrency) if concurrency and concurrency > 0 else None
 
     client = AsyncOpenAI()
-    
-    # Initialize verification harness if verify is enabled
-    harness = None
-    if verify:
-        from utils.verification.harness import VerificationHarness
-        misconceptions = load_misconceptions(ASSIGNMENTS[assignment]["groundtruth"])
-        harness = VerificationHarness(
-            client=client,
-            model=model,
-            assignment=assignment,
-            question_texts=question_texts,
-            question_briefs=question_briefs,
-            misconceptions=misconceptions,
-        )
 
     tasks = []
     for student in students:
@@ -535,7 +485,6 @@ async def run_generation(
                     file_entry=file_entry,
                     output_path=target_path,
                     semaphore=semaphore,
-                    harness=harness,
                 )
             )
 
@@ -570,8 +519,8 @@ async def run_generation(
 @app.command()
 def manifest(
     assignment: str = typer.Option(
-        "a2",
-        help="Assignment to generate for (a2 or a3).",
+        "a1",
+        help="Assignment to generate for.",
     ),
     manifest_path: Path = typer.Option(
         None,
@@ -616,8 +565,8 @@ def generate(
 @app.command()
 def run(
     assignment: str = typer.Option(
-        "a2",
-        help="Assignment to generate for (a2 or a3).",
+        "a1",
+        help="Assignment to generate for.",
     ),
     manifest_path: Path = typer.Option(
         None,
@@ -656,7 +605,7 @@ def interactive_main() -> None:
     """Interactive CLI entry point."""
     console.print("[bold cyan]Misconception Dataset Generator[/bold cyan]")
     defaults = {
-        "misconceptions_path": Path("data/a2/groundtruth.json"),
+        "misconceptions_path": Path("data/a1/groundtruth.json"),
         "manifest_path": DEFAULT_MANIFEST_PATH,
         "output_root": DEFAULT_OUTPUT_ROOT,
         "students": DEFAULT_STUDENT_COUNT,
