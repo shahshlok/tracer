@@ -450,13 +450,14 @@ async def generate_file(
                 text = await _call_api()
             cleaned = strip_code_fences(text)
             
-            # Differential execution check for SEEDED files
+            # Two-phase verification for SEEDED files
             if harness is not None and file_entry.get("type") == "SEEDED":
-                is_diff, reason = await harness.verify_difference(cleaned, persona, question)
-                if not is_diff and reason == "MATCH":
-                    # Bug is silent, regenerate
+                misconception_id = file_entry.get("misconception_id")
+                is_valid, reason = await harness.verify_submission(cleaned, persona, question, misconception_id)
+                if not is_valid:
+                    # Verification failed, regenerate
                     attempt += 1
-                    console.print(f"[yellow]Silent bug detected for {output_path.name}, regenerating ({attempt}/{max_retries})...[/yellow]")
+                    console.print(f"[yellow]{reason} for {output_path.name}, regenerating ({attempt}/{max_retries})...[/yellow]")
                     continue
             
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -503,12 +504,14 @@ async def run_generation(
     harness = None
     if verify:
         from utils.verification.harness import VerificationHarness
+        misconceptions = load_misconceptions(ASSIGNMENTS[assignment]["groundtruth"])
         harness = VerificationHarness(
             client=client,
             model=model,
             assignment=assignment,
             question_texts=question_texts,
             question_briefs=question_briefs,
+            misconceptions=misconceptions,
         )
 
     tasks = []

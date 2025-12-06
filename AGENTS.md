@@ -1,6 +1,6 @@
-# AGENT GUIDANCE – ensemble-eval-cli
+# AGENT GUIDANCE 
 
-This repository contains a research harness for evaluating **LLM-based misconception detection** in CS1-style programming assignments. It is designed to support synthetic experiments first, with a long-term goal of extending to real student code.
+This repository contains a research harness for evaluating **LLM-based misconception detection** in CS1-style programming assignments. It is designed to support synthetic experiments.
 
 The primary user is working toward a **Bachelor’s honours thesis** and a publishable paper in **CS education venues** (e.g., ITiCSE, SIGCSE, possibly L@S). Any agent working in this repo should prioritize:
 

@@ -1,5 +1,5 @@
 """Verification utilities for differential execution."""
 
-from .harness import VerificationHarness, run_safely, load_inputs
+from .harness import VerificationHarness, load_inputs
 
-__all__ = ["VerificationHarness", "run_safely", "load_inputs"]
+__all__ = ["VerificationHarness", "load_inputs"]
