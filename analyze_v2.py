@@ -392,15 +392,27 @@ def generate_report(
     assets_dir = run_dir / "assets"
     charts = generate_charts(df, assets_dir, groundtruth)
     
-    overall = compute_metrics(df)
-    by_strategy = metrics_by_group(df, ["strategy"])
-    by_model = metrics_by_group(df, ["model"])
-    
-    seeded = df[df["expected_id"].notna()]
-    by_category = metrics_by_group(seeded, ["expected_category"]) if not seeded.empty else pd.DataFrame()
-    
+    # For "all" mode, we need to show matcher comparison and use best (hybrid) for other sections
+    is_ablation = match_mode == "all"
     gt_map = {g["id"]: g for g in groundtruth}
-    by_misconception = metrics_by_group(seeded, ["expected_id"]) if not seeded.empty else pd.DataFrame()
+    
+    if is_ablation:
+        by_matcher = metrics_by_group(df, ["match_mode"])
+        # Use hybrid subset for main report
+        df_main = df[df["match_mode"] == "hybrid"]
+        overall = compute_metrics(df_main)
+        by_strategy = metrics_by_group(df_main, ["strategy"])
+        by_model = metrics_by_group(df_main, ["model"])
+        seeded = df_main[df_main["expected_id"].notna()]
+        by_category = metrics_by_group(seeded, ["expected_category"]) if not seeded.empty else pd.DataFrame()
+        by_misconception = metrics_by_group(seeded, ["expected_id"]) if not seeded.empty else pd.DataFrame()
+    else:
+        overall = compute_metrics(df)
+        by_strategy = metrics_by_group(df, ["strategy"])
+        by_model = metrics_by_group(df, ["model"])
+        seeded = df[df["expected_id"].notna()]
+        by_category = metrics_by_group(seeded, ["expected_category"]) if not seeded.empty else pd.DataFrame()
+        by_misconception = metrics_by_group(seeded, ["expected_id"]) if not seeded.empty else pd.DataFrame()
     
     lines = [
         "# LLM Misconception Detection: Analysis Report",
@@ -412,7 +424,26 @@ def generate_report(
         f"- **Seed:** {manifest.get('seed', 'N/A')}",
         f"- **Match Mode:** {match_mode}",
         "",
-        "## Overall Metrics",
+    ]
+    
+    # Matcher Ablation section (only for "all" mode)
+    if is_ablation:
+        lines.extend([
+            "## Matcher Ablation Study",
+            "",
+            "> Comparing fuzzy (string-based), semantic (embedding-based), and hybrid (combined) matchers.",
+            "",
+            "| Matcher | TP | FP | FN | Precision | Recall | F1 |",
+            "|---------|----|----|----|-----------| -------|-----|",
+        ])
+        for _, row in by_matcher.iterrows():
+            lines.append(f"| {row['match_mode']} | {row['tp']} | {row['fp']} | {row['fn']} | {row['precision']:.3f} | {row['recall']:.3f} | {row['f1']:.3f} |")
+        lines.append("")
+        lines.append("> **Note:** Remaining sections use **hybrid** matcher results only.")
+        lines.append("")
+    
+    lines.extend([
+        "## Overall Metrics" + (" (Hybrid)" if is_ablation else ""),
         f"| Metric | Value |",
         f"|--------|-------|",
         f"| True Positives | {overall['tp']} |",
@@ -422,7 +453,7 @@ def generate_report(
         f"| **Recall** | **{overall['recall']:.3f}** |",
         f"| **F1 Score** | **{overall['f1']:.3f}** |",
         "",
-    ]
+    ])
     
     # Strategy section
     lines.extend([
