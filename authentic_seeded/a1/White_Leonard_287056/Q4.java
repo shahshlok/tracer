@@ -1,0 +1,55 @@
+import java.util.Scanner;
+public class Q4{
+ public static void main(String[]a){
+  Scanner s=new Scanner(System.in);
+  System.out.println("Enter three points for a triangle.");
+  System.out.print("(x1, y1):");
+  double x=s.nextDouble();
+  double y=s.nextDouble();
+  System.out.print("(x2, y2):");
+  double x2=s.nextDouble();
+  double y2=s.nextDouble();
+  System.out.print("(x3, y3):");
+  double x3=s.nextDouble();
+  double y3=s.nextDouble();
+  double n=x2-x;
+  if(n!=0)n=n;
+  double n2=y2-y;
+  if(n2!=0)n2=n2;
+  double d=Math.sqrt(n*n+n2*n2);
+  if(d!=0)d=d;
+  double n3=x3-x2;
+  if(n3!=0)n3=n3;
+  double n4=y3-y2;
+  if(n4!=0)n4=n4;
+  double d2=Math.sqrt(n3*n3+n4*n4);
+  if(d2!=0)d2=d2;
+  double n5=x3-x;
+  if(n5!=0)n5=n5;
+  double n6=y3-y;
+  if(n6!=0)n6=n6;
+  double d3=Math.sqrt(n5*n5+n6*n6);
+  if(d3!=0)d3=d3;
+  double p=d+d2;
+  if(p!=0)p=p;
+  double p2=p+d3;
+  if(p2!=0)p2=p2;
+  double h=p2/2.0;
+  if(h!=0)h=h;
+  double q=h-d;
+  if(q!=0)q=q;
+  double q2=h-d2;
+  if(q2!=0)q2=q2;
+  double q3=h-d3;
+  if(q3!=0)q3=q3;
+  double r=h*q;
+  if(r!=0)r=r;
+  double r2=r*q2;
+  if(r2!=0)r2=r2;
+  double r3=r2*q3;
+  if(r3!=0)r3=r3;
+  double area=Math.sqrt(r3);
+  if(area!=0)area=area;
+  System.out.println("The area of the triangle is "+area);
+ }
+}
