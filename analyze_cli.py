@@ -92,6 +92,30 @@ class MatchResult_:
     detail: str
 
 
+def adapt_detection_fields(detection: dict[str, Any]) -> dict[str, Any]:
+    """
+    Adapt new NotionalMisconception fields to legacy matcher field names.
+    
+    New model fields -> Legacy matcher fields:
+    - inferred_category_name -> name
+    - conceptual_gap -> description  
+    - student_thought_process -> student_belief
+    - error_manifestation -> (not used, but preserved)
+    
+    This allows the existing fuzzy/semantic/hybrid matchers to work
+    without modification.
+    """
+    return {
+        "name": detection.get("inferred_category_name", detection.get("name", "")),
+        "description": detection.get("conceptual_gap", detection.get("description", "")),
+        "student_belief": detection.get("student_thought_process", detection.get("student_belief", "")),
+        "topic": detection.get("topic", ""),  # Not in new model, but needed for hybrid
+        "confidence": detection.get("confidence"),
+        "evidence": detection.get("evidence", []),
+        "error_manifestation": detection.get("error_manifestation", ""),
+    }
+
+
 def dispatch_matcher(
     detection: dict[str, Any],
     groundtruth: list[dict[str, Any]],
@@ -101,10 +125,14 @@ def dispatch_matcher(
     """
     Dispatch to the appropriate matcher based on match_mode.
     Returns a unified MatchResult_ regardless of which matcher is used.
+    
+    Automatically adapts NotionalMisconception fields to legacy format.
     """
-    name = detection.get("name", "")
-    description = detection.get("description", "")
-    student_belief = detection.get("student_belief", "")
+    # Adapt new field names to legacy format for matchers
+    adapted = adapt_detection_fields(detection)
+    name = adapted["name"]
+    description = adapted["description"]
+    student_belief = adapted["student_belief"]
 
     if match_mode == MatchMode.FUZZY_ONLY:
         matched_id, score, method = fuzzy_match_misconception(
@@ -120,7 +148,7 @@ def dispatch_matcher(
 
     elif match_mode == MatchMode.HYBRID:
         result: HybridMatchResult = hybrid_match_misconception(
-            {**detection, "topic": detection.get("topic", "")},
+            adapted,
             groundtruth,
             gt_embeddings=gt_embeddings,
         )
@@ -151,13 +179,13 @@ def callback(ctx: typer.Context):
         console.print("\nRun 'analyze --help' for more info.")
 
 
-DEFAULT_DETECTIONS_DIR = Path("detections/a3")
-DEFAULT_MANIFEST_PATH = Path("authentic_seeded/a3/manifest.json")
-DEFAULT_GROUNDTRUTH_PATH = Path("data/a3/groundtruth.json")
+DEFAULT_DETECTIONS_DIR = Path("detections/a1")
+DEFAULT_MANIFEST_PATH = Path("authentic_seeded/a1/manifest.json")
+DEFAULT_GROUNDTRUTH_PATH = Path("data/a1/groundtruth.json")
 ASSET_DIR = Path("docs/report_assets")
 REPORT_PATH = Path("thesis_report.md")
 JSON_EXPORT_PATH = Path("thesis_report.json")
-RUNS_DIR = Path("runs/a3")
+RUNS_DIR = Path("runs/a1")
 RUNS_INDEX_PATH = RUNS_DIR / "index.json"
 
 
@@ -295,7 +323,7 @@ def build_dataframes(
                                 "result": result.value,
                                 "is_clean": is_clean,
                                 "confidence": mis.get("confidence"),
-                                "detected_name": mis.get("name", ""),
+                                "detected_name": mis.get("inferred_category_name", mis.get("name", "")),
                                 "detected_topic": mis.get("topic", ""),
                                 "expected_topic": expected_topic,
                             }
