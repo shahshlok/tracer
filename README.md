@@ -1,18 +1,25 @@
-# Ensemble Model Evaluation (EME) CLI
+# LLM Notional Machine Misconception Detection Framework
 
-A research-grade framework for grading student code submissions using multiple Large Language Models, with capabilities for analyzing misconception patterns, evaluating ensemble grading strategies, and generating cross-model analytics.
+A research framework for detecting notional machine misconceptions in CS1 student code using Large Language Models. Part of a Bachelor's Honours Thesis at UBCO investigating cognitive alignment between LLMs and CS education theory.
 
-**Research Context:** Honours Thesis Research at UBCO, investigating ensemble methods for automated code grading.
+## Research Goal
 
-## Status
+> Can LLMs detect **Notional Machine** misconceptions—flawed mental models about how code executes?
 
-| Component | Status |
-|-----------|--------|
-| Pydantic Schema | v1.0.0 (stable) |
-| Evaluation Pipeline | ✅ Complete |
-| Async Batch CLI | ✅ Complete |
-| Misconception Analysis | ✅ Complete |
-| Comparison Engine | 🔄 In Progress |
+This is **not** a grading tool. It measures the **Cognitive Alignment** of LLMs with CS Education theory.
+
+## The 3-Stage Pipeline
+
+```
+┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
+│ 1. SYNTHETIC        │    │ 2. BLIND            │    │ 3. SEMANTIC         │
+│    INJECTION        │───▶│    DETECTION        │───▶│    ALIGNMENT        │
+│                     │    │                     │    │                     │
+│ groundtruth.json    │    │ 3 LLMs × 4 prompts  │    │ Fuzzy/Semantic/     │
+│ → manifest.json     │    │ → detections/       │    │ Hybrid matching     │
+│ → Java files        │    │                     │    │ → report.md         │
+└─────────────────────┘    └─────────────────────┘    └─────────────────────┘
+```
 
 ## Quick Start
 
@@ -24,171 +31,121 @@ uv sync
 
 # Configure API keys
 echo "OPENROUTER_API_KEY=sk-or-..." > .env
+echo "OPENAI_API_KEY=sk-..." >> .env
 
-# Run grading
-uv run python cli.py grade
+# Run full pipeline (interactive)
+uv run pipeline
 
-# Run misconception analysis
-uv run python cli.py analyze
+# Or run specific stages
+uv run miscons              # Generate synthetic students
+uv run llm-miscons detect   # Run LLM detection
+uv run analyze analyze      # Generate analysis report
 ```
-
-**Output:** `student_evals/{student_id}_{question}_eval.json`
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [Architecture](docs/architecture.md) | System design, data flow, and component relationships |
-| [CLI Reference](docs/cli-reference.md) | Commands, options, and usage examples |
-| [Grading Workflow](docs/grading-workflow.md) | End-to-end grading process explained |
-| [Misconception Analysis](docs/misconception-analysis.md) | Fuzzy clustering and pattern detection |
-| [Pydantic Models](docs/pydantic-models.md) | Complete data model reference |
-| [Prompt Strategies](docs/prompts.md) | Direct, Reverse, and EME grading approaches |
-| [Configuration](docs/configuration.md) | Setup, environment variables, and customization |
-
-## Features
-
-### Multi-Model Grading
-- OpenAI models (GPT-4, GPT-4o, GPT-5 series)
-- OpenRouter providers (Gemini, Claude, Llama, etc.)
-- Parallel evaluation with configurable concurrency
-- Structured output validation via Pydantic
-
-### Three Grading Strategies
-- **Direct Grading:** Evaluate code directly against rubric
-- **Reverse Grading:** Generate ideal solution, then compare
-- **EME (Ensemble Method Evaluation):** Multi-model ensemble with 100-point normalization
-
-### Misconception Detection
-- Inductive approach: models identify misconceptions from code
-- Evidence linking with code snippets and line numbers
-- Fuzzy clustering to merge similar misconception names
-- Cross-model agreement tracking
-
-### Rich Analytics
-- Per-question difficulty analysis
-- Topic-based misconception aggregation
-- Q3→Q4 progression tracking
-- Model agreement heatmaps
+| Document                                                     | Description                                               |
+| ------------------------------------------------------------ | --------------------------------------------------------- |
+| [Architecture](docs/architecture.md)                         | System design and data flow                               |
+| [CLI Reference](docs/cli-reference.md)                       | Commands and options                                      |
+| [Analysis Methodology](docs/analysis-methodology.md)         | **Complete guide to the analysis pipeline** (start here!) |
+| [Understanding the Report](docs/understanding-the-report.md) | How to read and interpret reports                         |
+| [Prompt Strategies](docs/prompts.md)                         | 4 detection strategies                                    |
+| [Matching](docs/matching.md)                                 | Fuzzy, semantic, hybrid matchers                          |
+| [Notional Machines](docs/notional-machines.md)               | Theoretical framework                                     |
+| [Development](docs/development.md)                           | Extending the framework                                   |
+| [AGENTS.md](AGENTS.md)                                       | AI agent guidance                                         |
 
 ## Project Structure
 
 ```
 ensemble-eval-cli/
-├── docs/                    # Documentation
-├── pydantic_models/         # Data models (Pydantic v2)
-│   ├── evaluation.py        # Root EvaluationDocument
-│   ├── context/             # Course/assignment metadata
-│   ├── submission/          # Student files
-│   ├── rubric/              # Grading criteria
-│   ├── models/              # Per-model evaluations
-│   └── comparison/          # Multi-model analysis
-├── prompts/                 # Grading strategies
-│   ├── direct_prompt.py
-│   ├── reverse_prompt.py
-│   └── eme_prompt.py
-├── utils/                   # Core utilities
-│   ├── grading.py           # Grading orchestration
-│   ├── openrouter_sdk.py    # LLM integration
-│   ├── misconception_analyzer.py
-│   └── comparison_generator.py
-├── data/a2/                 # Questions and rubrics
-├── student_submissions/     # Input: student code
-├── student_evals/           # Output: evaluation JSONs
-└── cli.py                   # Main CLI entry point
+├── data/a1/                 # Ground truth and questions
+│   ├── groundtruth.json     # Misconception taxonomy (8 types)
+│   └── q*.md                # Question prompts
+├── authentic_seeded/a1/     # Generated student files
+│   ├── manifest.json        # Student→misconception mapping
+│   └── {Student_Name}/      # Java files
+├── detections/a1/           # LLM detection outputs
+│   ├── baseline/
+│   ├── taxonomy/
+│   ├── cot/
+│   └── socratic/
+├── runs/a1/                 # Analysis results
+│   └── run_{id}/
+│       ├── report.md
+│       ├── config.json
+│       └── assets/          # Visualizations
+├── prompts/strategies.py    # 4 prompt strategies
+├── utils/
+│   ├── matching/            # Fuzzy, semantic, hybrid
+│   ├── generators/          # Synthetic data generation
+│   └── llm/                 # OpenRouter API
+├── pipeline.py              # Full pipeline orchestrator
+├── analyze_cli.py           # Metrics and reporting
+└── llm_miscons_cli.py       # Detection CLI
 ```
 
-## Usage
+## The 5 Notional Machines
 
-### Interactive Mode
+| Category                | Belief                         | Example Misconception      |
+| ----------------------- | ------------------------------ | -------------------------- |
+| **Reactive State**      | Variables update automatically | Early Calculation          |
+| **Anthropomorphic I/O** | Computer reads prompt text     | Prompt-Logic Mismatch      |
+| **Fluid Type**          | Division always gives decimals | Integer Division Blindness |
+| **Algebraic Syntax**    | Math notation works in code    | XOR as Power               |
+| **Void Machine**        | Methods modify in place        | The Void Assumption        |
+
+## Detection Models
+
+| Model            | Provider  |
+| ---------------- | --------- |
+| GPT-5.1          | OpenAI    |
+| Gemini-2.5-Flash | Google    |
+| Claude Haiku-4.5 | Anthropic |
+
+Plus `:reasoning` variants for each.
+
+## Prompt Strategies
+
+| Strategy     | Philosophy                            |
+| ------------ | ------------------------------------- |
+| **baseline** | Simple error classification (control) |
+| **taxonomy** | Explicit notional machine categories  |
+| **cot**      | Chain-of-thought execution tracing    |
+| **socratic** | Mental model probing                  |
+
+## Sample Results
+
+From a typical run (hybrid matcher):
+
+| Metric                     | Value                    |
+| -------------------------- | ------------------------ |
+| Potential Recall (Ceiling) | 100%                     |
+| Average Recall             | 86%                      |
+| Best F1                    | 0.84 (Gemini + baseline) |
+
+## Environment Variables
 
 ```bash
-uv run python cli.py
-```
-
-Presents a menu:
-1. **Grade Students** - Run batch grading
-2. **Analyze Misconceptions** - Analyze existing evaluations
-3. **Exit**
-
-### Direct Commands
-
-```bash
-# Grade all students in student_submissions/
-uv run python cli.py grade
-
-# Analyze misconceptions from student_evals/
-uv run python cli.py analyze
-```
-
-### Sandbox Experiment
-
-```bash
-# Single-student evaluation for testing
-uv run python sandbox/single_submission.py
-```
-
-## Output Format
-
-Evaluations are saved as JSON files conforming to the `EvaluationDocument` schema:
-
-```json
-{
-  "evaluation_id": "eval_abc123",
-  "schema_version": "1.0.0",
-  "context": { "course_id": "COSC121", "question_id": "q1" },
-  "submission": { "student_id": "Chen_Wei_200023", "files": [...] },
-  "rubric": { "total_points": 4, "categories": [...] },
-  "models": {
-    "google/gemini-2.5-flash-lite": { "scores": {...}, "misconceptions": [...] },
-    "openai/gpt-5-nano": { "scores": {...}, "misconceptions": [...] }
-  }
-}
-```
-
-## Configuration
-
-### Environment Variables
-
-```bash
-# Required for OpenRouter models
-OPENROUTER_API_KEY=sk-or-...
-
-# Optional: Direct OpenAI access
-OPENAI_API_KEY=sk-...
-```
-
-### In-Code Configuration (`cli.py`)
-
-```python
-MAX_CONCURRENT_STUDENTS = 5  # Reduce if hitting rate limits
-BATCH_LIMIT = 25             # Students per batch
-MODELS = [
-    "google/gemini-2.5-flash-lite",
-    "openai/gpt-5-nano",
-]
-```
-
-## Testing
-
-```bash
-uv run pytest
-uv run pytest -v  # Verbose
+OPENROUTER_API_KEY=sk-or-...  # Required: LLM API access
+OPENAI_API_KEY=sk-...         # Required: Semantic matching
 ```
 
 ## Research Context
 
-**Project:** Honours Thesis - Ensemble Model Evaluation for Code Grading  
+**Project:** Honours Thesis - LLM Detection of Notional Machine Misconceptions  
 **Institution:** University of British Columbia Okanagan (UBCO)  
 **Researcher:** Shlok Shah  
-**Academic Year:** 2024-2025
+**Academic Year:** 2024-2025  
+**Target Venue:** ITiCSE/SIGCSE
 
 ## Citation
 
 ```bibtex
-@software{eme_framework_2025,
+@software{misconception_framework_2025,
   author = {Shah, Shlok},
-  title = {Ensemble Model Evaluation Framework for Code Grading},
+  title = {LLM Notional Machine Misconception Detection Framework},
   year = {2025},
   institution = {University of British Columbia Okanagan},
   note = {Honours Thesis Research Project}
