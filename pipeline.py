@@ -69,15 +69,13 @@ from llm_miscons_cli import (
 
 # Import from existing modules
 from utils.generators.dataset_generator import (
-    DEFAULT_MANIFEST_PATH,
     DEFAULT_MODEL,
-    DEFAULT_OUTPUT_ROOT,
-    generate_manifest,
-    load_misconceptions,
-    load_question_texts,
-    run_generation,
-    write_manifest,
+    run_pipeline as run_synthetic_pipeline,
 )
+
+# Constants for defaults
+DEFAULT_OUTPUT_ROOT = Path("authentic_seeded/a1")
+DEFAULT_MANIFEST_PATH = DEFAULT_OUTPUT_ROOT / "manifest.json"
 
 app = typer.Typer(
     help="Full pipeline: generate -> detect -> analyze",
@@ -124,31 +122,14 @@ async def run_pipeline_async(
         console.print(f"[dim]Students: {students}[/dim]")
         console.print()
 
-        # Generate manifest
-        console.print("[cyan]Generating manifest...[/cyan]")
-        question_texts = load_question_texts()
-        misconceptions = load_misconceptions(Path("data/a3/groundtruth.json"))
-        manifest_data = generate_manifest(
-            misconceptions, question_texts, seed=seed, student_count=students
-        )
-
-        try:
-            write_manifest(manifest_data, DEFAULT_MANIFEST_PATH, force=force)
-        except FileExistsError:
-            console.print("[yellow]Manifest exists. Use --force to overwrite.[/yellow]")
-            if typer.confirm("Overwrite existing manifest?", default=False):
-                write_manifest(manifest_data, DEFAULT_MANIFEST_PATH, force=True)
-            else:
-                console.print("[yellow]Using existing manifest.[/yellow]")
-
-        # Generate Java files
-        console.print()
-        console.print("[cyan]Generating student submissions via OpenAI...[/cyan]")
-        await run_generation(
-            manifest_path=DEFAULT_MANIFEST_PATH,
-            output_root=DEFAULT_OUTPUT_ROOT,
+        # Generate Dataset (Manifest + Files included)
+        console.print("[cyan]Running unified synthetic pipeline...[/cyan]")
+        await run_synthetic_pipeline(
+            assignment="a1",
+            student_count=students,
             model=DEFAULT_MODEL,
-            concurrency=concurrency,
+            output_root=DEFAULT_OUTPUT_ROOT,
+            seed=seed,
         )
         console.print("[green]✓ Dataset generation complete[/green]")
         console.print()
