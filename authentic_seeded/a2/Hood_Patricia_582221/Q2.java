@@ -1,0 +1,42 @@
+import java.util.*;
+
+public class Q2 {
+
+  public static void main(String[] args) {
+
+      Scanner input = new Scanner(System.in);
+      Random rand = new Random();
+
+      int a = 100;
+   int b = 1;
+		int c = rand.nextInt(a) + b;
+
+      int secret_number = c;
+
+      int guess_count = 0;
+   int userGuess = 0;
+
+      System.out.print("Guess a number (1-100): ");
+	      userGuess = input.nextInt();
+
+
+      while (userGuess != secret_number) {
+
+         guess_count = guess_count + 1;
+
+         int diff = userGuess - secret_number;
+
+         if (diff == 0) {
+            System.out.println("Correct! You took " + guess_count + " guesses.");
+         } else if (diff > 0) {
+            System.out.println("Too high!");
+         } else {
+      System.out.println("Too low!");
+         }
+
+      }
+
+      input.close();
+  }
+
+}
