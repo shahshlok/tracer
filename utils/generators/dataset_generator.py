@@ -86,6 +86,10 @@ class TestCase:
     name: str
     input: str
     expected_output: str
+    # If True, expected_output must be the ONLY relevant content (no extra letters for Q3)
+    exclusive: bool = False
+    # If set, this string must NOT appear in output
+    forbidden_output: str | None = None
 
 
 @dataclass
@@ -237,24 +241,36 @@ TEST_CASES = {
     },
     "a2": {
         "Q1": [
-            TestCase("sample", "3 8 2 7 4", "14"),
+            # All evens: Accumulator reset bug would give 10 (last even), not 30
             TestCase("all_evens", "2 4 6 8 10", "30"),
+            # Single even at end: Off-by-one (4 iterations) would miss the 2
+            TestCase("last_even_matters", "1 3 5 7 2", "2"),
+            # No evens: Accumulator reset bug might still give 0, but good sanity check
             TestCase("no_evens", "1 3 5 7 9", "0"),
         ],
         "Q2": [
-            # Guessing game - just check it terminates and says "Correct"
-            TestCase("exhaust", "\n".join(str(i) for i in range(1, 101)), "Correct"),
+            # Infinite loop will timeout (10s) and fail.
+            # We send all guesses so eventually one matches.
+            TestCase("terminates", "\n".join(str(i) for i in range(1, 101)), "Correct"),
         ],
         "Q3": [
-            TestCase("A_grade", "95", "A"),
-            TestCase("B_grade", "85", "B"),
-            TestCase("C_grade", "75", "C"),
-            TestCase("D_grade", "65", "D"),
-            TestCase("F_grade", "55", "F"),
+            # Mutually exclusive fallacy: 95 prints both A AND B
+            # We check A appears but B must NOT appear
+            TestCase("A_not_B", "95", "A", exclusive=False, forbidden_output="B"),
+            TestCase("B_not_C", "85", "B", exclusive=False, forbidden_output="C"),
+            # Boundary: 90 is A, 89 is B (dangling else might fail here)
+            TestCase("boundary_90", "90", "A", exclusive=False, forbidden_output="B"),
+            TestCase("boundary_60", "60", "D", exclusive=False, forbidden_output="F"),
+            TestCase("fail_grade", "55", "F"),
         ],
         "Q4": [
-            TestCase("height_4", "4", "****"),
+            # Off-by-one: height 4 with row < height gives only 3 rows
+            # Check that last row has 4 stars (correct code must have this)
+            TestCase("height_4_last_row", "4", "****"),
+            # Height 1 should have single star
             TestCase("height_1", "1", "*"),
+            # Height 3 should have 3 stars in last row  
+            TestCase("height_3_last_row", "3", "***"),
         ],
     },
 }
@@ -295,8 +311,20 @@ def run_tests(java_source: str, test_cases: list[TestCase]) -> tuple[int, int, l
             failures.append(f"{tc.name}: Execution failed - {stderr}")
             continue
         
-        # Check if expected output is in stdout (flexible matching)
-        if tc.expected_output in stdout or tc.expected_output.rstrip('0').rstrip('.') in stdout:
+        # Check if expected output is in stdout
+        output_contains_expected = (
+            tc.expected_output in stdout or 
+            tc.expected_output.rstrip('0').rstrip('.') in stdout
+        )
+        
+        # Check forbidden output if specified
+        if tc.forbidden_output and tc.forbidden_output in stdout:
+            failures.append(
+                f"{tc.name}: Found forbidden '{tc.forbidden_output}' in output: '{stdout.strip()}'"
+            )
+            continue
+        
+        if output_contains_expected:
             passed += 1
         else:
             failures.append(f"{tc.name}: Expected '{tc.expected_output}' in output, got '{stdout.strip()}'")
