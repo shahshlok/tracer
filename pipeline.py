@@ -42,6 +42,7 @@ from analyze_cli import (
     plot_matcher_ablation,
     plot_matcher_pr_scatter,
     plot_matcher_strategy_grid,
+    plot_mcnemar_bar_chart,
     plot_misconception_recall_bars,
     plot_model_agreement_matrix,
     plot_model_comparison,
@@ -52,6 +53,8 @@ from analyze_cli import (
     plot_topic_recall_by_model,
     save_run,
     summarize_metrics,
+    cohen_kappa,
+    mcnemar,
 )
 from llm_miscons_cli import (
     DEFAULT_OUTPUT_DIR as DETECTIONS_DIR,
@@ -235,6 +238,7 @@ async def run_pipeline_async(
             "topic_recall_by_model": ASSET_DIR / "topic_recall_by_model.png",
             "model_agreement_matrix": ASSET_DIR / "model_agreement_matrix.png",
             "confidence_calibration": ASSET_DIR / "confidence_calibration.png",
+            "mcnemar_chart": ASSET_DIR / "mcnemar_chart.png",
         }
 
         # Filter to hybrid for topic-related plots
@@ -266,6 +270,23 @@ async def run_pipeline_async(
         plot_topic_recall_by_model(hybrid_opps, asset_paths["topic_recall_by_model"])
         plot_model_agreement_matrix(hybrid_opps, asset_paths["model_agreement_matrix"])
         plot_confidence_calibration_distribution(hybrid_dets, asset_paths["confidence_calibration"])
+
+        # Build agreement data for McNemar chart
+        from itertools import combinations
+        agreement_rows = []
+        for strategy, grp in hybrid_opps.groupby("strategy"):
+            models = sorted(grp["model"].unique())
+            for model_a, model_b in combinations(models, 2):
+                a_res = grp[grp["model"] == model_a]["success"].tolist()
+                b_res = grp[grp["model"] == model_b]["success"].tolist()
+                if len(a_res) == len(b_res):
+                    stat, p, _ = mcnemar(a_res, b_res)
+                    agreement_rows.append({
+                        "model_a": model_a.split("/")[-1],
+                        "model_b": model_b.split("/")[-1],
+                        "mcnemar_p": p,
+                    })
+        plot_mcnemar_bar_chart(agreement_rows, asset_paths["mcnemar_chart"])
 
         # RQ1: Compute Diagnostic Ceiling metrics
         ceiling_stats = compute_potential_recall(opportunities_df)

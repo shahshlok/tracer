@@ -853,7 +853,8 @@ def plot_matcher_ablation(metrics: pd.DataFrame, path: Path) -> Path:
     x = np.arange(len(matcher_avg))
     width = 0.25
 
-    colors = {"fuzzy_only": "#e74c3c", "semantic_only": "#3498db", "hybrid": "#2ecc71"}
+    # Consistent colors for each metric across all matchers
+    metric_colors = {"precision": "#e74c3c", "recall": "#3498db", "f1": "#2ecc71"}
 
     # Plot precision, recall, F1 side by side for each matcher
     for i, metric in enumerate(["precision", "recall", "f1"]):
@@ -863,8 +864,8 @@ def plot_matcher_ablation(metrics: pd.DataFrame, path: Path) -> Path:
             values,
             width,
             label=metric.capitalize(),
-            color=[colors.get(m, "#999") for m in matcher_avg["match_mode"]] if i == 0 else None,
-            alpha=0.8 if i == 0 else 0.6 + i * 0.15,
+            color=metric_colors[metric],
+            alpha=0.85,
         )
         for bar, val in zip(bars, values):
             plt.text(
@@ -901,9 +902,13 @@ def plot_matcher_pr_scatter(metrics: pd.DataFrame, path: Path) -> Path:
     colors = {"fuzzy_only": "#e74c3c", "semantic_only": "#3498db", "hybrid": "#2ecc71"}
     markers = {"fuzzy_only": "o", "semantic_only": "s", "hybrid": "^"}
 
+    # Create main axes and inset axes for fuzzy zoom
+    fig, ax_main = plt.subplots(figsize=(12, 8))
+    
+    # Main plot (semantic + hybrid focus)
     for match_mode in metrics["match_mode"].unique():
         subset = metrics[metrics["match_mode"] == match_mode]
-        plt.scatter(
+        ax_main.scatter(
             subset["recall"],
             subset["precision"],
             c=colors.get(match_mode, "#999"),
@@ -918,17 +923,39 @@ def plot_matcher_pr_scatter(metrics: pd.DataFrame, path: Path) -> Path:
         p = np.linspace(0.01, 1, 100)
         r = (f1 * p) / (2 * p - f1)
         valid = (r > 0) & (r <= 1)
-        plt.plot(r[valid], p[valid], "--", color="gray", alpha=0.3, linewidth=1)
+        ax_main.plot(r[valid], p[valid], "--", color="gray", alpha=0.3, linewidth=1)
 
-    plt.xlabel("Recall")
-    plt.ylabel("Precision")
-    plt.title("Precision-Recall by Matcher (each point = strategy × model)")
-    plt.xlim(0.3, 1.0)
-    plt.ylim(0.3, 0.85)
-    plt.legend(title="Matcher")
-    plt.grid(True, alpha=0.3)
+    ax_main.set_xlabel("Recall", fontsize=12)
+    ax_main.set_ylabel("Precision", fontsize=12)
+    ax_main.set_title("Precision-Recall by Matcher (each point = strategy × model)", fontsize=14)
+    ax_main.set_xlim(0.0, 1.0)
+    ax_main.set_ylim(0.0, 0.85)
+    ax_main.legend(title="Matcher", loc="upper right")
+    ax_main.grid(True, alpha=0.3)
+
+    # Inset axes for fuzzy zoom (bottom-left cluster)
+    ax_inset = fig.add_axes([0.15, 0.55, 0.25, 0.3])  # [left, bottom, width, height]
+    fuzzy_data = metrics[metrics["match_mode"] == "fuzzy_only"]
+    if not fuzzy_data.empty:
+        ax_inset.scatter(
+            fuzzy_data["recall"],
+            fuzzy_data["precision"],
+            c="#e74c3c",
+            marker="o",
+            s=60,
+            alpha=0.8,
+        )
+        ax_inset.set_xlim(0, 0.25)
+        ax_inset.set_ylim(0, 0.15)
+        ax_inset.set_xlabel("Recall", fontsize=9)
+        ax_inset.set_ylabel("Precision", fontsize=9)
+        ax_inset.set_title("Fuzzy Zoom", fontsize=10)
+        ax_inset.grid(True, alpha=0.3)
+        ax_inset.patch.set_edgecolor("black")
+        ax_inset.patch.set_linewidth(2)
+
     plt.tight_layout()
-    plt.savefig(path, dpi=200)
+    plt.savefig(path, dpi=200, bbox_inches="tight")
     plt.close()
     return path
 
@@ -972,6 +999,135 @@ def plot_matcher_strategy_grid(metrics: pd.DataFrame, path: Path) -> Path:
     plt.savefig(path, dpi=200)
     plt.close()
     return path
+
+
+def plot_mcnemar_bar_chart(agreement_data: list[dict], path: Path) -> Path:
+    """
+    Bar chart showing McNemar test p-values for model pairs.
+    Significant pairs (p < 0.05) are highlighted in red.
+    """
+    if not agreement_data:
+        return path
+
+    # Filter to unique model pairs (aggregate across strategies)
+    from collections import defaultdict
+    pair_pvals = defaultdict(list)
+    for row in agreement_data:
+        key = (row["model_a"], row["model_b"])
+        pair_pvals[key].append(row["mcnemar_p"])
+    
+    # Average p-value per pair
+    pairs = []
+    for (model_a, model_b), p_list in pair_pvals.items():
+        avg_p = sum(p_list) / len(p_list)
+        pairs.append({
+            "label": f"{model_a[:8]}...\nvs\n{model_b[:8]}...",
+            "p_value": avg_p,
+            "significant": avg_p < 0.05,
+        })
+    
+    # Sort by p-value (lowest first = most significant)
+    pairs.sort(key=lambda x: x["p_value"])
+    
+    # Take top 15 for readability
+    pairs = pairs[:15]
+    
+    if not pairs:
+        return path
+    
+    fig, ax = plt.subplots(figsize=(14, 7))
+    x = np.arange(len(pairs))
+    colors = ["#e74c3c" if p["significant"] else "#95a5a6" for p in pairs]
+    
+    bars = ax.bar(x, [p["p_value"] for p in pairs], color=colors, alpha=0.8, edgecolor="black")
+    
+    # Significance threshold line
+    ax.axhline(y=0.05, color="red", linestyle="--", linewidth=2, label="α = 0.05")
+    
+    ax.set_xlabel("Model Pair", fontsize=11)
+    ax.set_ylabel("p-value (avg across strategies)", fontsize=11)
+    ax.set_title("McNemar's Test: Model Pair Significance", fontsize=14, fontweight="bold")
+    ax.set_xticks(x)
+    ax.set_xticklabels([p["label"] for p in pairs], rotation=45, ha="right", fontsize=8)
+    ax.legend(loc="upper right")
+    ax.set_ylim(0, min(1.0, max(p["p_value"] for p in pairs) * 1.2))
+    ax.grid(axis="y", alpha=0.3)
+    
+    # Add count annotations
+    sig_count = sum(1 for p in pairs if p["significant"])
+    ax.text(0.02, 0.98, f"Significant: {sig_count}/{len(pairs)}", 
+            transform=ax.transAxes, fontsize=10, va="top", 
+            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5))
+    
+    plt.tight_layout()
+    plt.savefig(path, dpi=200, bbox_inches="tight")
+    plt.close()
+    return path
+
+
+def compute_model_rankings(metrics: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute model rankings based on average F1 score across ALL matchers.
+    Returns DataFrame with Rank, Model, Avg F1, Best Config, Worst Config.
+    """
+    if metrics.empty:
+        return pd.DataFrame()
+    
+    data = metrics.copy()
+    
+    # Get model short names
+    data["model_short"] = data["model"].apply(lambda m: m.split("/")[-1])
+    
+    # Create config column combining match_mode + strategy
+    if "match_mode" in data.columns:
+        data["config"] = data["match_mode"] + " / " + data["strategy"]
+    else:
+        data["config"] = data["strategy"]
+    
+    # Compute average F1 per model
+    model_stats = []
+    for model in data["model_short"].unique():
+        model_data = data[data["model_short"] == model]
+        avg_f1 = model_data["f1"].mean()
+        best_idx = model_data["f1"].idxmax()
+        worst_idx = model_data["f1"].idxmin()
+        model_stats.append({
+            "model_short": model,
+            "avg_f1": avg_f1,
+            "best_config": model_data.loc[best_idx, "config"],
+            "best_f1": model_data.loc[best_idx, "f1"],
+            "worst_config": model_data.loc[worst_idx, "config"],
+            "worst_f1": model_data.loc[worst_idx, "f1"],
+        })
+    
+    rankings = pd.DataFrame(model_stats)
+    rankings = rankings.sort_values("avg_f1", ascending=False).reset_index(drop=True)
+    rankings["rank"] = range(1, len(rankings) + 1)
+    
+    return rankings
+
+
+def render_model_leaderboard(rankings: pd.DataFrame) -> str:
+    """Render model leaderboard as markdown table."""
+    if rankings.empty:
+        return ""
+    
+    lines = [
+        "## Model Leaderboard",
+        "",
+        "> Ranking by average F1 across all matchers and strategies.",
+        "",
+        "| Rank | Model | Avg F1 | Best Config (F1) | Worst Config (F1) |",
+        "|------|-------|--------|------------------|-------------------|",
+    ]
+    
+    for _, row in rankings.iterrows():
+        lines.append(
+            f"| {row['rank']} | {row['model_short']} | {row['avg_f1']:.3f} | {row['best_config']} ({row['best_f1']:.2f}) | {row['worst_config']} ({row['worst_f1']:.2f}) |"
+        )
+    
+    lines.append("")
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -1829,6 +1985,11 @@ def generate_report(
             ]
         )
 
+    # Model Leaderboard (ranking best to worst)
+    model_rankings = compute_model_rankings(metrics)
+    if not model_rankings.empty:
+        report.append(render_model_leaderboard(model_rankings))
+
     # RQ1: Diagnostic Ceiling section
     if ceiling_stats:
         report.append(render_potential_recall_section(ceiling_stats))
@@ -1857,9 +2018,6 @@ def generate_report(
                 f"![Matcher Strategy Grid]({asset_paths.get('matcher_strategy_grid', '')})"
                 if asset_paths.get("matcher_strategy_grid")
                 else "",
-                "",
-                "### Full Results Table",
-                render_metrics_table(metrics, ci, include_match_mode=True),
                 "",
             ]
         )
@@ -2078,6 +2236,22 @@ def generate_report(
             report.append(
                 f"| {row['strategy']} | {row['model_a']} | {row['model_b']} | {row['mcnemar_stat']:.2f} | {row['mcnemar_p']:.4f} | {sig} | {row['both_correct']} | {row['only_a']} | {row['only_b']} | {row['both_wrong']} |"
             )
+
+        # McNemar bar chart
+        if asset_paths.get("mcnemar_chart"):
+            report.extend([
+                "",
+                f"![McNemar Significance Chart]({asset_paths.get('mcnemar_chart')})",
+            ])
+
+    # Full Results Table at the end (for ablation mode)
+    if is_ablation:
+        report.extend([
+            "",
+            "## Full Results Table",
+            "",
+            render_metrics_table(metrics, ci, include_match_mode=True),
+        ])
 
     return "\n".join(report)
 
@@ -2361,7 +2535,7 @@ def main(
         detections_df,
         group_cols=group_cols,
         unit_cols=["student", "question"],
-        iters=150 if quick else 400,
+        iters=10 if quick else 400,
     )
 
     display_summary(metrics)
