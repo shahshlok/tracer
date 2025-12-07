@@ -524,11 +524,18 @@ def plot_topic_heatmap(opportunities: pd.DataFrame, path: Path) -> Path:
     pivot = df.pivot_table(
         index="topic", columns="strategy_model", values="success", aggfunc="mean"
     ).fillna(0)
-    plt.figure(figsize=(12, max(4, 0.4 * len(pivot))))
-    sns.heatmap(pivot, annot=True, fmt=".2f", cmap="YlGnBu", vmin=0, vmax=1)
-    plt.title("Recall by Topic (strategy | model)")
+    # Increase figure width and height for better readability
+    plt.figure(figsize=(16, max(6, 0.6 * len(pivot))))
+    ax = sns.heatmap(pivot, annot=True, fmt=".2f", cmap="YlGnBu", vmin=0, vmax=1)
+    plt.title("Recall by Topic (strategy | model)", fontsize=14, fontweight="bold")
+    # Rotate x-axis labels 45 degrees for readability
+    plt.xticks(rotation=45, ha="right", fontsize=9)
+    # Ensure full y-axis label visibility
+    plt.yticks(fontsize=10)
+    ax.set_ylabel("Notional Machine Category", fontsize=11)
+    ax.set_xlabel("Strategy | Model", fontsize=11)
     plt.tight_layout()
-    plt.savefig(path, dpi=200)
+    plt.savefig(path, dpi=200, bbox_inches="tight")
     plt.close()
     return path
 
@@ -574,10 +581,11 @@ def plot_hallucinations(df: pd.DataFrame, path: Path) -> Path:
     top = fps["label"].value_counts().head(10).reset_index()
     top.columns = ["name", "count"]
     plt.figure(figsize=(10, 6))
-    sns.barplot(data=top, y="name", x="count", palette="Reds_r")
-    plt.title("Top Hallucinated Misconceptions (FP)")
+    # Use categorical color palette (deep) instead of all-red shades
+    sns.barplot(data=top, y="name", x="count", palette="deep")
+    plt.title("Top Hallucinated Misconceptions (FP)", fontsize=13, fontweight="bold")
     plt.xlabel("Count")
-    plt.ylabel("")
+    plt.ylabel("Misconception")
     plt.tight_layout()
     plt.savefig(path, dpi=200)
     plt.close()
@@ -1735,7 +1743,7 @@ def render_dataset_summary(
         "## Dataset & Run Configuration",
         "",
         "### Dataset Summary",
-        "- **Assignment:** A2 – Kinematics & Geometry (CS1)",
+        "- **Assignment:** A1 – Kinematics & Geometry (CS1)",
         f"- **Students:** {summary.get('total_students', 'N/A')}",
         f"- **Questions:** {summary.get('total_questions', 'N/A')} ({', '.join(summary.get('questions', []))})",
         f"- **Total files:** {summary.get('total_files', 'N/A')}",
@@ -2001,7 +2009,8 @@ def generate_report(
     else:
         opps_for_agreement = opportunities
 
-    agreements = []
+    # Collect agreement data for tables
+    agreement_rows = []
     for strategy, grp in opps_for_agreement.groupby("strategy"):
         models = sorted(grp["model"].unique())
         if len(models) < 2:
@@ -2022,11 +2031,58 @@ def generate_report(
 
             kappa = cohen_kappa(a_res, b_res)
             stat, p, table = mcnemar(a_res, b_res)
-            agreements.append(
-                f"- {strategy} ({model_a_short} vs {model_b_short}): κ={kappa:.3f}, McNemar p={p:.4f} (stat={stat:.3f}) | table={table}"
+            agreement_rows.append({
+                "strategy": strategy,
+                "model_a": model_a_short,
+                "model_b": model_b_short,
+                "kappa": kappa,
+                "mcnemar_stat": stat,
+                "mcnemar_p": p,
+                "both_correct": table["both_correct"],
+                "only_a": table["only_a"],
+                "only_b": table["only_b"],
+                "both_wrong": table["both_wrong"],
+            })
+    
+    if agreement_rows:
+        report.extend([
+            "",
+            "## Agreement & Significance",
+            "",
+            "### Cohen's Kappa (Inter-Model Agreement)",
+            "",
+            "| Strategy | Model A | Model B | Cohen's κ | Interpretation |",
+            "|----------|---------|---------|-----------|----------------|",
+        ])
+        for row in agreement_rows:
+            # Interpret kappa
+            k = row["kappa"]
+            if k >= 0.8:
+                interp = "Almost Perfect"
+            elif k >= 0.6:
+                interp = "Substantial"
+            elif k >= 0.4:
+                interp = "Moderate"
+            elif k >= 0.2:
+                interp = "Fair"
+            else:
+                interp = "Slight"
+            report.append(
+                f"| {row['strategy']} | {row['model_a']} | {row['model_b']} | {k:.3f} | {interp} |"
             )
-    if agreements:
-        report.extend(["", "## Agreement & Significance", *agreements])
+        
+        report.extend([
+            "",
+            "### McNemar's Test (Significance of Differences)",
+            "",
+            "| Strategy | Model A | Model B | χ² Stat | p-value | Significant? | Both✓ | A only | B only | Both✗ |",
+            "|----------|---------|---------|---------|---------|--------------|-------|--------|--------|-------|",
+        ])
+        for row in agreement_rows:
+            sig = "Yes" if row["mcnemar_p"] < 0.05 else "No"
+            report.append(
+                f"| {row['strategy']} | {row['model_a']} | {row['model_b']} | {row['mcnemar_stat']:.2f} | {row['mcnemar_p']:.4f} | {sig} | {row['both_correct']} | {row['only_a']} | {row['only_b']} | {row['both_wrong']} |"
+            )
 
     return "\n".join(report)
 
