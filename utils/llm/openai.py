@@ -59,12 +59,21 @@ async def get_reasoning_response(
 
     input_text = messages[-1].get("content", "")
 
-    parsed = await client.responses.parse(
-        model=model,
-        input=input_text,
-        text_format=response_model,
-        reasoning={"effort": "medium"},
-    )
+    # Prefer explicit reasoning configuration when supported by the installed SDK.
+    try:
+        parsed = await client.responses.parse(
+            model=model,
+            input=input_text,
+            text_format=response_model,
+            reasoning={"effort": "medium"},
+        )
+    except TypeError:
+        # Older SDKs may not support the `reasoning` parameter; fall back gracefully.
+        parsed = await client.responses.parse(
+            model=model,
+            input=input_text,
+            text_format=response_model,
+        )
 
     for output in parsed.output:
         for item in output.content:

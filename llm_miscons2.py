@@ -50,19 +50,41 @@ DEFAULT_OUTPUT_DIR = Path("detections/a3_openai")
 QUESTIONS_DIR = Path("data/a3")
 
 
-def get_student_list() -> list[str]:
-    if not SUBMISSION_DIR.exists():
-        return []
-    return sorted(
-        [d.name for d in SUBMISSION_DIR.iterdir() if d.is_dir() and not d.name.startswith(".")]
-    )
-
-
 def load_manifest() -> dict[str, Any]:
     manifest_path = SUBMISSION_DIR / "manifest.json"
     if not manifest_path.exists():
         return {}
     return json.loads(manifest_path.read_text())
+
+
+def get_student_list() -> list[str]:
+    if not SUBMISSION_DIR.exists():
+        return []
+
+    manifest = load_manifest()
+    students: list[str] = []
+
+    if manifest and "students" in manifest:
+        for entry in manifest["students"]:
+            folder = entry.get("folder_name")
+            if not folder:
+                continue
+            student_dir = SUBMISSION_DIR / folder
+            if not student_dir.is_dir():
+                continue
+            # Require all four question files to be present for inclusion.
+            if all((student_dir / f"Q{i}.java").exists() for i in range(1, 5)):
+                students.append(folder)
+    else:
+        students = sorted(
+            [
+                d.name
+                for d in SUBMISSION_DIR.iterdir()
+                if d.is_dir() and not d.name.startswith(".")
+            ]
+        )
+
+    return students
 
 
 def load_question_text(question: str) -> str:
@@ -200,6 +222,7 @@ async def run_detection(
                 stats["successful"] += 1
 
                 output_file = strategy_dir / f"{result['student']}_{result['question']}.json"
+                output_file.parent.mkdir(parents=True, exist_ok=True)
                 output_file.write_text(json.dumps(result, indent=2))
 
                 for model_key in result["models"]:
@@ -217,6 +240,7 @@ async def run_detection(
     stats["students_processed"] = len(students)
 
     stats_file = strategy_dir / "_stats.json"
+    stats_file.parent.mkdir(parents=True, exist_ok=True)
     stats_file.write_text(json.dumps(stats, indent=2))
 
     return stats

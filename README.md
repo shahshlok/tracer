@@ -134,10 +134,10 @@ OPENAI_API_KEY=sk-...         # Required: Semantic matching
 
 ## Research Context
 
-**Project:** Honours Thesis - LLM Detection of Notional Machine Misconceptions  
-**Institution:** University of British Columbia Okanagan (UBCO)  
-**Researcher:** Shlok Shah  
-**Academic Year:** 2024-2025  
+**Project:** Honours Thesis - LLM Detection of Notional Machine Misconceptions
+**Institution:** University of British Columbia Okanagan (UBCO)
+**Researcher:** Shlok Shah
+**Academic Year:** 2024-2025
 **Target Venue:** ITiCSE/SIGCSE
 
 ## Citation
