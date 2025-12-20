@@ -1,7 +1,7 @@
 """
-LLM Misconception Detection CLI (OpenAI + Anthropic)
+LLM Misconception Detection CLI (OpenAI + Anthropic + Gemini)
 
-Uses the official OpenAI Responses API and Anthropic Messages API via utils.llm
+Uses the official OpenAI Responses API, Anthropic Messages API, and Google GenAI SDK via utils.llm
 to run multiple models and prompting strategies for notional machine misconception detection.
 """
 
@@ -25,29 +25,37 @@ from prompts.strategies import PromptStrategy, build_prompt
 from pydantic_models import LLMDetectionResponse
 from utils.llm import openai as openai_client
 from utils.llm import anthropic as anthropic_client
+from utils.llm import gemini as gemini_client
 
 load_dotenv()
 
-app = typer.Typer(help="LLM Misconception Detection CLI (OpenAI + Anthropic)")
+app = typer.Typer(help="LLM Misconception Detection CLI (OpenAI + Anthropic + Gemini)")
 console = Console()
 
 OPENAI_MODELS = ["gpt-5.2-2025-12-11"]
 ANTHROPIC_MODELS = ["claude-haiku-4-5-20251001"]
+GEMINI_MODELS = ["gemini-3-flash-preview"]
 
 MODEL_SHORT_NAMES = {
     "gpt-5.2-2025-12-11": "GPT-5.2",
     "claude-haiku-4-5-20251001": "Claude-Haiku",
+    "gemini-3-flash-preview": "Gemini-3-Flash",
 }
 
 REASONING_SHORT_NAMES = {
     "gpt-5.2-2025-12-11:reasoning": "GPT-5.2-R",
     "claude-haiku-4-5-20251001:reasoning": "Claude-Haiku-R",
+    "gemini-3-flash-preview:reasoning": "Gemini-3-Flash-R",
 }
 
 ALL_MODEL_SHORT_NAMES = {**MODEL_SHORT_NAMES, **REASONING_SHORT_NAMES}
 
 STRATEGIES = ["baseline", "taxonomy", "cot", "socratic"]
-MAX_CONCURRENCY = 15
+
+# Reduced concurrency to avoid rate limiting on Tier 1 accounts
+# Anthropic Tier 1: 50 RPM, OpenAI/Gemini have higher limits
+# With 6 models per task, 5 concurrent tasks = 30 parallel requests max
+MAX_CONCURRENCY = 5
 
 SUBMISSION_DIR = Path("authentic_seeded/a3")
 DEFAULT_OUTPUT_DIR = Path("detections/a3_multi")
@@ -56,6 +64,7 @@ QUESTIONS_DIR = Path("data/a3")
 # Provider mapping for models
 OPENAI_MODEL_SET = set(OPENAI_MODELS)
 ANTHROPIC_MODEL_SET = set(ANTHROPIC_MODELS)
+GEMINI_MODEL_SET = set(GEMINI_MODELS)
 
 
 def load_manifest() -> dict[str, Any]:
@@ -85,11 +94,7 @@ def get_student_list() -> list[str]:
                 students.append(folder)
     else:
         students = sorted(
-            [
-                d.name
-                for d in SUBMISSION_DIR.iterdir()
-                if d.is_dir() and not d.name.startswith(".")
-            ]
+            [d.name for d in SUBMISSION_DIR.iterdir() if d.is_dir() and not d.name.startswith(".")]
         )
 
     return students
@@ -117,12 +122,28 @@ async def detect_for_file(
         # Route to the correct provider
         if model in OPENAI_MODEL_SET:
             if use_reasoning:
-                return await openai_client.get_reasoning_response(messages, LLMDetectionResponse, model=model)
-            return await openai_client.get_structured_response(messages, LLMDetectionResponse, model=model)
+                return await openai_client.get_reasoning_response(
+                    messages, LLMDetectionResponse, model=model
+                )
+            return await openai_client.get_structured_response(
+                messages, LLMDetectionResponse, model=model
+            )
         elif model in ANTHROPIC_MODEL_SET:
             if use_reasoning:
-                return await anthropic_client.get_reasoning_response(messages, LLMDetectionResponse, model=model)
-            return await anthropic_client.get_structured_response(messages, LLMDetectionResponse, model=model)
+                return await anthropic_client.get_reasoning_response(
+                    messages, LLMDetectionResponse, model=model
+                )
+            return await anthropic_client.get_structured_response(
+                messages, LLMDetectionResponse, model=model
+            )
+        elif model in GEMINI_MODEL_SET:
+            if use_reasoning:
+                return await gemini_client.get_reasoning_response(
+                    messages, LLMDetectionResponse, model=model
+                )
+            return await gemini_client.get_structured_response(
+                messages, LLMDetectionResponse, model=model
+            )
         else:
             raise ValueError(f"Unknown model provider for: {model}")
     except Exception as e:
@@ -162,7 +183,7 @@ async def process_student_question(
             }
 
         # Build model configs for all providers
-        all_models = OPENAI_MODELS + ANTHROPIC_MODELS
+        all_models = OPENAI_MODELS + ANTHROPIC_MODELS + GEMINI_MODELS
         model_configs = [(model, model, False) for model in all_models]
         if include_reasoning:
             model_configs.extend([(f"{model}:reasoning", model, True) for model in all_models])
@@ -203,7 +224,7 @@ async def run_detection(
     questions = ["Q1", "Q2", "Q3", "Q4"]
     total_tasks = len(students) * len(questions)
 
-    all_models = OPENAI_MODELS + ANTHROPIC_MODELS
+    all_models = OPENAI_MODELS + ANTHROPIC_MODELS + GEMINI_MODELS
     all_model_keys = list(all_models)
     if include_reasoning:
         all_model_keys.extend([f"{m}:reasoning" for m in all_models])
@@ -267,7 +288,11 @@ async def run_detection(
 
 def create_header():
     title = Text("NOTIONAL MACHINE DETECTOR", style="bold white on blue", justify="center")
-    subtitle = Text("LLM-based Misconception Discovery (OpenAI + Anthropic)", style="italic cyan", justify="center")
+    subtitle = Text(
+        "LLM-based Misconception Discovery (OpenAI + Anthropic + Gemini)",
+        style="italic cyan",
+        justify="center",
+    )
     return Panel(
         Text.assemble(title, "\n", subtitle),
         box=box.DOUBLE,
@@ -344,7 +369,7 @@ def detect(
     console.print()
     console.print(f"[cyan]Running {strategy} on {len(student_list)} students...[/cyan]")
     console.print()
-    all_models = OPENAI_MODELS + ANTHROPIC_MODELS
+    all_models = OPENAI_MODELS + ANTHROPIC_MODELS + GEMINI_MODELS
     console.print(
         f"[dim]Models: {len(all_models)} base + {0 if no_reasoning else len(all_models)} reasoning[/dim]"
     )
