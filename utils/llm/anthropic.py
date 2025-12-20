@@ -55,6 +55,7 @@ async def get_structured_response(
 
     kwargs: dict = {
         "model": model,
+        "max_tokens": 8192,
         "messages": filtered_messages,
         "betas": [STRUCTURED_OUTPUTS_BETA],
         "output_format": response_model,
@@ -85,12 +86,13 @@ async def get_reasoning_response(
 
     kwargs: dict = {
         "model": model,
+        "max_tokens": 16000,
         "messages": filtered_messages,
         "betas": [STRUCTURED_OUTPUTS_BETA],
         "output_format": response_model,
         "thinking": {
             "type": "enabled",
-            "budget_tokens": 10000,  # Medium effort equivalent
+            "budget_tokens": 5000,  # Medium effort equivalent
         },
     }
     if system_content:
