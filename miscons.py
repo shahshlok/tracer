@@ -1,8 +1,8 @@
 """
-LLM Misconception Detection CLI (OpenAI variant)
+LLM Misconception Detection CLI (OpenAI + Anthropic)
 
-Uses the official OpenAI Responses API via utils.llm.openai to run multiple
-models and prompting strategies for notional machine misconception detection.
+Uses the official OpenAI Responses API and Anthropic Messages API via utils.llm
+to run multiple models and prompting strategies for notional machine misconception detection.
 """
 
 import asyncio
@@ -23,21 +23,25 @@ from rich.text import Text
 
 from prompts.strategies import PromptStrategy, build_prompt
 from pydantic_models import LLMDetectionResponse
-from utils.llm.openai import get_reasoning_response, get_structured_response
+from utils.llm import openai as openai_client
+from utils.llm import anthropic as anthropic_client
 
 load_dotenv()
 
-app = typer.Typer(help="LLM Misconception Detection CLI (OpenAI, GPT-5.2 only)")
+app = typer.Typer(help="LLM Misconception Detection CLI (OpenAI + Anthropic)")
 console = Console()
 
-MODELS = ["gpt-5.2-2025-12-11"]
+OPENAI_MODELS = ["gpt-5.2-2025-12-11"]
+ANTHROPIC_MODELS = ["claude-haiku-4-5-20251001"]
 
 MODEL_SHORT_NAMES = {
     "gpt-5.2-2025-12-11": "GPT-5.2",
+    "claude-haiku-4-5-20251001": "Claude-Haiku",
 }
 
 REASONING_SHORT_NAMES = {
     "gpt-5.2-2025-12-11:reasoning": "GPT-5.2-R",
+    "claude-haiku-4-5-20251001:reasoning": "Claude-Haiku-R",
 }
 
 ALL_MODEL_SHORT_NAMES = {**MODEL_SHORT_NAMES, **REASONING_SHORT_NAMES}
@@ -46,8 +50,12 @@ STRATEGIES = ["baseline", "taxonomy", "cot", "socratic"]
 MAX_CONCURRENCY = 30
 
 SUBMISSION_DIR = Path("authentic_seeded/a3")
-DEFAULT_OUTPUT_DIR = Path("detections/a3_openai")
+DEFAULT_OUTPUT_DIR = Path("detections/a3_multi")
 QUESTIONS_DIR = Path("data/a3")
+
+# Provider mapping for models
+OPENAI_MODEL_SET = set(OPENAI_MODELS)
+ANTHROPIC_MODEL_SET = set(ANTHROPIC_MODELS)
 
 
 def load_manifest() -> dict[str, Any]:
@@ -106,9 +114,17 @@ async def detect_for_file(
     messages = [{"role": "user", "content": prompt}]
 
     try:
-        if use_reasoning:
-            return await get_reasoning_response(messages, LLMDetectionResponse, model=model)
-        return await get_structured_response(messages, LLMDetectionResponse, model=model)
+        # Route to the correct provider
+        if model in OPENAI_MODEL_SET:
+            if use_reasoning:
+                return await openai_client.get_reasoning_response(messages, LLMDetectionResponse, model=model)
+            return await openai_client.get_structured_response(messages, LLMDetectionResponse, model=model)
+        elif model in ANTHROPIC_MODEL_SET:
+            if use_reasoning:
+                return await anthropic_client.get_reasoning_response(messages, LLMDetectionResponse, model=model)
+            return await anthropic_client.get_structured_response(messages, LLMDetectionResponse, model=model)
+        else:
+            raise ValueError(f"Unknown model provider for: {model}")
     except Exception as e:
         console.print(f"[red]Error with {ALL_MODEL_SHORT_NAMES.get(model, model)}: {e}[/red]")
         return LLMDetectionResponse(misconceptions=[])
@@ -145,9 +161,11 @@ async def process_student_question(
                 "reason": str(e),
             }
 
-        model_configs = [(model, model, False) for model in MODELS]
+        # Build model configs for all providers
+        all_models = OPENAI_MODELS + ANTHROPIC_MODELS
+        model_configs = [(model, model, False) for model in all_models]
         if include_reasoning:
-            model_configs.extend([(f"{model}:reasoning", model, True) for model in MODELS])
+            model_configs.extend([(f"{model}:reasoning", model, True) for model in all_models])
 
         tasks = [
             detect_for_file(model_id, problem_description, student_code, strategy, use_reasoning)
@@ -185,9 +203,10 @@ async def run_detection(
     questions = ["Q1", "Q2", "Q3", "Q4"]
     total_tasks = len(students) * len(questions)
 
-    all_model_keys = list(MODELS)
+    all_models = OPENAI_MODELS + ANTHROPIC_MODELS
+    all_model_keys = list(all_models)
     if include_reasoning:
-        all_model_keys.extend([f"{m}:reasoning" for m in MODELS])
+        all_model_keys.extend([f"{m}:reasoning" for m in all_models])
 
     stats: dict[str, Any] = {
         "total_processed": 0,
@@ -248,7 +267,7 @@ async def run_detection(
 
 def create_header():
     title = Text("NOTIONAL MACHINE DETECTOR", style="bold white on blue", justify="center")
-    subtitle = Text("LLM-based Misconception Discovery (OpenAI)", style="italic cyan", justify="center")
+    subtitle = Text("LLM-based Misconception Discovery (OpenAI + Anthropic)", style="italic cyan", justify="center")
     return Panel(
         Text.assemble(title, "\n", subtitle),
         box=box.DOUBLE,
@@ -324,8 +343,10 @@ def detect(
     console.print(create_header())
     console.print()
     console.print(f"[cyan]Running {strategy} on {len(student_list)} students...[/cyan]")
+    console.print()
+    all_models = OPENAI_MODELS + ANTHROPIC_MODELS
     console.print(
-        f"[dim]Models: {len(MODELS)} base + {0 if no_reasoning else len(MODELS)} reasoning[/dim]"
+        f"[dim]Models: {len(all_models)} base + {0 if no_reasoning else len(all_models)} reasoning[/dim]"
     )
     console.print()
 
