@@ -1,7 +1,6 @@
 import os
 from typing import TypeVar
 
-import instructor
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -10,13 +9,11 @@ from tenacity import retry, stop_after_attempt, wait_exponential, wait_random
 load_dotenv()
 
 T = TypeVar("T", bound=BaseModel)
+DEFAULT_MODEL = os.getenv("OPENAI_DEFAULT_MODEL", "gpt-5.2-2025-12-11")
 
-DEFAULT_MODEL = os.getenv("OPENAI_DEFAULT_MODEL", "gpt-5.1")
 
-client = instructor.from_openai(
-    AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY")),
-    mode=instructor.Mode.RESPONSES_TOOLS,
-)
+def _client() -> AsyncOpenAI:
+    return AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 @retry(
@@ -31,13 +28,14 @@ async def get_structured_response(
     if not messages:
         raise ValueError("messages must contain at least one item")
 
-    input_text = messages[-1].get("content", "")
-
-    return await client.responses.create(
+    response = await _client().responses.parse(
         model=model,
-        input=input_text,
-        response_model=response_model,
+        input=messages,
+        text_format=response_model,
     )
+    if response.output_parsed is None:
+        raise ValueError("OpenAI response missing parsed output")
+    return response.output_parsed
 
 
 @retry(
@@ -53,20 +51,12 @@ async def get_reasoning_response(
     if not messages:
         raise ValueError("messages must contain at least one item")
 
-    input_text = messages[-1].get("content", "")
-
-    # For reasoning models, we attempt to pass reasoning configuration.
-    try:
-        return await client.responses.create(
-            model=model,
-            input=input_text,
-            response_model=response_model,
-            reasoning={"effort": "medium"},
-        )
-    except (TypeError, Exception):
-        # Fallback if reasoning parameter is not supported
-        return await client.responses.create(
-            model=model,
-            input=input_text,
-            response_model=response_model,
-        )
+    response = await _client().responses.parse(
+        model=model,
+        input=messages,
+        text_format=response_model,
+        reasoning={"effort": "medium"},
+    )
+    if response.output_parsed is None:
+        raise ValueError("OpenAI response missing parsed output")
+    return response.output_parsed

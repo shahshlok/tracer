@@ -23,8 +23,7 @@ from rich.text import Text
 
 from prompts.strategies import PromptStrategy, build_prompt
 from pydantic_models import LLMDetectionResponse
-from utils.llm.openrouter import get_structured_response
-from utils.llm.openrouter_reasoning import get_reasoning_response
+from utils.llm.router import get_structured_response, get_reasoning_response
 
 load_dotenv()
 
