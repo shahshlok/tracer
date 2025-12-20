@@ -1,6 +1,7 @@
 import os
 from typing import TypeVar
 
+import instructor
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -12,7 +13,10 @@ T = TypeVar("T", bound=BaseModel)
 
 DEFAULT_MODEL = os.getenv("OPENAI_DEFAULT_MODEL", "gpt-5.1")
 
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = instructor.from_openai(
+    AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY")),
+    mode=instructor.Mode.JSON_SCHEMA,
+)
 
 
 @retry(
