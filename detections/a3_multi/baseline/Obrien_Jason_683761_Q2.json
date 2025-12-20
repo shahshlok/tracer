@@ -1,0 +1,194 @@
+{
+  "student": "Obrien_Jason_683761",
+  "question": "Q2",
+  "strategy": "baseline",
+  "status": "success",
+  "models": {
+    "gpt-5.2-2025-12-11": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "No bug / correct notional model for parallel-array sorting",
+          "student_thought_process": "The student believes they must sort the scores array and perform the exact same swaps on the names array so the (name, score) pairing stays aligned, then take the last element as the maximum after ascending sort.",
+          "conceptual_gap": "No conceptual gap detected here: the code correctly models how array elements move during swapping and maintains parallel-array alignment during sorting. The approach of sorting ascending and then selecting index N-1 correctly yields the highest score.",
+          "error_manifestation": "None for valid inputs matching the problem statement (N >= 1, N names, N integer scores). Output matches the required behavior.",
+          "confidence": 0.86,
+          "evidence": [
+            {
+              "line_number": 27,
+              "code_snippet": "// bubble sort using math-like swapping\nfor (int i = 0; i < N - 1; i++) {\n  for (int j = 0; j < N - 1 - i; j++) {\n    int a = scores_array[j];\n    int b = scores_array[j + 1];\n    int c = a - b;\n\n    if (c > 0) {\n      int temp_score = scores_array[j];\n      scores_array[j] = scores_array[j + 1];\n      scores_array[j + 1] = temp_score;\n\n      String temp_name = names[j];\n      names[j] = names[j + 1];\n      names[j + 1] = temp_name;\n    }\n  }\n}"
+            },
+            {
+              "line_number": 49,
+              "code_snippet": "int index_of_top = N - 1;\nString topName = names[index_of_top];\nint topScore = scores_array[index_of_top];\nSystem.out.println(\"Top student: \" + topName + \" (\" + topScore + \")\");"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Overreliance on arithmetic comparison with potential overflow",
+          "student_thought_process": "The student believes comparing two integers by subtracting them (a - b) is always safe and equivalent to a direct comparison like (a > b).",
+          "conceptual_gap": "In Java, int arithmetic can overflow. If scores were near Integer.MIN_VALUE/Integer.MAX_VALUE, a - b could overflow and flip sign, leading to incorrect ordering decisions. While typical CS1 'scores' won\u2019t hit those extremes, the mental model that subtraction is always a safe comparator is flawed.",
+          "error_manifestation": "Potential wrong sort order for extreme integer values due to overflow in `c = a - b`, which would then produce an incorrect 'top student'.",
+          "confidence": 0.42,
+          "evidence": [
+            {
+              "line_number": 33,
+              "code_snippet": "int a = scores_array[j];\nint b = scores_array[j + 1];\nint c = a - b;\n\nif (c > 0) {"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "claude-haiku-4-5-20251001": {
+      "misconceptions": [],
+      "count": 0
+    },
+    "gemini-3-flash-preview": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Arithmetic Comparison Reliability",
+          "student_thought_process": "The student believes that calculating the difference between two integers (a - b) and checking if the result is greater than zero is a universally correct and safe way to determine if 'a' is greater than 'b'.",
+          "conceptual_gap": "In Java's notional machine, 'int' types are fixed-width 32-bit signed integers. Unlike real-world mathematics, subtracting a very large negative number from a large positive number can result in integer overflow (e.g., Integer.MAX_VALUE - (-1) results in Integer.MIN_VALUE). This causes the 'c > 0' check to fail even when 'a' is indeed greater than 'b'.",
+          "error_manifestation": "wrong output",
+          "confidence": 0.8,
+          "evidence": [
+            {
+              "line_number": 31,
+              "code_snippet": "int c = a - b;"
+            },
+            {
+              "line_number": 33,
+              "code_snippet": "if (c > 0)"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Array Index Safety Assumption",
+          "student_thought_process": "The student believes that accessing the index 'N - 1' is always a valid operation for an array of size 'N', without considering the specific state where 'N' is zero.",
+          "conceptual_gap": "The student assumes that because 'N' represents the count of items, 'N - 1' will always point to the final item. However, in the Java execution model, if N=0, the expression 'N - 1' evaluates to -1, which is outside the bounds of any array and triggers a runtime exception.",
+          "error_manifestation": "runtime exception",
+          "confidence": 0.7,
+          "evidence": [
+            {
+              "line_number": 45,
+              "code_snippet": "int index_of_top = N - 1;"
+            },
+            {
+              "line_number": 46,
+              "code_snippet": "String topName = names[index_of_top];"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Redundant Value Retrieval",
+          "student_thought_process": "The student believes that values held in local variables (like 'a') are less authoritative or persistent than the values stored directly in the array, necessitating a re-read of the array during the swap process.",
+          "conceptual_gap": "The student fails to fully utilize the local variable 'a' which already holds the value of 'scores_array[j]'. In the Java notional machine, a primitive variable assignment creates a snapshot of the value that remains consistent until the variable itself is reassigned; re-accessing the array index is redundant and suggests a lack of confidence in variable-value persistence.",
+          "error_manifestation": "none",
+          "confidence": 0.6,
+          "evidence": [
+            {
+              "line_number": 29,
+              "code_snippet": "int a = scores_array[j];"
+            },
+            {
+              "line_number": 34,
+              "code_snippet": "int temp_score = scores_array[j];"
+            }
+          ]
+        }
+      ],
+      "count": 3
+    },
+    "gpt-5.2-2025-12-11:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Comparison-by-subtraction is always safe",
+          "student_thought_process": "The student believes they can safely compare two integers by subtracting them (c = a - b) and checking the sign, and that this will always behave the same as using relational operators.",
+          "conceptual_gap": "In Java, `int` arithmetic can overflow/underflow silently (wrap around). If `a` and `b` are far apart (near `Integer.MAX_VALUE`/`Integer.MIN_VALUE`), `a - b` can overflow and flip sign, causing the comparison to be wrong. The correct mental model is that `int` is fixed-width (32-bit) and subtraction is not an unbounded \u043c\u0430\u0442\u0435\u043c\u0430\u0442ical integer operation.",
+          "error_manifestation": "Potential wrong sorting order (logic error) for extreme score values; usually hidden on small/typical CS1 inputs.",
+          "confidence": 0.62,
+          "evidence": [
+            {
+              "line_number": 31,
+              "code_snippet": "int c = a - b;"
+            },
+            {
+              "line_number": 33,
+              "code_snippet": "if (c > 0) {"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Assuming non-empty input when indexing arrays",
+          "student_thought_process": "The student believes it is always valid to take the 'top student' as `N - 1` after sorting, without considering that `N` could be 0.",
+          "conceptual_gap": "Array indices must be within `[0, N-1]`. If `N == 0`, then `N - 1` is `-1`, and accessing `names[-1]` / `scores_array[-1]` throws an exception. A correct model includes checking preconditions (e.g., `N > 0`) before indexing.",
+          "error_manifestation": "Runtime exception (`ArrayIndexOutOfBoundsException`) if `N` is 0.",
+          "confidence": 0.55,
+          "evidence": [
+            {
+              "line_number": 45,
+              "code_snippet": "int index_of_top = N - 1;"
+            },
+            {
+              "line_number": 46,
+              "code_snippet": "String topName = names[index_of_top];"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "claude-haiku-4-5-20251001:reasoning": {
+      "misconceptions": [],
+      "count": 0
+    },
+    "gemini-3-flash-preview:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Mathematical Comparison Substitution",
+          "student_thought_process": "The student believes that in order to compare two numeric values for sorting, they must first perform a mathematical subtraction and check the sign of the result, rather than using a direct relational operator.",
+          "conceptual_gap": "The student is unaware that relational operators (like > or <) are the standard and safer way to compare primitives. This 'math-like' approach introduces risks such as integer overflow (e.g., if a is a large positive number and b is a large negative number, a - b could overflow and return a negative result, leading to an incorrect comparison).",
+          "error_manifestation": "logical error (potential for incorrect sorting with extreme values)",
+          "confidence": 0.7,
+          "evidence": [
+            {
+              "line_number": 31,
+              "code_snippet": "int a = scores_array[j];"
+            },
+            {
+              "line_number": 32,
+              "code_snippet": "int b = scores_array[j + 1];"
+            },
+            {
+              "line_number": 33,
+              "code_snippet": "int c = a - b;"
+            },
+            {
+              "line_number": 35,
+              "code_snippet": "if (c > 0)"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Unnecessary Primitive Extraction",
+          "student_thought_process": "The student believes that array elements must be 'extracted' into local variables before they can be used in an expression or comparison, rather than operating on the array elements directly.",
+          "conceptual_gap": "The student does not fully realize that array access expressions (e.g., scores_array[j]) evaluate to values and can be used directly in any context where a variable of that type is allowed.",
+          "error_manifestation": "style issue/logic redundancy",
+          "confidence": 0.6,
+          "evidence": [
+            {
+              "line_number": 31,
+              "code_snippet": "int a = scores_array[j];"
+            },
+            {
+              "line_number": 35,
+              "code_snippet": "if (c > 0)"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    }
+  },
+  "timestamp": "2025-12-20T11:00:51.163966+00:00"
+}
