@@ -27,17 +27,17 @@ from utils.llm.openai import get_reasoning_response, get_structured_response
 
 load_dotenv()
 
-app = typer.Typer(help="LLM Misconception Detection CLI (OpenAI, GPT-5.1 only)")
+app = typer.Typer(help="LLM Misconception Detection CLI (OpenAI, GPT-5.2 only)")
 console = Console()
 
-MODELS = ["gpt-5.1"]
+MODELS = ["gpt-5.2-2025-12-11"]
 
 MODEL_SHORT_NAMES = {
-    "gpt-5.1": "GPT-5.1",
+    "gpt-5.2-2025-12-11": "GPT-5.2",
 }
 
 REASONING_SHORT_NAMES = {
-    "gpt-5.1:reasoning": "GPT-5.1-R",
+    "gpt-5.2-2025-12-11:reasoning": "GPT-5.2-R",
 }
 
 ALL_MODEL_SHORT_NAMES = {**MODEL_SHORT_NAMES, **REASONING_SHORT_NAMES}
