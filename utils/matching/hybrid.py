@@ -66,7 +66,8 @@ def hybrid_match_misconception(
 
     # Semantic match
     sem_id, sem_score, sem_method = semantic_match_misconception(
-        name, description, belief, groundtruth, threshold=semantic_threshold
+        name, description, belief, groundtruth, threshold=semantic_threshold,
+        precomputed_gt_embeddings=gt_embeddings,
     )
 
     candidates: dict[str, dict[str, float | str]] = {}
@@ -82,7 +83,8 @@ def hybrid_match_misconception(
     if not candidates:
         # Try semantic again with best-scoring candidate even if below threshold
         fallback_id, fallback_sem_score, _ = semantic_match_misconception(
-            name, description, belief, groundtruth, threshold=0.0
+            name, description, belief, groundtruth, threshold=0.0,
+            precomputed_gt_embeddings=gt_embeddings,
         )
         if fallback_id:
             candidates[fallback_id] = {

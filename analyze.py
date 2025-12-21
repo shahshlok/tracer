@@ -234,10 +234,13 @@ def build_results_df(
                                 adapted["description"],
                                 adapted["student_belief"],
                                 groundtruth,
+                                precomputed_gt_embeddings=gt_embeddings,
                             )
                             fuzzy_score, semantic_score = 0.0, match_score
                         else:  # hybrid
-                            result = hybrid_match_misconception(adapted, groundtruth)
+                            result = hybrid_match_misconception(
+                                adapted, groundtruth, gt_embeddings=gt_embeddings
+                            )
                             matched_id = result.matched_id
                             match_score = result.score
                             fuzzy_score = result.fuzzy_score

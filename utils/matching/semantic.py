@@ -75,6 +75,7 @@ def semantic_match_misconception(
     detected_student_belief: str,
     groundtruth: list[dict[str, Any]],
     threshold: float = 0.7,
+    precomputed_gt_embeddings: dict[str, list[float]] | None = None,
 ) -> tuple[str | None, float, str]:
     """
     Match a detected misconception using semantic embeddings.
@@ -85,6 +86,7 @@ def semantic_match_misconception(
         detected_student_belief: The student_belief field from detection
         groundtruth: List of groundtruth misconception definitions
         threshold: Minimum similarity to consider a match
+        precomputed_gt_embeddings: Optional dict of {gt_id: embedding} for faster matching
 
     Returns:
         Tuple of (matched_id, similarity_score, "semantic")
@@ -108,20 +110,29 @@ def semantic_match_misconception(
     best_match_id = None
     best_score = 0.0
 
-    for gt in groundtruth:
-        gt_text = build_groundtruth_text(gt)
-        if not gt_text.strip():
-            continue
-
-        try:
-            gt_embedding = get_embedding(gt_text)
+    # Use precomputed embeddings if available (much faster!)
+    if precomputed_gt_embeddings:
+        for gt_id, gt_embedding in precomputed_gt_embeddings.items():
             similarity = cosine_similarity(detection_embedding, gt_embedding)
-
             if similarity > best_score:
                 best_score = similarity
-                best_match_id = gt.get("id")
-        except Exception:
-            continue
+                best_match_id = gt_id
+    else:
+        # Fallback: compute embeddings on the fly (slow!)
+        for gt in groundtruth:
+            gt_text = build_groundtruth_text(gt)
+            if not gt_text.strip():
+                continue
+
+            try:
+                gt_embedding = get_embedding(gt_text)
+                similarity = cosine_similarity(detection_embedding, gt_embedding)
+
+                if similarity > best_score:
+                    best_score = similarity
+                    best_match_id = gt.get("id")
+            except Exception:
+                continue
 
     if best_score >= threshold:
         return best_match_id, best_score, "semantic"
