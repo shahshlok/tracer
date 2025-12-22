@@ -61,7 +61,8 @@ NULL_TEMPLATE_THRESHOLD = 0.80
 
 # Noise floor: detections below this score are "pedantic" (e.g., "didn't close Scanner")
 # and should be filtered out rather than counted as hallucinations
-NOISE_FLOOR_THRESHOLD = 0.45
+# Raised from 0.45 to 0.55 based on FP mean score of 0.59
+NOISE_FLOOR_THRESHOLD = 0.55
 
 # Semantic match threshold: lowered from 0.70 to capture more edge-case TPs
 # TP mean is ~0.774, FP mean is ~0.586, so 0.65 is a good separator
@@ -133,6 +134,43 @@ def adapt_detection(mis: dict[str, Any]) -> dict[str, str]:
     }
 
 
+# Keyword patterns that indicate "no misconception found" responses
+NULL_KEYWORD_PATTERNS = [
+    "no misconception",
+    "no conceptual gap",
+    "no error",
+    "correct understanding",
+    "correctly understood",
+    "proper understanding",
+    "code is correct",
+    "logic is correct",
+    "no flawed",
+    "not a misconception",
+    "no issues",
+    "functions correctly",
+    "works correctly",
+    "no bug",
+    "no logical error",
+]
+
+
+def is_null_keyword_match(mis: dict[str, Any]) -> bool:
+    """
+    Fast keyword-based check for "no misconception" responses.
+
+    Checks the inferred_category_name and conceptual_gap fields for
+    common phrases indicating the LLM found nothing wrong.
+    """
+    name = mis.get("inferred_category_name", "").lower()
+    gap = mis.get("conceptual_gap", "").lower()
+    combined = f"{name} {gap}"
+
+    for pattern in NULL_KEYWORD_PATTERNS:
+        if pattern in combined:
+            return True
+    return False
+
+
 def build_null_template_embeddings() -> list[list[float]]:
     try:
         return [get_embedding(t) for t in NULL_TEMPLATES]
@@ -144,6 +182,18 @@ def build_null_template_embeddings() -> list[list[float]]:
 def is_null_template_misconception(
     mis: dict[str, Any], null_embeddings: list[list[float]], threshold: float
 ) -> bool:
+    """
+    Check if a misconception is actually a "no misconception found" response.
+
+    Uses two-stage detection:
+    1. Fast keyword matching (catches most cases)
+    2. Semantic embedding matching (catches paraphrased versions)
+    """
+    # Stage 1: Fast keyword matching
+    if is_null_keyword_match(mis):
+        return True
+
+    # Stage 2: Semantic matching against null templates
     if not null_embeddings:
         return False
     detection_text = build_detection_text(adapt_detection(mis))
