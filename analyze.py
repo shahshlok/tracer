@@ -208,6 +208,106 @@ def is_null_template_misconception(
 
 
 # ---------------------------------------------------------------------------
+# Ensemble Voting (Majority Consensus)
+# ---------------------------------------------------------------------------
+def apply_ensemble_filter(
+    df: pd.DataFrame,
+    ensemble_threshold: int = 2,
+) -> pd.DataFrame:  # type: ignore
+    """
+    Apply ensemble voting to filter detections.
+
+    A detection is only validated if >= ensemble_threshold strategies
+    agree on the same misconception for the same student/question.
+    """
+    console.print(
+        f"\n[cyan]Applying ensemble filter (threshold: {ensemble_threshold}/4 strategies)...[/cyan]"
+    )
+
+    agreement_map: dict[Any, set[str]] = {}
+
+    try:
+        for idx, row in df.iterrows():  # type: ignore
+            try:
+                result_val = str(row["result"])
+                if result_val == "FN":
+                    continue
+
+                student = str(row["student"])
+                question = str(row["question"])
+                matched_id = row["matched_id"]
+                try:
+                    if pd.isna(matched_id):  # type: ignore
+                        matched_id = None
+                except (TypeError, ValueError):
+                    pass
+
+                key = (student, question, matched_id)
+                if key not in agreement_map:
+                    agreement_map[key] = set()
+                agreement_map[key].add(str(row["strategy"]))
+            except Exception:
+                continue
+    except Exception as e:
+        console.print(f"[yellow]Warning during agreement mapping: {e}[/yellow]")
+
+    # Find validated detections
+    validated_detections = set()
+    for (student, question, matched_id), strategies in agreement_map.items():
+        agreement_count = len(strategies)
+        if agreement_count >= ensemble_threshold and matched_id is not None:
+            validated_detections.add((student, question, matched_id))
+
+    console.print(
+        f"[cyan]Found {len(validated_detections)} validated detections "
+        f"(≥ {ensemble_threshold} strategies agree)[/cyan]"
+    )
+
+    # Filter rows
+    filtered_rows = []
+    try:
+        for idx, row in df.iterrows():  # type: ignore
+            try:
+                student = str(row["student"])
+                question = str(row["question"])
+                result = str(row["result"])
+                matched_id = row["matched_id"]
+                try:
+                    if pd.isna(matched_id):  # type: ignore
+                        matched_id = None
+                except (TypeError, ValueError):
+                    pass
+
+                key = (student, question, matched_id)
+
+                if result == "FN":
+                    filtered_rows.append(dict(row))
+                elif result == "TP":
+                    if key in validated_detections:
+                        filtered_rows.append(dict(row))
+                    else:
+                        row_dict = dict(row)
+                        row_dict["result"] = "FN"
+                        row_dict["matched_id"] = None
+                        filtered_rows.append(row_dict)
+                elif result.startswith("FP"):  # type: ignore
+                    if key in validated_detections:
+                        filtered_rows.append(dict(row))
+            except Exception:
+                continue
+    except Exception as e:
+        console.print(f"[yellow]Warning during filtering: {e}[/yellow]")
+
+    ensemble_df = pd.DataFrame(filtered_rows)
+    console.print(
+        f"[cyan]Ensemble filtering complete:[/cyan] "
+        f"{len(df)} → {len(ensemble_df)} rows "
+        f"({len(ensemble_df) / len(df) * 100:.1f}% retained)"
+    )
+    return ensemble_df
+
+
+# ---------------------------------------------------------------------------
 # Core Analysis (Semantic-Only Matching)
 # ---------------------------------------------------------------------------
 def build_results_df(
@@ -1427,6 +1527,411 @@ def generate_multi_report(
             f"- **Noise Floor:** Detections with similarity < {noise_floor:.2f} are filtered as 'pedantic' noise, not counted as hallucinations.",
             "- **Bootstrap CI:** 1000 resamples with replacement for confidence intervals.",
             "- **McNemar's Test:** Paired comparison with continuity correction.",
+            "",
+        ]
+    )
+
+    report_path = run_dir / "report.md"
+    report_path.write_text("\n".join(lines))
+    return report_path
+
+
+@app.command()
+def analyze_ensemble(
+    run_name: str = typer.Option(..., help="Descriptive run name (e.g., 'analysis3')"),
+    ensemble_threshold: int = typer.Option(
+        2,
+        help="Minimum strategies that must agree for a detection to count (default: 2)",
+    ),
+    semantic_threshold: float = typer.Option(
+        SEMANTIC_THRESHOLD_DEFAULT,
+        help="Semantic similarity threshold for matching (default: 0.65)",
+    ),
+    noise_floor: float = typer.Option(
+        NOISE_FLOOR_THRESHOLD,
+        help="Noise floor threshold - detections below this are filtered (default: 0.55)",
+    ),
+):
+    """
+    Run multi-assignment analysis with ENSEMBLE VOTING.
+
+    This applies majority voting across strategies: a detection is only
+    counted if >= ensemble_threshold strategies agree on the same misconception.
+
+    Expected effect: Higher precision (fewer hallucinations), slightly lower recall.
+    """
+    console.print("[bold cyan]═══ Analysis 3: Ensemble Voting Mode ═══[/bold cyan]")
+    console.print(f"Run name: {run_name}")
+    console.print(f"Ensemble threshold: {ensemble_threshold}/4 strategies must agree")
+    console.print(f"Semantic threshold: {semantic_threshold}")
+    console.print(f"Noise floor: {noise_floor}")
+
+    ASSIGNMENTS = ["a1", "a2", "a3"]
+    all_dfs = []
+    all_compliance_dfs = []
+    combined_groundtruth: list[dict[str, Any]] = []
+    total_students = 0
+    seeds = []
+
+    for assignment in ASSIGNMENTS:
+        console.print(f"\n[cyan]Processing {assignment}...[/cyan]")
+
+        detections_dir = Path(f"detections/{assignment}_multi")
+        manifest_path = Path(f"authentic_seeded/{assignment}/manifest.json")
+        groundtruth_path = Path(f"data/{assignment}/groundtruth.json")
+
+        if not detections_dir.exists():
+            console.print(f"[yellow]Warning: {detections_dir} not found, skipping[/yellow]")
+            continue
+
+        manifest = load_manifest(manifest_path)
+        groundtruth = load_groundtruth(groundtruth_path)
+
+        # Add to combined groundtruth (avoiding duplicates by ID)
+        existing_ids = {gt["id"] for gt in combined_groundtruth}
+        for gt in groundtruth:
+            if gt["id"] not in existing_ids:
+                combined_groundtruth.append(gt)
+
+        total_students += manifest.get("student_count", 0)
+        if manifest.get("seed"):
+            seeds.append(str(manifest["seed"]))
+
+        console.print(f"  Students: {manifest.get('student_count', 'N/A')}")
+        console.print(f"  Misconceptions: {len(groundtruth)}")
+
+        df, compliance_df = build_results_df(
+            detections_dir,
+            manifest,
+            groundtruth,
+            semantic_threshold=semantic_threshold,
+            noise_floor_threshold=noise_floor,
+        )
+
+        if not df.empty:
+            df["assignment"] = assignment
+            all_dfs.append(df)
+
+        if not compliance_df.empty:
+            compliance_df["assignment"] = assignment
+            all_compliance_dfs.append(compliance_df)
+
+    if not all_dfs:
+        console.print("[red]No results from any assignment![/red]")
+        return
+
+    # Combine all DataFrames
+    combined_df = pd.concat(all_dfs, ignore_index=True)
+    combined_compliance_df = (
+        pd.concat(all_compliance_dfs, ignore_index=True) if all_compliance_dfs else pd.DataFrame()
+    )
+
+    console.print(f"\n[bold]Pre-ensemble dataset:[/bold]")
+    console.print(f"  Total students processed: {total_students}")
+    console.print(f"  Total detection rows: {len(combined_df)}")
+
+    # Compute pre-ensemble metrics
+    pre_ensemble = compute_metrics(combined_df)
+    console.print(
+        f"  Pre-ensemble: P={pre_ensemble['precision']:.3f} R={pre_ensemble['recall']:.3f} F1={pre_ensemble['f1']:.3f}"
+    )
+
+    # Apply ensemble filtering
+    ensemble_df = apply_ensemble_filter(combined_df, ensemble_threshold=ensemble_threshold)
+
+    # Compute post-ensemble metrics
+    overall = compute_metrics(ensemble_df)
+    console.print(
+        f"\n[bold]Post-ensemble:[/bold] P={overall['precision']:.3f} R={overall['recall']:.3f} F1={overall['f1']:.3f}"
+    )
+
+    # Per-assignment metrics
+    console.print("\n[bold]By Assignment (Ensemble)[/bold]")
+    by_assignment = metrics_by_group(ensemble_df, ["assignment"])
+    table = Table()
+    table.add_column("Assignment")
+    table.add_column("TP")
+    table.add_column("FP")
+    table.add_column("FN")
+    table.add_column("Precision")
+    table.add_column("Recall")
+    table.add_column("F1")
+    for _, row in by_assignment.iterrows():
+        table.add_row(
+            str(row["assignment"]),
+            str(row["tp"]),
+            str(row["fp"]),
+            str(row["fn"]),
+            f"{row['precision']:.3f}",
+            f"{row['recall']:.3f}",
+            f"{row['f1']:.3f}",
+        )
+    console.print(table)
+
+    # Create run directory
+    run_id = run_name if run_name.startswith("run_") else f"run_{run_name}"
+    run_dir = Path("runs/multi") / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    assets_dir = run_dir / "assets"
+    assets_dir.mkdir(exist_ok=True)
+
+    # Save CSVs
+    ensemble_df.to_csv(run_dir / "results.csv", index=False)
+    (run_dir / "metrics.json").write_text(json.dumps(overall, indent=2))
+    if not combined_compliance_df.empty:
+        combined_compliance_df.to_csv(run_dir / "compliance.csv", index=False)
+
+    # Save config with ensemble info
+    config = {
+        "mode": "ensemble",
+        "ensemble_threshold": ensemble_threshold,
+        "semantic_threshold": semantic_threshold,
+        "noise_floor": noise_floor,
+        "pre_ensemble_metrics": pre_ensemble,
+        "post_ensemble_metrics": overall,
+    }
+    (run_dir / "config.json").write_text(json.dumps(config, indent=2))
+
+    # Generate charts
+    charts = generate_charts(ensemble_df, assets_dir, combined_groundtruth)
+
+    # Generate assignment comparison chart
+    if not by_assignment.empty:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        x = np.arange(len(by_assignment))
+        width = 0.25
+        ax.bar(x - width, by_assignment["precision"], width, label="Precision", color="#4285F4")
+        ax.bar(x, by_assignment["recall"], width, label="Recall", color="#34A853")
+        ax.bar(x + width, by_assignment["f1"], width, label="F1", color="#EA4335")
+        ax.set_xlabel("Assignment")
+        ax.set_ylabel("Score")
+        ax.set_title(f"Cross-Assignment Comparison (Ensemble N≥{ensemble_threshold})")
+        ax.set_xticks(x)
+        ax.set_xticklabels(by_assignment["assignment"].tolist())
+        ax.legend()
+        ax.set_ylim(0, 1)
+        plt.tight_layout()
+        fig.savefig(assets_dir / "assignment_comparison.png", dpi=150)
+        plt.close(fig)
+        charts.append("assignment_comparison.png")
+
+    # Generate report
+    by_strategy = metrics_by_group(ensemble_df, ["strategy"])
+    by_model = metrics_by_group(ensemble_df, ["model"])
+    by_category = metrics_by_group(
+        ensemble_df[ensemble_df["expected_category"].notna()],
+        ["expected_category"],  # type: ignore
+    )
+    by_misconception = metrics_by_group(
+        ensemble_df[ensemble_df["expected_id"].notna()],
+        ["expected_id"],  # type: ignore
+    )
+
+    # Build combined manifest for report
+    combined_manifest = {
+        "student_count": total_students,
+        "seed": ",".join(seeds) if seeds else "multiple",
+        "ensemble_threshold": ensemble_threshold,
+    }
+
+    report_path = generate_ensemble_report(
+        ensemble_df,
+        by_assignment,
+        by_strategy,
+        by_model,
+        by_category,
+        by_misconception,
+        combined_groundtruth,
+        combined_manifest,
+        run_dir,
+        charts,
+        semantic_threshold=semantic_threshold,
+        noise_floor=noise_floor,
+        ensemble_threshold=ensemble_threshold,
+        pre_ensemble_metrics=pre_ensemble,
+    )
+
+    console.print(f"[green]Report:[/green] {report_path}")
+    console.print("[bold green]✓ Ensemble analysis complete[/bold green]")
+
+
+def generate_ensemble_report(
+    df: pd.DataFrame,
+    by_assignment: pd.DataFrame,
+    by_strategy: pd.DataFrame,
+    by_model: pd.DataFrame,
+    by_category: pd.DataFrame,
+    by_misconception: pd.DataFrame,
+    groundtruth: list[dict[str, Any]],
+    manifest: dict[str, Any],
+    run_dir: Path,
+    charts: list[str],
+    semantic_threshold: float = SEMANTIC_THRESHOLD_DEFAULT,
+    noise_floor: float = NOISE_FLOOR_THRESHOLD,
+    ensemble_threshold: int = 2,
+    pre_ensemble_metrics: dict[str, Any] | None = None,
+) -> Path:
+    """Generate ensemble-specific report with before/after comparison."""
+    gt_map = {gt["id"]: gt for gt in groundtruth}
+    overall = compute_metrics(df)
+
+    # Compute bootstrap CIs for overall metrics
+    console.print("[cyan]Computing bootstrap confidence intervals...[/cyan]")
+    overall_with_ci = compute_all_metrics_with_ci(df, n_bootstrap=1000)
+
+    lines = [
+        "# Analysis 3: Ensemble Voting Report",
+        f"_Generated: {datetime.now(timezone.utc).isoformat()}_",
+        "",
+        "## Executive Summary",
+        "",
+        f"This report applies **Ensemble Voting** with threshold N≥{ensemble_threshold}.",
+        "A detection is only counted if at least {} strategies agree on the same misconception.".format(
+            ensemble_threshold
+        ),
+        "",
+        "**Goal:** Reduce hallucinations by filtering one-off detections that only one strategy sees.",
+        "",
+        "---",
+        "",
+        "## Configuration",
+        f"- **Total Students:** {manifest.get('student_count', 'N/A')}",
+        f"- **Ensemble Threshold:** {ensemble_threshold}/4 strategies must agree",
+        f"- **Semantic Threshold:** Cosine Similarity ≥ {semantic_threshold:.2f}",
+        f"- **Noise Floor:** Detections with score < {noise_floor:.2f} filtered",
+        f"- **Seeds:** {manifest.get('seed', 'N/A')}",
+        "",
+    ]
+
+    # Before/After comparison
+    if pre_ensemble_metrics:
+        lines.extend(
+            [
+                "## Before vs After Ensemble Filtering",
+                "",
+                "| Metric | Before | After | Change |",
+                "|--------|--------|-------|--------|",
+                f"| Precision | {pre_ensemble_metrics['precision']:.3f} | {overall['precision']:.3f} | {(overall['precision'] - pre_ensemble_metrics['precision']) * 100:+.1f}% |",
+                f"| Recall | {pre_ensemble_metrics['recall']:.3f} | {overall['recall']:.3f} | {(overall['recall'] - pre_ensemble_metrics['recall']) * 100:+.1f}% |",
+                f"| F1 Score | {pre_ensemble_metrics['f1']:.3f} | {overall['f1']:.3f} | {(overall['f1'] - pre_ensemble_metrics['f1']) * 100:+.1f}% |",
+                f"| TP | {pre_ensemble_metrics['tp']} | {overall['tp']} | {overall['tp'] - pre_ensemble_metrics['tp']:+d} |",
+                f"| FP | {pre_ensemble_metrics['fp']} | {overall['fp']} | {overall['fp'] - pre_ensemble_metrics['fp']:+d} |",
+                f"| FN | {pre_ensemble_metrics['fn']} | {overall['fn']} | {overall['fn'] - pre_ensemble_metrics['fn']:+d} |",
+                "",
+            ]
+        )
+
+    lines.extend(
+        [
+            "## Overall Metrics (with 95% Confidence Intervals)",
+            "",
+            "| Metric | Value | 95% CI | Std Error |",
+            "|--------|-------|--------|-----------|",
+            f"| True Positives | {overall['tp']} | — | — |",
+            f"| False Positives | {overall['fp']} | — | — |",
+            f"| False Negatives | {overall['fn']} | — | — |",
+            f"| **Precision** | **{overall_with_ci['precision']['estimate']:.3f}** | [{overall_with_ci['precision']['ci_lower']:.3f}, {overall_with_ci['precision']['ci_upper']:.3f}] | {overall_with_ci['precision']['std_error']:.4f} |",
+            f"| **Recall** | **{overall_with_ci['recall']['estimate']:.3f}** | [{overall_with_ci['recall']['ci_lower']:.3f}, {overall_with_ci['recall']['ci_upper']:.3f}] | {overall_with_ci['recall']['std_error']:.4f} |",
+            f"| **F1 Score** | **{overall_with_ci['f1']['estimate']:.3f}** | [{overall_with_ci['f1']['ci_lower']:.3f}, {overall_with_ci['f1']['ci_upper']:.3f}] | {overall_with_ci['f1']['std_error']:.4f} |",
+            "",
+        ]
+    )
+
+    # Cross-Assignment Comparison
+    lines.extend(
+        [
+            "## Cross-Assignment Comparison (Ensemble)",
+            "",
+            "| Assignment | Focus | TP | FP | FN | Precision | Recall | F1 |",
+            "|------------|-------|----|----|----|-----------| -------|-----|",
+        ]
+    )
+    assignment_focus = {"a1": "Variables/Math", "a2": "Loops/Control", "a3": "Arrays/Strings"}
+    for _, row in by_assignment.iterrows():
+        focus = assignment_focus.get(str(row["assignment"]), "")
+        lines.append(
+            f"| {row['assignment']} | {focus} | {row['tp']} | {row['fp']} | {row['fn']} | {row['precision']:.3f} | {row['recall']:.3f} | {row['f1']:.3f} |"
+        )
+    lines.append("")
+    if "assignment_comparison.png" in charts:
+        lines.append("![Assignment Comparison](assets/assignment_comparison.png)")
+        lines.append("")
+
+    # Strategy section
+    lines.extend(
+        [
+            "## Performance by Strategy (Ensemble)",
+            "",
+            "| Strategy | TP | FP | FN | Precision | Recall | F1 |",
+            "|----------|----|----|----|-----------| -------|-----|",
+        ]
+    )
+    for _, row in by_strategy.iterrows():
+        lines.append(
+            f"| {row['strategy']} | {row['tp']} | {row['fp']} | {row['fn']} | {row['precision']:.3f} | {row['recall']:.3f} | {row['f1']:.3f} |"
+        )
+    lines.append("")
+    if "strategy_f1.png" in charts:
+        lines.append("![Strategy F1](assets/strategy_f1.png)")
+        lines.append("")
+
+    # Model section
+    lines.extend(
+        [
+            "## Performance by Model (Ensemble)",
+            "",
+            "| Model | TP | FP | FN | Precision | Recall | F1 |",
+            "|-------|----|----|----|-----------|--------|-----|",
+        ]
+    )
+    for _, row in by_model.iterrows():
+        model_short = str(row["model"]).split("/")[-1]
+        lines.append(
+            f"| {model_short} | {row['tp']} | {row['fp']} | {row['fn']} | {row['precision']:.3f} | {row['recall']:.3f} | {row['f1']:.3f} |"
+        )
+    lines.append("")
+    if "model_comparison.png" in charts:
+        lines.append("![Model Comparison](assets/model_comparison.png)")
+        lines.append("")
+
+    # Category section
+    if not by_category.empty:
+        lines.extend(
+            [
+                "## Notional Machine Category Detection (Ensemble)",
+                "",
+                "| Category | Recall | N | Difficulty |",
+                "|----------|--------|---|------------|",
+            ]
+        )
+        by_category = by_category.sort_values("recall")  # type: ignore
+        for _, row in by_category.iterrows():
+            n = row["tp"] + row["fn"]
+            recall = row["recall"]
+            if recall >= 0.7:
+                difficulty = "Easy"
+            elif recall >= 0.5:
+                difficulty = "Medium"
+            else:
+                difficulty = "**Hard**"
+            lines.append(f"| {row['expected_category']} | {recall:.3f} | {n} | {difficulty} |")
+        lines.append("")
+        if "category_recall.png" in charts:
+            lines.append("![Category Recall](assets/category_recall.png)")
+            lines.append("")
+
+    # Methodology note
+    lines.extend(
+        [
+            "---",
+            "",
+            "## Methodology Notes",
+            "",
+            f"- **Ensemble Voting:** Detection counted only if ≥{ensemble_threshold} strategies agree",
+            "- **Semantic Matching:** Uses OpenAI `text-embedding-3-large`",
+            f"- **Match Threshold:** Cosine similarity ≥ {semantic_threshold:.2f}",
+            f"- **Noise Floor:** Detections < {noise_floor:.2f} filtered",
+            "- **Bootstrap CI:** 1000 resamples",
             "",
         ]
     )
