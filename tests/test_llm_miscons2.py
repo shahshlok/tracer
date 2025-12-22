@@ -137,4 +137,3 @@ async def test_run_detection_writes_outputs(tmp_path, monkeypatch):
     assert stats_file.exists()
     loaded_stats: dict[str, Any] = json.loads(stats_file.read_text())
     assert loaded_stats["strategy"] == "taxonomy"
-

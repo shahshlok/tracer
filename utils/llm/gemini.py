@@ -45,7 +45,7 @@ def _client() -> genai.Client:
 
 async def cleanup() -> None:
     """Reset the client to avoid 'Event loop is closed' errors.
-    
+
     The google-genai client uses aiohttp internally. By setting the instance
     to None before the event loop closes, we prevent the destructor from
     attempting cleanup on a closed loop.

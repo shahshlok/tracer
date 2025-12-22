@@ -32,48 +32,50 @@ def get_embedding(text: str, model: str = "text-embedding-3-large") -> list[floa
     """Get embedding for text, with memory + disk caching."""
     # Create cache key from hash of full text
     cache_key = hashlib.md5(f"{model}:{text}".encode()).hexdigest()
-    
+
     # Check memory cache first
     if cache_key in _embedding_cache:
         return _embedding_cache[cache_key]
-    
+
     # Check disk cache
     cache_file = CACHE_DIR / f"{cache_key}.npy"
     if cache_file.exists():
         embedding = np.load(cache_file).tolist()
         _embedding_cache[cache_key] = embedding
         return embedding
-    
+
     # API call
     client = get_client()
     response = client.embeddings.create(input=text, model=model)
     embedding = response.data[0].embedding
-    
+
     # Save to both caches
     _embedding_cache[cache_key] = embedding
     np.save(cache_file, np.array(embedding))
-    
+
     return embedding
 
 
-def get_embeddings_batch(texts: list[str], model: str = "text-embedding-3-large") -> list[list[float]]:
+def get_embeddings_batch(
+    texts: list[str], model: str = "text-embedding-3-large"
+) -> list[list[float]]:
     """Get embeddings for multiple texts in a single API call (much faster)."""
     if not texts:
         return []
-    
+
     results = []
     texts_to_fetch = []
     fetch_indices = []
-    
+
     # Check cache for each text
     for i, text in enumerate(texts):
         cache_key = hashlib.md5(f"{model}:{text}".encode()).hexdigest()
-        
+
         # Check memory cache
         if cache_key in _embedding_cache:
             results.append((i, _embedding_cache[cache_key]))
             continue
-        
+
         # Check disk cache
         cache_file = CACHE_DIR / f"{cache_key}.npy"
         if cache_file.exists():
@@ -81,29 +83,29 @@ def get_embeddings_batch(texts: list[str], model: str = "text-embedding-3-large"
             _embedding_cache[cache_key] = embedding
             results.append((i, embedding))
             continue
-        
+
         # Need to fetch from API
         texts_to_fetch.append(text)
         fetch_indices.append(i)
-    
+
     # Batch fetch missing embeddings
     if texts_to_fetch:
         client = get_client()
         response = client.embeddings.create(input=texts_to_fetch, model=model)
-        
+
         for j, item in enumerate(response.data):
             embedding = item.embedding
             original_idx = fetch_indices[j]
             text = texts_to_fetch[j]
             cache_key = hashlib.md5(f"{model}:{text}".encode()).hexdigest()
-            
+
             # Save to caches
             _embedding_cache[cache_key] = embedding
             cache_file = CACHE_DIR / f"{cache_key}.npy"
             np.save(cache_file, np.array(embedding))
-            
+
             results.append((original_idx, embedding))
-    
+
     # Sort by original index and return
     results.sort(key=lambda x: x[0])
     return [emb for _, emb in results]

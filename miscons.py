@@ -60,19 +60,24 @@ MAX_CONCURRENCY = 5
 # Configurable assignment (default a3, can be changed via CLI)
 CURRENT_ASSIGNMENT = "a3"
 
+
 def get_submission_dir() -> Path:
     return Path(f"authentic_seeded/{CURRENT_ASSIGNMENT}")
+
 
 def get_output_dir() -> Path:
     return Path(f"detections/{CURRENT_ASSIGNMENT}_multi")
 
+
 def get_questions_dir() -> Path:
     return Path(f"data/{CURRENT_ASSIGNMENT}")
+
 
 # Provider mapping for models
 OPENAI_MODEL_SET = set(OPENAI_MODELS)
 ANTHROPIC_MODEL_SET = set(ANTHROPIC_MODELS)
 GEMINI_MODEL_SET = set(GEMINI_MODELS)
+
 
 def load_manifest() -> dict[str, Any]:
     manifest_path = get_submission_dir() / "manifest.json"
@@ -106,6 +111,7 @@ def get_student_list() -> list[str]:
         )
 
     return students
+
 
 def load_question_text(question: str) -> str:
     q_num = question.lower()
@@ -366,16 +372,18 @@ def display_results(stats: dict[str, Any], strategy: str):
 def detect(
     strategy: str = typer.Option("taxonomy", help="Strategy: baseline, taxonomy, cot, socratic"),
     students: int = typer.Option(0, help="Number of students (0 = all)"),
-    output: Path = typer.Option(None, help="Output directory (default: detections/<assignment>_multi)"),
+    output: Path = typer.Option(
+        None, help="Output directory (default: detections/<assignment>_multi)"
+    ),
     no_reasoning: bool = typer.Option(False, help="Disable reasoning models"),
     assignment: str = typer.Option("a3", help="Assignment: a1, a2, or a3"),
 ):
     global CURRENT_ASSIGNMENT
     CURRENT_ASSIGNMENT = assignment
-    
+
     if output is None:
         output = get_output_dir()
-    
+
     student_list = get_student_list()
     if not student_list:
         console.print(f"[red]No students found in authentic_seeded/{assignment}[/red]")
@@ -402,15 +410,17 @@ def detect(
 @app.command()
 def all_strategies(
     students: int = typer.Option(0, help="Number of students (0 = all)"),
-    output: Path = typer.Option(None, help="Output directory (default: detections/<assignment>_multi)"),
+    output: Path = typer.Option(
+        None, help="Output directory (default: detections/<assignment>_multi)"
+    ),
     assignment: str = typer.Option("a3", help="Assignment: a1, a2, or a3"),
 ):
     global CURRENT_ASSIGNMENT
     CURRENT_ASSIGNMENT = assignment
-    
+
     if output is None:
         output = get_output_dir()
-    
+
     student_list = get_student_list()
     if not student_list:
         console.print(f"[red]No students found in authentic_seeded/{assignment}[/red]")
