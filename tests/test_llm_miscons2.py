@@ -1,18 +1,15 @@
 import asyncio
 import json
-from pathlib import Path
 from typing import Any
 
 import pytest
-
 from llm_miscons2 import (
-    DEFAULT_OUTPUT_DIR,
-    SUBMISSION_DIR,
     get_student_list,
     process_student_question,
     run_detection,
 )
-from pydantic_models import LLMDetectionResponse, NotionalMisconception, Evidence
+
+from pydantic_models import Evidence, LLMDetectionResponse, NotionalMisconception
 from utils.llm import openai as openai_module
 
 

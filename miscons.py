@@ -23,9 +23,9 @@ from rich.text import Text
 
 from prompts.strategies import PromptStrategy, build_prompt
 from pydantic_models import LLMDetectionResponse
-from utils.llm import openai as openai_client
 from utils.llm import anthropic as anthropic_client
 from utils.llm import gemini as gemini_client
+from utils.llm import openai as openai_client
 
 load_dotenv()
 

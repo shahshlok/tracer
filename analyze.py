@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any
 
 import matplotlib
 
@@ -1099,7 +1099,7 @@ def analyze_multi(
         pd.concat(all_compliance_dfs, ignore_index=True) if all_compliance_dfs else pd.DataFrame()
     )
 
-    console.print(f"\n[bold]Combined dataset:[/bold]")
+    console.print("\n[bold]Combined dataset:[/bold]")
     console.print(f"  Total students processed: {total_students}")
     console.print(f"  Total detection rows: {len(combined_df)}")
     console.print(f"  Unique misconceptions: {len(combined_groundtruth)}")
@@ -1246,7 +1246,7 @@ def generate_multi_report(
         "",
         "## Dataset Summary",
         f"- **Total Students:** {manifest.get('student_count', 'N/A')}",
-        f"- **Assignments:** a1 (Variables), a2 (Loops), a3 (Arrays)",
+        "- **Assignments:** a1 (Variables), a2 (Loops), a3 (Arrays)",
         f"- **Semantic Threshold:** Cosine Similarity ≥ {semantic_threshold:.2f}",
         f"- **Noise Floor:** Detections with score < {noise_floor:.2f} are filtered as 'pedantic'",
         f"- **Seeds:** {manifest.get('seed', 'N/A')}",
@@ -1626,7 +1626,7 @@ def analyze_ensemble(
         pd.concat(all_compliance_dfs, ignore_index=True) if all_compliance_dfs else pd.DataFrame()
     )
 
-    console.print(f"\n[bold]Pre-ensemble dataset:[/bold]")
+    console.print("\n[bold]Pre-ensemble dataset:[/bold]")
     console.print(f"  Total students processed: {total_students}")
     console.print(f"  Total detection rows: {len(combined_df)}")
 
@@ -1786,9 +1786,7 @@ def generate_ensemble_report(
         "## Executive Summary",
         "",
         f"This report applies **Ensemble Voting** with threshold N≥{ensemble_threshold}.",
-        "A detection is only counted if at least {} strategies agree on the same misconception.".format(
-            ensemble_threshold
-        ),
+        f"A detection is only counted if at least {ensemble_threshold} strategies agree on the same misconception.",
         "",
         "**Goal:** Reduce hallucinations by filtering one-off detections that only one strategy sees.",
         "",

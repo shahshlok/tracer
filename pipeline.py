@@ -13,13 +13,6 @@ from pathlib import Path
 from typing import Any
 
 import typer
-from rich import box
-from rich.console import Console
-from rich.panel import Panel
-from rich.prompt import Confirm, IntPrompt, Prompt
-from rich.table import Table
-from rich.text import Text
-
 from analyze_cli import (
     ASSET_DIR,
     DEFAULT_GROUNDTRUTH_PATH,
@@ -66,6 +59,12 @@ from llm_miscons_cli import (
 from llm_miscons_cli import (
     display_results as display_detection_results,
 )
+from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.prompt import Confirm, IntPrompt, Prompt
+from rich.table import Table
+from rich.text import Text
 
 # Import from existing modules
 from utils.generators.dataset_generator import (

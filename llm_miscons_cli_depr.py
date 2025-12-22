@@ -20,10 +20,10 @@ from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeEl
 from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
+from utils.llm.router import get_reasoning_response, get_structured_response
 
 from prompts.strategies import PromptStrategy, build_prompt
 from pydantic_models import LLMDetectionResponse
-from utils.llm.router import get_structured_response, get_reasoning_response
 
 load_dotenv()
 

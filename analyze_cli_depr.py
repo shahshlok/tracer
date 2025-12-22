@@ -29,10 +29,10 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import typer
+from llm_miscons_cli import MODEL_SHORT_NAMES
 from rich.console import Console
 from rich.table import Table
 
-from llm_miscons_cli import MODEL_SHORT_NAMES
 from utils.matching.classifier import MatchResult
 from utils.matching.fuzzy import fuzzy_match_misconception
 from utils.matching.hybrid import (
