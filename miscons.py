@@ -290,6 +290,11 @@ async def run_detection(
     stats_file.parent.mkdir(parents=True, exist_ok=True)
     stats_file.write_text(json.dumps(stats, indent=2))
 
+    # Cleanup all LLM clients to avoid "Event loop is closed" errors
+    await openai_client.cleanup()
+    await anthropic_client.cleanup()
+    await gemini_client.cleanup()
+
     return stats
 
 

@@ -29,6 +29,14 @@ def _client() -> AsyncAnthropic:
     return _client_instance
 
 
+async def cleanup() -> None:
+    """Explicitly close the client to avoid 'Event loop is closed' errors."""
+    global _client_instance
+    if _client_instance is not None:
+        await _client_instance.close()
+        _client_instance = None
+
+
 def _split_system_and_messages(
     messages: list[dict[str, str]],
 ) -> tuple[str | None, list[dict[str, str]]]:

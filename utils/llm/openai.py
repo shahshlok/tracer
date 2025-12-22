@@ -11,9 +11,23 @@ load_dotenv()
 T = TypeVar("T", bound=BaseModel)
 DEFAULT_MODEL = os.getenv("OPENAI_DEFAULT_MODEL", "gpt-5.2-2025-12-11")
 
+# Module-level singleton client to reuse connections and avoid cleanup issues
+_client_instance: AsyncOpenAI | None = None
+
 
 def _client() -> AsyncOpenAI:
-    return AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    global _client_instance
+    if _client_instance is None:
+        _client_instance = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    return _client_instance
+
+
+async def cleanup() -> None:
+    """Explicitly close the client to avoid 'Event loop is closed' errors."""
+    global _client_instance
+    if _client_instance is not None:
+        await _client_instance.close()
+        _client_instance = None
 
 
 @retry(
