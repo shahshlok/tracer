@@ -1,0 +1,209 @@
+{
+  "student": "May_Brad_242645",
+  "question": "Q4",
+  "strategy": "baseline",
+  "status": "success",
+  "models": {
+    "gpt-5.2-2025-12-11": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Off-by-one array indexing / inclusive-bound loop misconception",
+          "student_thought_process": "The student believes array indices can safely be accessed at index n when the array size is n, and that loops written with i <= n (or starting at i = n) still stay within bounds if they adjust indices inside the loop.",
+          "conceptual_gap": "In Java, arrays are 0-based and valid indices are 0..n-1. Any attempt to access arr[n] is out of bounds and throws ArrayIndexOutOfBoundsException. When shifting right, the copy loop must write into positions 1..n-1 (e.g., i = n-1 down to 1). Starting at i = n and assigning arr[i] accesses arr[n], which is invalid.",
+          "error_manifestation": "Runtime exception (ArrayIndexOutOfBoundsException) for any n > 0 during the shift loop; program does not produce the required output.",
+          "confidence": 0.97,
+          "evidence": [
+            {
+              "line_number": 20,
+              "code_snippet": "for (int i = n; i >= 1; i--) {\n    arr[i] = arr[i - 1];\n}"
+            },
+            {
+              "line_number": 21,
+              "code_snippet": "arr[i] = arr[i - 1]; // when i == n, writes arr[n]"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Loop boundary confusion (1-based thinking in a 0-based language)",
+          "student_thought_process": "The student believes it is natural to loop from 1 to n for array processing and compensate with i-1 indexing, and applies similar 1..n reasoning inconsistently to the shifting loop.",
+          "conceptual_gap": "You can loop 1..n and use i-1 to index, but only if you do it consistently and never access index n. The input and output loops avoid out-of-bounds by using arr[i-1], but the shift loop switches to direct arr[i] indexing while still using 1..n style bounds, causing an invalid access.",
+          "error_manifestation": "Runtime exception during shifting; indicates inconsistent mapping between loop counter values and valid array indices.",
+          "confidence": 0.8,
+          "evidence": [
+            {
+              "line_number": 12,
+              "code_snippet": "for (int i = 1; i <= n; i++) {\n    arr[i - 1] = scanner.nextInt();\n}"
+            },
+            {
+              "line_number": 19,
+              "code_snippet": "for (int i = n; i >= 1; i--) {\n    arr[i] = arr[i - 1];\n}"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "claude-haiku-4-5-20251001": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Array Boundary Off-by-One in Loop Shift",
+          "student_thought_process": "The student believes that using a loop counter from 1 to n (instead of 0 to n-1) while accessing arr[i] will correctly shift array elements. Specifically, in the shift loop `for (int i = n; i >= 1; i--)`, the student accesses `arr[i]` where i can equal n, thinking this maps to a valid array index.",
+          "conceptual_gap": "The student has a flawed mental model of array indexing. Arrays in Java are zero-indexed (indices 0 to n-1), but the student is using loop counters (1 to n) directly as array indices without proper adjustment. In the line `arr[i] = arr[i - 1]` when i = n, the code attempts to access arr[n], which is out of bounds since the valid indices are 0 to n-1. This will cause an ArrayIndexOutOfBoundsException at runtime.",
+          "error_manifestation": "Runtime exception (ArrayIndexOutOfBoundsException)",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 18,
+              "code_snippet": "for (int i = n; i >= 1; i--) {\n                arr[i] = arr[i - 1];\n            }"
+            },
+            {
+              "line_number": 14,
+              "code_snippet": "for (int i = 1; i <= n; i++) {\n            arr[i - 1] = scanner.nextInt();\n        }"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Inconsistent Array Index Convention",
+          "student_thought_process": "The student believes that converting between 1-based loop logic and 0-based array indexing using the formula (i - 1) is sufficient throughout the code, but they don't consistently apply this when the loop counter itself needs adjustment for different operations.",
+          "conceptual_gap": "While the student correctly uses `arr[i - 1]` in the input loop (lines 14-16), they fail to apply proper bounds checking in the shift loop (lines 18-20). When iterating backwards to shift elements, the loop `for (int i = n; i >= 1; i--)` allows i to reach n, and accessing `arr[i]` directly (even with the offset in `arr[i-1]`) still results in an out-of-bounds access when i = n. The correct approach would be `for (int i = n - 1; i >= 1; i--)` or similar logic that respects array bounds.",
+          "error_manifestation": "Runtime exception (ArrayIndexOutOfBoundsException)",
+          "confidence": 0.92,
+          "evidence": [
+            {
+              "line_number": 18,
+              "code_snippet": "for (int i = n; i >= 1; i--) {"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "gemini-3-flash-preview": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Off-by-One Array Boundary Error",
+          "student_thought_process": "The student believes that for an array of size N, the index N is a valid destination for moving an element, likely due to a 1-based indexing mental model where the last element is located at position N.",
+          "conceptual_gap": "In Java, arrays use 0-based indexing. An array of size N has valid indices from 0 to N-1. The student's loop starts at 'i = n' and attempts to write to 'arr[i]', which results in an ArrayIndexOutOfBoundsException because the index 'n' is outside the array's bounds. This mistake often stems from confusing the size/count of the array with the index of the final element.",
+          "error_manifestation": "runtime exception (java.lang.ArrayIndexOutOfBoundsException)",
+          "confidence": 0.98,
+          "evidence": [
+            {
+              "line_number": 18,
+              "code_snippet": "for (int i = n; i >= 1; i--) {"
+            },
+            {
+              "line_number": 19,
+              "code_snippet": "arr[i] = arr[i - 1];"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "1-Based Indexing Mental Model",
+          "student_thought_process": "The student believes that the first element of an array is fundamentally 'element 1' and the last is 'element N', leading them to perform literal arithmetic (like 1-1) to translate their mental model into Java's 0-based requirements.",
+          "conceptual_gap": "While the student understands that Java requires 0-based access, they haven't internalized the system. Instead of thinking in terms of index 0, they think in terms of 'index 1' and manually subtract 1. This cognitive overhead leads to errors in loop boundaries where the translation is not applied consistently (e.g., using 'n' instead of 'n-1').",
+          "error_manifestation": "logic error / runtime exception",
+          "confidence": 0.9,
+          "evidence": [
+            {
+              "line_number": 21,
+              "code_snippet": "arr[1 - 1] = last;"
+            },
+            {
+              "line_number": 12,
+              "code_snippet": "for (int i = 1; i <= n; i++) {"
+            },
+            {
+              "line_number": 13,
+              "code_snippet": "arr[i - 1] = scanner.nextInt();"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "gpt-5.2-2025-12-11:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "1-based indexing / incorrect array bounds mental model",
+          "student_thought_process": "The student believes an array of length n has valid indices 1..n (or that using i = n is still safe), so shifting can copy into arr[n] when moving elements right.",
+          "conceptual_gap": "In Java, an array of length n is indexed 0..n-1. Any access to arr[n] is out of bounds and throws ArrayIndexOutOfBoundsException at runtime. When shifting right by one, the largest index you can assign to is n-1, so the loop must start at i = n-1 and stop at i = 1.",
+          "error_manifestation": "Runtime exception (ArrayIndexOutOfBoundsException) for any n > 0; therefore the program does not produce the required output.",
+          "confidence": 0.92,
+          "evidence": [
+            {
+              "line_number": 18,
+              "code_snippet": "for (int i = n; i >= 1; i--) {"
+            },
+            {
+              "line_number": 19,
+              "code_snippet": "    arr[i] = arr[i - 1]; // when i == n, writes arr[n] (out of bounds)"
+            },
+            {
+              "line_number": 17,
+              "code_snippet": "int last = arr[n - 1]; // indicates correct last index is n-1, but loop contradicts it"
+            }
+          ]
+        }
+      ],
+      "count": 1
+    },
+    "claude-haiku-4-5-20251001:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Array Index Bounds Confusion",
+          "student_thought_process": "The student believes that an array of size n has valid indices from 0 to n (inclusive), so the loop should iterate from i=n down to i=1 to shift elements rightward.",
+          "conceptual_gap": "In Java, an array of size n has valid indices only from 0 to n-1. When the loop executes with i=n on the first iteration, it attempts to access arr[n], which is beyond the allocated bounds. The student has confused the array size (n) with the highest valid index (n-1).",
+          "error_manifestation": "ArrayIndexOutOfBoundsException at runtime",
+          "confidence": 0.99,
+          "evidence": [
+            {
+              "line_number": 16,
+              "code_snippet": "for (int i = n; i >= 1; i--) {\n    arr[i] = arr[i - 1];\n}"
+            },
+            {
+              "line_number": 15,
+              "code_snippet": "int last = arr[n - 1];\n            for (int i = n; i >= 1; i--) {"
+            }
+          ]
+        }
+      ],
+      "count": 1
+    },
+    "gemini-3-flash-preview:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Array Boundary Misunderstanding",
+          "student_thought_process": "The student believes that for an array of size N, the index N is a valid destination for shifting an element.",
+          "conceptual_gap": "In Java, array indexing is zero-based, meaning an array declared as new int[n] has valid indices from 0 to n-1. Accessing index n triggers an ArrayIndexOutOfBoundsException.",
+          "error_manifestation": "runtime exception",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 19,
+              "code_snippet": "for (int i = n; i >= 1; i--)"
+            },
+            {
+              "line_number": 20,
+              "code_snippet": "arr[i] = arr[i - 1];"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Index-Value Mapping Confusion",
+          "student_thought_process": "The student believes that to shift elements right, they should start at the total count 'n' and move backwards, forgetting that the highest index is 'n-1' and the destination index must be within bounds.",
+          "conceptual_gap": "The student fails to reconcile the logical 'nth' position with the physical memory index 'n-1'. While they used 'i-1' correctly in the input loop, they reverted to using the literal size 'n' as an index during the algorithmic shift phase.",
+          "error_manifestation": "runtime exception",
+          "confidence": 0.85,
+          "evidence": [
+            {
+              "line_number": 20,
+              "code_snippet": "arr[i] = arr[i - 1];"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    }
+  },
+  "timestamp": "2025-12-30T08:50:05.144503+00:00"
+}

@@ -1,0 +1,143 @@
+{
+  "student": "Mooney_Heather_926545",
+  "question": "Q2",
+  "strategy": "cot",
+  "status": "success",
+  "models": {
+    "gpt-5.2-2025-12-11": {
+      "misconceptions": [],
+      "count": 0
+    },
+    "claude-haiku-4-5-20251001": {
+      "misconceptions": [],
+      "count": 0
+    },
+    "gemini-3-flash-preview": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Non-Blocking Scanner Misconception",
+          "student_thought_process": "The student believes that sc.hasNext() and sc.hasNextInt() function as non-blocking polling checks. They believe that if the user has not provided input, these methods will return false immediately, allowing the code to fall into the 'else' block and assign a default value like an empty string or 0.",
+          "conceptual_gap": "Java's Scanner methods are blocking. Calling hasNext() on System.in will halt the entire program's execution until either a token is provided or the input stream is closed. It does not simply 'check' the current state of the buffer and move on.",
+          "error_manifestation": "Logic hang / unexpected blocking. The program will pause and wait for user input indefinitely rather than automatically using the default values provided in the else-branches.",
+          "confidence": 0.9,
+          "evidence": [
+            {
+              "line_number": 22,
+              "code_snippet": "if (sc.hasNext()) { String tempName = sc.next(); names[i] = tempName; } else { names[i] = \"\"; }"
+            },
+            {
+              "line_number": 31,
+              "code_snippet": "if (sc.hasNextInt()) { int tempScore = sc.nextInt(); scores[j] = tempScore; } else { scores[j] = 0; }"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Null Reference Persistence Misconception",
+          "student_thought_process": "The student believes that even after an array element has been explicitly assigned a non-null value (like an empty string), there is still a possibility that the element could 'be' null or revert to its uninitialized state when accessed later.",
+          "conceptual_gap": "In Java, assigning a value to a reference (e.g., names[i] = \"\") completely replaces the previous value (null). Since every execution path in the initialization loop leads to a non-null assignment, checking for null later is logically impossible.",
+          "error_manifestation": "Redundant defensive code that indicates a lack of trust in the state of the heap/array variables after assignment.",
+          "confidence": 0.85,
+          "evidence": [
+            {
+              "line_number": 26,
+              "code_snippet": "names[i] = \"\";"
+            },
+            {
+              "line_number": 73,
+              "code_snippet": "if (top_name == null) { top_name = \"\"; }"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Index Zero Safety Fallacy",
+          "student_thought_process": "The student believes that if an array index calculation results in a negative number, resetting that index to 0 is a universal 'safe' fix that prevents errors.",
+          "conceptual_gap": "While 0 is the lowest possible index, it is not inherently safe. If an array has a length of 0, index 0 is just as invalid as index -1. Furthermore, the student fails to realize that their own guard (N <= 0) already guarantees that top_index (N-1) cannot be negative, rendering the clamping logic both logically flawed and dead code.",
+          "error_manifestation": "Dead code in most cases, but would lead to an ArrayIndexOutOfBoundsException if the guard at line 13 were removed and N was 0.",
+          "confidence": 0.75,
+          "evidence": [
+            {
+              "line_number": 68,
+              "code_snippet": "if (top_index < 0) { top_index = 0; }"
+            }
+          ]
+        }
+      ],
+      "count": 3
+    },
+    "gpt-5.2-2025-12-11:reasoning": {
+      "misconceptions": [],
+      "count": 0
+    },
+    "claude-haiku-4-5-20251001:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Defensive Null-Checking of Explicitly Assigned Variables",
+          "student_thought_process": "The student believes that even though they have explicitly assigned values (either from input or a default empty string) to array elements in a loop, those elements might still be null and require checking before use.",
+          "conceptual_gap": "The student does not fully grasp that when you explicitly assign a value to an array element (e.g., names[i] = tempName or names[i] = \"\"), that element is guaranteed to contain the assigned value and cannot be null. The null check at lines 46-47 is therefore unnecessary. In this code flow, top_name is always assigned a non-null value from the names array, making the subsequent null check dead code that suggests misunderstanding of definite assignment.",
+          "error_manifestation": "No runtime error or incorrect output. The code produces the correct result despite the unnecessary check. However, this indicates the student may not fully understand Java's definite assignment rules and array initialization semantics.",
+          "confidence": 0.6,
+          "evidence": [
+            {
+              "line_number": 44,
+              "code_snippet": "String top_name = names[top_index];"
+            },
+            {
+              "line_number": 46,
+              "code_snippet": "if (top_name == null) {\n   top_name = \"\";\n}"
+            }
+          ]
+        }
+      ],
+      "count": 1
+    },
+    "gemini-3-flash-preview:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Scanner Cursor Persistence",
+          "student_thought_process": "The student believes that if a validation check like `sc.hasNextInt()` fails, the Scanner will automatically skip over the invalid token and move to the next item for the next iteration of the loop.",
+          "conceptual_gap": "The student fails to realize that Scanner methods like `hasNextInt()` are look-ahead operations. If they return false, the 'invalid' token remains at the head of the input stream. Without a call to `sc.next()` to consume and discard the invalid token, every subsequent call to `hasNextInt()` will continue to evaluate the same piece of data, often leading to logic errors or infinite loops.",
+          "error_manifestation": "logic error / infinite loop",
+          "confidence": 0.9,
+          "evidence": [
+            {
+              "line_number": 34,
+              "code_snippet": "if (sc.hasNextInt()) { int tempScore = sc.nextInt(); scores[j] = tempScore; } else { scores[j] = 0; }"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Non-Blocking Input Assumption",
+          "student_thought_process": "The student believes that `sc.hasNext()` acts as a real-time status check of the input buffer, returning `false` if the user has not yet typed anything.",
+          "conceptual_gap": "In Java's Scanner, `hasNext()` is a blocking call when connected to `System.in`. It does not return `false` simply because the buffer is empty; instead, it pauses execution and waits for the user to provide input or for the stream to be closed (EOF). The `else` branch providing a default value (`names[i] = \"\"`) will only ever execute if the input stream is terminated (e.g., via Ctrl+D), not if the user is simply slow to type.",
+          "error_manifestation": "logic error / hang",
+          "confidence": 0.85,
+          "evidence": [
+            {
+              "line_number": 24,
+              "code_snippet": "if (sc.hasNext()) { String tempName = sc.next(); names[i] = tempName; } else { names[i] = \"\"; }"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Primitive Value Disconnection",
+          "student_thought_process": "The student believes that even though they have stored the value of `scores[j]` in a variable called `left`, they must re-access the array index `scores[j]` directly to perform a swap to ensure the 'actual' data is being moved.",
+          "conceptual_gap": "This demonstrates a minor misunderstanding of variable evaluation. While the student correctly understands that they cannot assign to `left` to change the array (pass-by-value), they don't realize that once a primitive value is stored in `left`, using `left` is computationally identical to re-fetching `scores[j]` before the array has been modified.",
+          "error_manifestation": "redundant code",
+          "confidence": 0.7,
+          "evidence": [
+            {
+              "line_number": 51,
+              "code_snippet": "int temp_score_holder = scores[j];"
+            },
+            {
+              "line_number": 47,
+              "code_snippet": "int left = scores[j];"
+            }
+          ]
+        }
+      ],
+      "count": 3
+    }
+  },
+  "timestamp": "2025-12-30T11:03:25.140181+00:00"
+}
