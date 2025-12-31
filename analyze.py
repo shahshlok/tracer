@@ -210,101 +210,196 @@ def is_null_template_misconception(
 # ---------------------------------------------------------------------------
 # Ensemble Voting (Majority Consensus)
 # ---------------------------------------------------------------------------
-def apply_ensemble_filter(
+def apply_strategy_ensemble_filter(
     df: pd.DataFrame,
-    ensemble_threshold: int = 2,
-) -> pd.DataFrame:  # type: ignore
+    threshold: int = 2,
+    silent: bool = False,
+) -> pd.DataFrame:
     """
-    Apply ensemble voting to filter detections.
+    Apply ensemble voting based on STRATEGY agreement.
 
-    A detection is only validated if >= ensemble_threshold strategies
+    A detection is only validated if >= threshold strategies
     agree on the same misconception for the same student/question.
+
+    Args:
+        df: Results DataFrame with 'strategy', 'student', 'question', 'matched_id', 'result'
+        threshold: Minimum number of strategies that must agree (default: 2/4)
+        silent: If True, suppress console output
+
+    Returns:
+        Filtered DataFrame with non-consensus TPs demoted to FN
     """
-    console.print(
-        f"\n[cyan]Applying ensemble filter (threshold: {ensemble_threshold}/4 strategies)...[/cyan]"
-    )
+    if not silent:
+        console.print(f"[cyan]Applying strategy ensemble (threshold: {threshold}/4)...[/cyan]")
 
-    agreement_map: dict[Any, set[str]] = {}
+    # Build agreement map: (student, question, matched_id) -> set of strategies
+    agreement_map: dict[tuple, set[str]] = {}
+    for _, row in df.iterrows():
+        if row["result"] == "FN":
+            continue
+        matched_id = row["matched_id"]
+        if pd.isna(matched_id):
+            matched_id = None
+        key = (row["student"], row["question"], matched_id)
+        if key not in agreement_map:
+            agreement_map[key] = set()
+        agreement_map[key].add(row["strategy"])
 
-    try:
-        for idx, row in df.iterrows():  # type: ignore
-            try:
-                result_val = str(row["result"])
-                if result_val == "FN":
-                    continue
+    # Find validated detections (>= threshold strategies agree)
+    validated = {
+        key for key, strategies in agreement_map.items()
+        if len(strategies) >= threshold and key[2] is not None
+    }
 
-                student = str(row["student"])
-                question = str(row["question"])
-                matched_id = row["matched_id"]
-                try:
-                    if pd.isna(matched_id):  # type: ignore
-                        matched_id = None
-                except (TypeError, ValueError):
-                    pass
-
-                key = (student, question, matched_id)
-                if key not in agreement_map:
-                    agreement_map[key] = set()
-                agreement_map[key].add(str(row["strategy"]))
-            except Exception:
-                continue
-    except Exception as e:
-        console.print(f"[yellow]Warning during agreement mapping: {e}[/yellow]")
-
-    # Find validated detections
-    validated_detections = set()
-    for (student, question, matched_id), strategies in agreement_map.items():
-        agreement_count = len(strategies)
-        if agreement_count >= ensemble_threshold and matched_id is not None:
-            validated_detections.add((student, question, matched_id))
-
-    console.print(
-        f"[cyan]Found {len(validated_detections)} validated detections "
-        f"(≥ {ensemble_threshold} strategies agree)[/cyan]"
-    )
+    if not silent:
+        console.print(f"[cyan]  Validated detections: {len(validated)}[/cyan]")
 
     # Filter rows
     filtered_rows = []
-    try:
-        for idx, row in df.iterrows():  # type: ignore
-            try:
-                student = str(row["student"])
-                question = str(row["question"])
-                result = str(row["result"])
-                matched_id = row["matched_id"]
-                try:
-                    if pd.isna(matched_id):  # type: ignore
-                        matched_id = None
-                except (TypeError, ValueError):
-                    pass
+    for _, row in df.iterrows():
+        matched_id = row["matched_id"]
+        if pd.isna(matched_id):
+            matched_id = None
+        key = (row["student"], row["question"], matched_id)
+        result = row["result"]
 
-                key = (student, question, matched_id)
+        if result == "FN":
+            filtered_rows.append(dict(row))
+        elif result == "TP":
+            if key in validated:
+                filtered_rows.append(dict(row))
+            else:
+                # Demote to FN
+                row_dict = dict(row)
+                row_dict["result"] = "FN"
+                row_dict["matched_id"] = None
+                filtered_rows.append(row_dict)
+        elif result.startswith("FP"):
+            # Only keep FPs that match validated detections (rare but possible)
+            if key in validated:
+                filtered_rows.append(dict(row))
+            # Otherwise drop the FP entirely
 
-                if result == "FN":
-                    filtered_rows.append(dict(row))
-                elif result == "TP":
-                    if key in validated_detections:
-                        filtered_rows.append(dict(row))
-                    else:
-                        row_dict = dict(row)
-                        row_dict["result"] = "FN"
-                        row_dict["matched_id"] = None
-                        filtered_rows.append(row_dict)
-                elif result.startswith("FP"):  # type: ignore
-                    if key in validated_detections:
-                        filtered_rows.append(dict(row))
-            except Exception:
-                continue
-    except Exception as e:
-        console.print(f"[yellow]Warning during filtering: {e}[/yellow]")
+    return pd.DataFrame(filtered_rows)
 
-    ensemble_df = pd.DataFrame(filtered_rows)
-    console.print(
-        f"[cyan]Ensemble filtering complete:[/cyan] "
-        f"{len(df)} → {len(ensemble_df)} rows "
-        f"({len(ensemble_df) / len(df) * 100:.1f}% retained)"
-    )
-    return ensemble_df
+
+def apply_model_ensemble_filter(
+    df: pd.DataFrame,
+    threshold: int = 2,
+    silent: bool = False,
+) -> pd.DataFrame:
+    """
+    Apply ensemble voting based on MODEL agreement.
+
+    A detection is only validated if >= threshold models
+    agree on the same misconception for the same student/question/strategy.
+
+    Args:
+        df: Results DataFrame with 'model', 'student', 'question', 'matched_id', 'result'
+        threshold: Minimum number of models that must agree (default: 2/6)
+        silent: If True, suppress console output
+
+    Returns:
+        Filtered DataFrame with non-consensus TPs demoted to FN
+    """
+    n_models = df["model"].nunique()
+    if not silent:
+        console.print(f"[cyan]Applying model ensemble (threshold: {threshold}/{n_models})...[/cyan]")
+
+    # Build agreement map: (student, question, strategy, matched_id) -> set of models
+    agreement_map: dict[tuple, set[str]] = {}
+    for _, row in df.iterrows():
+        if row["result"] == "FN":
+            continue
+        matched_id = row["matched_id"]
+        if pd.isna(matched_id):
+            matched_id = None
+        key = (row["student"], row["question"], row["strategy"], matched_id)
+        if key not in agreement_map:
+            agreement_map[key] = set()
+        agreement_map[key].add(row["model"])
+
+    # Find validated detections (>= threshold models agree)
+    validated = {
+        key for key, models in agreement_map.items()
+        if len(models) >= threshold and key[3] is not None
+    }
+
+    if not silent:
+        console.print(f"[cyan]  Validated detections: {len(validated)}[/cyan]")
+
+    # Filter rows
+    filtered_rows = []
+    for _, row in df.iterrows():
+        matched_id = row["matched_id"]
+        if pd.isna(matched_id):
+            matched_id = None
+        key = (row["student"], row["question"], row["strategy"], matched_id)
+        result = row["result"]
+
+        if result == "FN":
+            filtered_rows.append(dict(row))
+        elif result == "TP":
+            if key in validated:
+                filtered_rows.append(dict(row))
+            else:
+                # Demote to FN
+                row_dict = dict(row)
+                row_dict["result"] = "FN"
+                row_dict["matched_id"] = None
+                filtered_rows.append(row_dict)
+        elif result.startswith("FP"):
+            if key in validated:
+                filtered_rows.append(dict(row))
+
+    return pd.DataFrame(filtered_rows)
+
+
+def compute_ensemble_comparison(
+    df: pd.DataFrame,
+    strategy_threshold: int = 2,
+    model_threshold: int = 2,
+) -> dict[str, Any]:
+    """
+    Compute metrics for raw, strategy-ensemble, and model-ensemble approaches.
+
+    Returns:
+        Dict with 'raw', 'strategy_ensemble', 'model_ensemble' metrics and comparison
+    """
+    raw_metrics = compute_metrics(df)
+
+    strategy_df = apply_strategy_ensemble_filter(df, threshold=strategy_threshold, silent=True)
+    strategy_metrics = compute_metrics(strategy_df)
+
+    model_df = apply_model_ensemble_filter(df, threshold=model_threshold, silent=True)
+    model_metrics = compute_metrics(model_df)
+
+    return {
+        "raw": raw_metrics,
+        "strategy_ensemble": {
+            "threshold": strategy_threshold,
+            "metrics": strategy_metrics,
+            "precision_gain": strategy_metrics["precision"] - raw_metrics["precision"],
+            "recall_loss": raw_metrics["recall"] - strategy_metrics["recall"],
+            "f1_delta": strategy_metrics["f1"] - raw_metrics["f1"],
+        },
+        "model_ensemble": {
+            "threshold": model_threshold,
+            "metrics": model_metrics,
+            "precision_gain": model_metrics["precision"] - raw_metrics["precision"],
+            "recall_loss": raw_metrics["recall"] - model_metrics["recall"],
+            "f1_delta": model_metrics["f1"] - raw_metrics["f1"],
+        },
+    }
+
+
+# Legacy alias for backwards compatibility
+def apply_ensemble_filter(
+    df: pd.DataFrame,
+    ensemble_threshold: int = 2,
+) -> pd.DataFrame:
+    """Legacy wrapper for strategy-based ensemble filtering."""
+    return apply_strategy_ensemble_filter(df, threshold=ensemble_threshold)
 
 
 # ---------------------------------------------------------------------------
@@ -1515,6 +1610,58 @@ def generate_multi_report(
             ]
         )
 
+    # Ensemble Analysis Section
+    console.print("[cyan]Computing ensemble analysis...[/cyan]")
+    ensemble_comparison = compute_ensemble_comparison(df, strategy_threshold=2, model_threshold=2)
+    raw = ensemble_comparison["raw"]
+    strat_ens = ensemble_comparison["strategy_ensemble"]
+    model_ens = ensemble_comparison["model_ensemble"]
+
+    lines.extend(
+        [
+            "## Ensemble Voting Analysis",
+            "",
+            "> Ensemble voting requires multiple agreeing sources before counting a detection.",
+            "> This trades recall for precision, reducing hallucinations.",
+            "",
+            "### Comparison: Raw vs Ensemble Methods",
+            "",
+            "| Method | Precision | Recall | F1 | Precision Gain | Recall Loss |",
+            "|--------|-----------|--------|-----|----------------|-------------|",
+            f"| **Raw (No Ensemble)** | {raw['precision']:.3f} | {raw['recall']:.3f} | {raw['f1']:.3f} | — | — |",
+            f"| **Strategy Ensemble (≥2/4)** | {strat_ens['metrics']['precision']:.3f} | {strat_ens['metrics']['recall']:.3f} | {strat_ens['metrics']['f1']:.3f} | {strat_ens['precision_gain']:+.3f} | {strat_ens['recall_loss']:+.3f} |",
+            f"| **Model Ensemble (≥2/6)** | {model_ens['metrics']['precision']:.3f} | {model_ens['metrics']['recall']:.3f} | {model_ens['metrics']['f1']:.3f} | {model_ens['precision_gain']:+.3f} | {model_ens['recall_loss']:+.3f} |",
+            "",
+            "### Interpretation",
+            "",
+        ]
+    )
+
+    # Determine which ensemble is better
+    if strat_ens["metrics"]["f1"] > model_ens["metrics"]["f1"]:
+        better = "Strategy Ensemble"
+        better_f1 = strat_ens["metrics"]["f1"]
+        worse_f1 = model_ens["metrics"]["f1"]
+    else:
+        better = "Model Ensemble"
+        better_f1 = model_ens["metrics"]["f1"]
+        worse_f1 = strat_ens["metrics"]["f1"]
+
+    lines.extend(
+        [
+            f"- **Best Ensemble Method:** {better} (F1 = {better_f1:.3f})",
+            f"- **Strategy Ensemble:** Requires ≥2 of 4 prompting strategies to agree on the same misconception",
+            f"- **Model Ensemble:** Requires ≥2 of 6 models to agree on the same misconception",
+            "",
+            "> **Key Finding:** Ensemble voting " + (
+                f"improves F1 by {max(strat_ens['f1_delta'], model_ens['f1_delta']):.3f} through precision gains."
+                if max(strat_ens["f1_delta"], model_ens["f1_delta"]) > 0
+                else "reduces F1, suggesting the precision-recall tradeoff is not favorable for this task."
+            ),
+            "",
+        ]
+    )
+
     # Methodology note
     lines.extend(
         [
@@ -1527,6 +1674,8 @@ def generate_multi_report(
             f"- **Noise Floor:** Detections with similarity < {noise_floor:.2f} are filtered as 'pedantic' noise, not counted as hallucinations.",
             "- **Bootstrap CI:** 1000 resamples with replacement for confidence intervals.",
             "- **McNemar's Test:** Paired comparison with continuity correction.",
+            "- **Strategy Ensemble:** Detection validated if ≥2/4 strategies agree on same misconception for same student/question.",
+            "- **Model Ensemble:** Detection validated if ≥2/6 models agree on same misconception for same student/question/strategy.",
             "",
         ]
     )
