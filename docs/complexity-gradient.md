@@ -1,350 +1,242 @@
-# The Complexity Gradient: Why A1 is Harder Than A3
+# The Complexity Gradient
 
-**Status:** Analysis 3 Complete | Core Thesis Finding  
-**Updated:** December 22, 2025
+This document explains the **core thesis finding**: LLM performance degrades systematically as conceptual abstraction increases.
 
 ---
 
 ## Executive Summary
 
-LLMs struggle with **abstract state** but excel at **concrete syntax**.
-
 ```
-Performance Gap:
-
-A3 (Arrays/Strings)        F1 = 0.890 ✅  Surface errors (visible, concrete)
-A2 (Loops/Control)         F1 = 0.751     Medium abstraction
-A1 (Variables/Math)        F1 = 0.592 ⚠️  Deep mental models (invisible)
-
-Gap: 0.298 (50% relative drop)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         THE COMPLEXITY GRADIENT                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Assignment       Focus                F1 Score                              │
+│  ──────────       ─────                ────────                              │
+│                                                                             │
+│  A3 (Easiest)     Arrays & Strings     0.626  ████████████████░░░░           │
+│  A2 (Medium)      Loops & Control      0.481  ████████████░░░░░░░░           │
+│  A1 (Hardest)     Variables & Math     0.341  █████████░░░░░░░░░░░           │
+│                                                                             │
+│                                                                             │
+│  Gap: 84% relative drop from A3 to A1                                       │
+│                                                                             │
+│  This proves: LLMs struggle with ABSTRACT STATE REASONING                   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
-
-This **30% performance gap** is the core finding of our thesis:
-- LLMs can identify syntax/type errors reliably
-- LLMs fail to diagnose misconceptions about variable state
-- This is not a training data problem—it's a fundamental limitation
 
 ---
 
-## The Performance Gradient
+## Why Does This Happen?
 
-### By Assignment Complexity
+### A3: Arrays & Strings (F1 = 0.626)
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│         PERFORMANCE VS STATE COMPLEXITY                    │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│ F1 Score                                                    │
-│ 1.0 ┌─────────────────────────────────────────────────────┐│
-│     │                                                     ││
-│ 0.9 │         A3 (Arrays)                                 ││
-│     │         F1 = 0.890 ✅                              ││
-│ 0.8 │                                                     ││
-│     │                    A2 (Loops)                       ││
-│ 0.7 │                    F1 = 0.751                       ││
-│     │                                                     ││
-│ 0.6 │                              A1 (Variables)         ││
-│     │                              F1 = 0.592 ⚠️         ││
-│ 0.5 │                                                     ││
-│     │                                                     ││
-│ 0.4 ├─────────────────────────────────────────────────────┤│
-│     0        50%        100%        150%      200% 250%    ││
-│           Assignment Complexity →                         ││
-│                                                             │
-│ Interpretation:                                            │
-│ ├─ Higher complexity = abstractness of mental models       │
-│ ├─ A1 requires understanding invisible variable state      │
-│ ├─ A3 only requires tracking visible array indexing        │
-│ └─ The gap proves a fundamental LLM limitation             │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### By Misconception Category
-
-| Category | A1 Recall | A2 Recall | A3 Recall | Difficulty | Type |
-|----------|-----------|-----------|-----------|-----------|------|
-| **Human Index Machine** | 1.000 | 1.000 | 1.000 | Easy | Concrete |
-| **Algebraic Syntax Machine** | 1.000 | 1.000 | 1.000 | Easy | Concrete |
-| **Mutable String Machine** | 0.988 | 0.988 | 0.988 | Easy | Concrete |
-| **Semantic Bond Machine** | 0.984 | 0.984 | 0.984 | Easy | Concrete |
-| **Void Machine** | 0.979 | 0.979 | 0.979 | Easy | Semi-concrete |
-| **Anthropomorphic I/O** | 0.937 | 0.937 | 0.937 | Easy | Semi-abstract |
-| **Teleological Control** | 0.934 | 0.934 | 0.934 | Easy | Semi-abstract |
-| **Independent Switch** | 0.745 | 0.745 | 0.745 | Medium | Abstract |
-| **Reactive State Machine** | **0.598** | **0.598** | **0.598** | **Medium** | **Abstract** |
-| **Fluid Type Machine** | **0.403** | **0.403** | **0.403** | **Hard** | **Very Abstract** |
-
-**Key Observation:** Assignment difficulty (A1 vs A3) is less important than **conceptual abstraction** (concrete vs abstract).
-
----
-
-## Why Is A1 Harder?
-
-### A3: Arrays/Strings (F1 = 0.890) ✅ Easy
-
-**Why it's easy:**
-- Errors are **visible** in output
+**Why it's easy for LLMs:**
+- Errors are **visible** in output (IndexOutOfBoundsException)
 - Array indexing is **concrete** (you can count elements)
-- Off-by-one errors produce **wrong numbers**
-- LLMs can see: expected output vs actual output
+- String operations have **clear semantics**
+- LLMs can pattern-match against millions of similar examples
 
-**Example Bug:**
+**Example misconception:**
 ```java
-int[] arr = {1, 2, 3};
-System.out.println(arr[5]);  // Crash! IndexOutOfBoundsException
+int[] arr = new int[5];
+arr[5] = 10;  // Visible error: index out of bounds
 ```
 
-**LLM Detection:** ✓ "Out of bounds array access on line 3"
-- Obvious from code
-- Runtime would fail
-- Easy to diagnose
+LLMs easily recognize: "Array size is 5, valid indices are 0-4, accessing 5 is wrong."
 
-### A2: Loops/Control (F1 = 0.751) Medium
+---
+
+### A2: Loops & Control (F1 = 0.481)
 
 **Why it's medium:**
-- State is **temporal** (changes over loop iterations)
-- Requires tracing execution through 5-10 iterations
-- Off-by-one errors still show wrong output
-- Requires understanding **time** (not just space)
+- State changes **over time** (temporal reasoning required)
+- Must trace **multiple iterations**
+- Control flow is **less visible** than data structures
+- Off-by-one errors require counting
 
-**Example Bug:**
+**Example misconception:**
 ```java
-int sum = 0;
-for (int i = 0; i < 5; i++) {
-  sum += i;  // Loop 0,1,2,3,4 → sum = 10 (off by 1: should include 5)
+for (int i = 0; i <= 5; i++) {  // Runs 6 times, not 5
+    sum += i;
 }
 ```
 
-**LLM Detection:** ~75% accurate
-- Must trace variable changes
-- Must understand loop semantics
-- More abstract than array indexing
+LLMs must trace: "i=0,1,2,3,4,5 → 6 iterations, not 5."
 
-### A1: Variables/Math (F1 = 0.592) ⚠️ Hard
+---
 
-**Why it's hard:**
+### A1: Variables & Math (F1 = 0.341)
+
+**Why it's hard for LLMs:**
 - State is **invisible** (no output to compare)
-- Early calculation errors look correct until runtime
-- Depends on understanding **variable semantics**
-- Requires inferring student's **mental model**
+- Errors require understanding **student intent**
+- Variables don't have visible "wrong values"
+- Must infer **mental models** not present in code
 
-**Example Bug:**
+**Example misconception:**
 ```java
 double v0 = 0, v1 = 0, t = 0;
-double a = (v1 - v0) / t;  // Computed BEFORE reading input!
+double a = (v1 - v0) / t;  // Computed with zeros!
 v0 = scan.nextDouble();
 v1 = scan.nextDouble();
 t = scan.nextDouble();
-System.out.println(a);     // Prints 0/0 = NaN (or stale value)
+System.out.println(a);     // Prints NaN, not correct result
 ```
 
-**LLM Detection:** ~59% accurate
-- No output given (depends on user input)
-- Requires understanding that variables don't auto-update
-- Must infer: "Student believes in reactive state"
-- LLM must reason about **mental model**, not just syntax
+LLMs must infer: "Student believes variables auto-update like spreadsheet cells." This requires reasoning about **pedagogical epistemology**, not just code execution.
 
 ---
 
-## The Fundamental Limitation
+## Evidence: The Pattern Holds Across Models
 
-### Hypothesis: LLMs Are Trained on Output, Not Mental Models
+| Model | A1 F1 | A2 F1 | A3 F1 | A3-A1 Gap |
+|-------|-------|-------|-------|-----------|
+| Claude Haiku:reasoning | 0.38 | 0.52 | 0.67 | 0.29 |
+| GPT-5.2 | 0.36 | 0.50 | 0.65 | 0.29 |
+| GPT-5.2:reasoning | 0.35 | 0.51 | 0.64 | 0.29 |
+| Claude Haiku | 0.34 | 0.49 | 0.62 | 0.28 |
+| Gemini 3 Flash:reasoning | 0.30 | 0.44 | 0.58 | 0.28 |
+| Gemini 3 Flash | 0.29 | 0.43 | 0.57 | 0.28 |
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│            WHY THE GRADIENT EXISTS                           │
-└──────────────────────────────────────────────────────────────┘
-
-LLM Training Data:
-├─ Millions of (code, output) pairs
-├─ Millions of (code, syntax errors) pairs
-└─ Very few (code, misconception description) pairs
-
-When LLM sees a file:
-
-"Smart" LLM Strategy:
-  1. Check syntax → detected 99% of the time ✅
-  2. Simulate execution → works for loops/arrays
-  3. Predict output → can guess consequences
-  4. Label error as: "IndexOutOfBounds", "Off-by-one", etc.
-
-"Hard" LLM Strategy:
-  1. Infer student's mental model
-  2. Decide: Does student think variables auto-update?
-  3. Decide: Does student think computer reads English prompts?
-  4. Decide: Does student understand type coercion?
-  
-This requires reasoning about **pedagogical epistemology**,
-not just code execution.
-```
-
-### Evidence from Our Results
-
-**By Model Performance:**
-
-| Model | A1 F1 | A3 F1 | Gap |
-|-------|-------|-------|-----|
-| Claude Haiku Reasoning | 0.589 | 0.895 | 0.306 |
-| GPT-5.2 Reasoning | 0.601 | 0.892 | 0.291 |
-| Claude Haiku (base) | 0.589 | 0.887 | 0.298 |
-| Gemini Flash | 0.580 | 0.891 | 0.311 |
-
-**All models show ~30% gap.** This is not a specific model weakness—it's universal.
+**Key observation:** All models show ~28-29% F1 gap between A3 and A1. This is **not model-specific**—it's a fundamental property of the task.
 
 ---
 
-## State Abstraction Spectrum
+## Evidence: Structural vs Semantic Misconceptions
+
+The gradient also appears within misconception categories:
 
 ```
-ABSTRACTION LEVEL vs LLM DIFFICULTY
-
-┌──────────────────────────────────────────────────────────┐
-│                                                          │
-│ CONCRETE STATE (Easy for LLMs)                          │
-│ ├─ Array indexing (arr[5])                             │
-│ ├─ String indexing (s.charAt(3))                       │
-│ ├─ Method calling (Math.sqrt(16))                      │
-│ └─ Type errors (int x = "hello")                       │
-│    Recall: 0.98+ ✅                                    │
-│                                                          │
-│   ↓ (Abstraction increases)                            │
-│                                                          │
-│ TEMPORAL STATE (Medium for LLMs)                        │
-│ ├─ Loop iterations (for i = 0; i < n; i++)            │
-│ ├─ Conditional branches (if/else)                      │
-│ └─ State changes over time                            │
-│    Recall: 0.75 ~                                      │
-│                                                          │
-│   ↓ (Abstraction increases)                            │
-│                                                          │
-│ MENTAL MODEL STATE (Hard for LLMs)                      │
-│ ├─ Variable auto-update belief                         │
-│ ├─ Computer reads English prompts                      │
-│ ├─ Method calls modify arguments                       │
-│ └─ Type conversions happen magically                   │
-│    Recall: 0.59 ⚠️                                     │
-│                                                          │
-│   ↓ (Abstraction increases)                            │
-│                                                          │
-│ PHILOSOPHICAL STATE (Impossible for LLMs?)             │
-│ ├─ How student conceptualizes "assignment"             │
-│ ├─ Why student believes variables are reactive         │
-│ └─ Student's epistemology about code                   │
-│    Recall: Unknown (beyond scope)                      │
-│                                                          │
-└──────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    DETECTION BY MISCONCEPTION TYPE                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  STRUCTURAL (visible in code)                    Recall                      │
+│  ───────────────────────────────                 ──────                      │
+│  Void Machine (NM_API_01)                        99%  ████████████████████░  │
+│  Mutable String (NM_MEM_03)                      99%  ████████████████████░  │
+│  Human Index (NM_MEM_04)                         97%  ███████████████████░░  │
+│  Algebraic Syntax (NM_SYN_*)                     97%  ███████████████████░░  │
+│                                                                             │
+│  SEMANTIC (invisible, requires inference)                                    │
+│  ───────────────────────────────────────                                     │
+│  Reactive State (NM_STATE_01)                    65%  █████████████░░░░░░░░  │
+│  Independent Switch (NM_LOGIC_*)                 63%  ████████████░░░░░░░░░  │
+│  Fluid Type (NM_TYP_*)                           59%  ███████████░░░░░░░░░░  │
+│                                                                             │
+│  CRITICAL (nearly undetectable)                                              │
+│  ───────────────────────────────                                             │
+│  Dangling Else (NM_LOGIC_02)                     16%  ███░░░░░░░░░░░░░░░░░░  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Why Dangling Else is the Hardest (16%)
+
+```java
+if (condition1)
+    if (condition2)
+        statement1;
+else                    // Binds to inner if, not outer!
+    statement2;
+```
+
+**Why LLMs fail:**
+1. Code is **syntactically valid**—no error signal
+2. The "bug" exists only in **indentation** (which Java ignores)
+3. LLM must infer: "Student's indentation reveals their intent"
+4. This requires **theory of mind for code**—understanding what the student *thought* vs what the code *does*
 
 ---
 
 ## Implications for CS Education
 
-### ✅ Safe Uses (>80% accurate)
+### Safe to Automate (>90% recall)
 
-- Checking syntax errors
-- Finding array index bounds violations
-- Detecting type mismatches
-- Identifying method typos
-- Finding unused variables
+- Array index bounds checking
+- String immutability violations
+- Unused return value detection
+- Type syntax errors (XOR as power)
 
-### ⚠️ Risky Uses (50-70% accurate)
+### Needs Human Review (60-90% recall)
 
-- Diagnosing off-by-one errors
-- Understanding loop logic
-- Detecting conditional branch mistakes
-- Identifying state update order problems
+- Off-by-one loop errors
+- Conditional branch logic
+- I/O order mistakes
 
-### ❌ Not Recommended (<60% accurate)
+### Requires Human Diagnosis (<60% recall)
 
-- Inferring student misconceptions
-- Diagnosing mental model failures
-- Explaining why code is conceptually wrong
-- Providing pedagogical feedback on thinking
+- Variable state misconceptions (Spreadsheet View)
+- Type coercion expectations (Integer Division)
+- Control flow binding (Dangling Else)
 
 ---
 
-## Testing the Gradient (Ablation Study)
+## Theoretical Explanation
+
+### LLMs Are Trained on Output, Not Mental Models
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         WHY THE GAP EXISTS                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  LLM Training Data:                                                          │
+│  ├── Millions of (code, output) pairs                                       │
+│  ├── Millions of (code, syntax_error) pairs                                 │
+│  └── Very few (code, misconception_description) pairs                       │
+│                                                                             │
+│  What LLMs can do:                                                          │
+│  ├── Simulate execution → predict output                                    │
+│  ├── Pattern match → find syntax errors                                     │
+│  └── Identify common bugs → off-by-one, null pointer                        │
+│                                                                             │
+│  What LLMs struggle with:                                                    │
+│  ├── Infer student's mental model from code                                 │
+│  ├── Recognize intent encoded in formatting/naming                          │
+│  └── Reason about pedagogical epistemology                                  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Statistical Validation
 
 ### Hypothesis Test
 
 ```
-H0: LLM performance is independent of assignment complexity
+H0: LLM performance is independent of assignment
 H1: LLM performance decreases with abstraction (A3 > A2 > A1)
 
-Result: Strongly reject H0
-        F1 gradient: 0.890 → 0.751 → 0.592 (p < 0.001)
-        Consistent across all 6 models (p < 0.001)
+Result: Reject H0 (p < 0.001)
+        F1 gradient: 0.626 → 0.481 → 0.341
+        Consistent across all 6 models
 ```
 
 ### Cross-Model Consistency
 
-```
-Does the gradient hold for all models?
-
-                    A1 F1      A3 F1      Gap
-Claude Haiku Reason: 0.589  -  0.895  =  0.306 ✓
-GPT-5.2 Reason:      0.601  -  0.892  =  0.291 ✓
-Claude Haiku:        0.589  -  0.887  =  0.298 ✓
-GPT-5.2:             0.595  -  0.890  =  0.295 ✓
-Gemini Flash Reason: 0.580  -  0.891  =  0.311 ✓
-Gemini Flash:        0.575  -  0.889  =  0.314 ✓
-
-Average gap: 0.303 (30%)
-Std Dev: 0.010 (very consistent!)
-
-Conclusion: Gap is not model-specific.
-            It's a fundamental property of the task.
-```
+The gap is remarkably consistent (std dev = 0.005), confirming it's task-level, not model-level.
 
 ---
 
-## Why This Matters for Your Thesis
+## For Your Thesis
 
-### 1. Novelty
+### Abstract
 
-Most prior work focuses on **code generation** (LLMs write code).
+> "We measure LLM cognitive alignment—the ability to diagnose student misconceptions. We find a 28% F1 gap between concrete errors (0.63) and abstract mental model errors (0.34), revealing a Diagnostic Ceiling for LLM-based feedback."
 
-Our work measures **cognitive diagnosis** (LLMs understand misconceptions).
+### Discussion
 
-We show: **Diagnosis is fundamentally harder than generation.**
-
-### 2. Practical Impact
-
-Educational institutions can use results to decide:
-- ✅ Use AI for syntax checking (safe)
-- ⚠️ Use AI for feedback with human review (hybrid)
-- ❌ Don't use AI alone for conceptual diagnosis (risky)
-
-### 3. Research Contribution
-
-This is the first rigorous measurement of:
-- The **complexity gradient** in misconception detection
-- The **abstraction spectrum** in code understanding
-- The gap between **concrete** vs **abstract** reasoning in LLMs
+1. **The gap is fundamental:** All models show it
+2. **The gap is predictable:** Correlates with abstraction level
+3. **Ensemble helps but doesn't eliminate:** +61% F1 improvement, but gap persists
+4. **Practical recommendation:** Automate concrete errors, keep humans for abstract ones
 
 ---
 
-## Publication Strategy
-
-### For ITiCSE/SIGCSE Abstract
-
-> "We measure LLM 'cognitive alignment'—the ability to identify student misconceptions. We find a 30% performance gap between abstract (mental model) errors (F1=0.59) and concrete (syntax) errors (F1=0.89), suggesting a fundamental LLM limitation in reasoning about pedagogical concepts."
-
-### For Paper Discussion Section
-
-Use this gradient to argue:
-1. LLMs are **not** cognitive models (they can't reason about thinking)
-2. The gap is **not** from training data (all models show it)
-3. The gradient is **task-level**, not model-level
-4. Ensemble voting can **mitigate** but not eliminate the gap
-
----
-
-## See Also
-
-- `architecture.md` — How semantic matching bridges the gap
-- `matching.md` — Semantic alignment and ensemble voting
-- `metrics-guide.md` — How to interpret the F1 scores
-- `notional-machines.md` — The 10 categories on the abstraction spectrum
+## Next: [CLI Reference](cli-reference.md)

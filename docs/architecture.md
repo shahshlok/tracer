@@ -1,150 +1,350 @@
-# Architecture Overview: Cognitive Alignment Research Framework
+# System Architecture
 
-**Status:** Analysis 3 Complete | Ensemble Voting Implemented  
-**Last Updated:** December 22, 2025
-
----
-
-## System Overview
-
-This document describes the **complete architecture** of `ensemble-eval-cli`, a research framework for measuring LLM "Cognitive Alignment"—the ability to identify deep student misconceptions in CS code.
+This document provides a complete technical overview of the LLM Misconception Detection Framework. It explains how each component works together to measure whether LLMs can diagnose student mental models.
 
 ---
 
-## High-Level Pipeline (3 Stages + Ensemble)
+## Table of Contents
+
+1. [Research Goal](#research-goal)
+2. [The 4-Stage Pipeline](#the-4-stage-pipeline)
+3. [Stage 1: Synthetic Injection](#stage-1-synthetic-injection)
+4. [Stage 2: Blind Detection](#stage-2-blind-detection)
+5. [Stage 3: Semantic Alignment](#stage-3-semantic-alignment)
+6. [Stage 4: Ensemble Voting](#stage-4-ensemble-voting)
+7. [Directory Structure](#directory-structure)
+8. [Data Models](#data-models)
+9. [Technology Stack](#technology-stack)
+
+---
+
+## Research Goal
+
+This framework measures **Cognitive Alignment**—the degree to which LLMs can identify not just *what* is wrong with code, but *why* the student wrote it that way (their mental model).
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        COMPLETE RESEARCH PIPELINE                           │
+│                           WHAT WE MEASURE                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Traditional Code Analysis        vs        Mental Model Diagnosis          │
+│   ─────────────────────────────              ──────────────────────────      │
+│                                                                             │
+│   "Line 5 has an array index       vs   "Student believes arrays start      │
+│    out of bounds error"                  at index 1, like in mathematics"   │
+│                                                                             │
+│   ↓ Identifies symptom                   ↓ Identifies cognitive cause       │
+│   ↓ Any static analyzer can do this     ↓ Requires understanding intent    │
+│                                                                             │
+│   This framework measures whether LLMs can do the SECOND type.              │
+│                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
-
-STAGE 1: SYNTHETIC INJECTION (Data Generation)
-┌─────────────────────────────────────────┐
-│ data/{a1,a2,a3}/groundtruth.json        │
-│ └─ 10 Notional Machine categories       │
-│ └─ 50+ misconceptions with theory       │
-│                                         │
-│ ↓ dataset_generator.py                  │
-│                                         │
-│ authentic_seeded/{a1,a2,a3}/            │
-│ └─ 120 students × 3 questions = 360     │
-│ └─ 40% clean, 60% seeded with bugs      │
-└─────────────────────────────────────────┘
-
-STAGE 2: BLIND DETECTION (LLM Analysis)
-┌──────────────────────────────────────────────────────────────┐
-│ 6 LLM Models × 4 Prompt Strategies × 3 Assignments           │
-│                                                              │
-│ Models:                  Strategies:                         │
-│ ├─ GPT-5.2               ├─ Baseline (simple ask)            │
-│ ├─ GPT-5.2 Reasoning     ├─ Taxonomy (with categories)       │
-│ ├─ Claude Haiku          ├─ CoT (step-by-step tracing)       │
-│ ├─ Claude Haiku Reasoning├─ Socratic (mental model probing)  │
-│ ├─ Gemini Flash          │                                   │
-│ └─ Gemini Flash Reasoning│ Total: 72 detection runs          │
-│                          │                                   │
-│ ↓ llm_miscons_cli.py                                          │
-│                                                              │
-│ detections/{a1,a2,a3}/{strategy}/student_Q*.json            │
-│ └─ 360 files × 4 strategies × 6 models = 8,640 detections   │
-└──────────────────────────────────────────────────────────────┘
-
-STAGE 3: SEMANTIC ALIGNMENT (Matching)
-┌────────────────────────────────────────────────────┐
-│ Semantic Embedding Pipeline:                       │
-│                                                    │
-│ 1. Load detection (LLM output)                    │
-│    ├─ inferred_category_name                     │
-│    ├─ student_thought_process                    │
-│    └─ conceptual_gap                             │
-│                                                    │
-│ 2. Embed with OpenAI text-embedding-3-large      │
-│    ├─ Detection text vector (1536D)              │
-│    └─ Ground truth text vector (1536D)           │
-│                                                    │
-│ 3. Compute cosine similarity                     │
-│    └─ If score > threshold (0.65): Match found   │
-│                                                    │
-│ 4. Classify result:                              │
-│    ├─ TP: matched correct misconception          │
-│    ├─ FP_CLEAN: wrong match                      │
-│    ├─ FP_HALLUCIN: false detection              │
-│    └─ FN: missed the actual misconception        │
-│                                                    │
-│ ↓ analyze.py (single-strategy mode)              │
-│                                                    │
-│ runs/multi/run_analysis2.2/                      │
-│ └─ Precision: 0.313, Recall: 0.872, F1: 0.461   │
-└────────────────────────────────────────────────────┘
-
-STAGE 4: ENSEMBLE VOTING (Consensus Filtering) ⭐ NEW
-┌──────────────────────────────────────────────────────────────┐
-│ Majority Consensus: Require ≥2 strategies to agree           │
-│                                                              │
-│ For each (student, question, misconception_id):             │
-│   Count which strategies detected it                        │
-│   If agreement_count >= 2:                                  │
-│     → VALIDATE detection (count as result)                 │
-│   Else:                                                     │
-│     → REJECT detection (filter as hallucination)           │
-│                                                              │
-│ ↓ analyze.py (ensemble-voting mode)                          │
-│                                                              │
-│ runs/multi/run_analysis3/                                   │
-│ ├─ Precision: 0.649 (+107% improvement) ✅                 │
-│ ├─ Recall: 0.871 (stable) ✅                               │
-│ ├─ F1: 0.744 (+61% improvement) ✅                         │
-│ └─ False Positives: -75% reduction (4,722 → 1,164) ✅      │
-└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Core Components
+## The 4-Stage Pipeline
 
-### 1. Data Layer
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          COMPLETE RESEARCH PIPELINE                           │
+└──────────────────────────────────────────────────────────────────────────────┘
 
-| Component | Location | Purpose | Size |
-|-----------|----------|---------|------|
-| **Ground Truth** | `data/{a1,a2,a3}/groundtruth.json` | 10 Notional Machine categories with 50+ misconceptions | ~200KB |
-| **Questions** | `data/{a1,a2,a3}/q*.md` | Problem statements for each question | ~50KB |
-| **Generated Code** | `authentic_seeded/{a1,a2,a3}/{Student}/*.java` | 360 student files with seeded bugs | ~5MB |
-| **Manifest** | `authentic_seeded/{a1,a2,a3}/manifest.json` | Maps student→question→misconception | ~100KB |
+  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+  │    STAGE 1      │    │    STAGE 2      │    │    STAGE 3      │    │    STAGE 4      │
+  │   SYNTHETIC     │───▶│     BLIND       │───▶│    SEMANTIC     │───▶│    ENSEMBLE     │
+  │   INJECTION     │    │   DETECTION     │    │   ALIGNMENT     │    │     VOTING      │
+  └─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                      │                      │
+         │                       │                      │                      │
+         ▼                       ▼                      ▼                      ▼
 
-### 2. Detection Layer (LLM Analysis)
+  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+  │ • 18 misconcp-  │    │ • 6 LLM models  │    │ • OpenAI embed- │    │ • Require ≥2    │
+  │   tions defined │    │ • 4 prompts     │    │   dings (3072D) │    │   strategies    │
+  │ • 300 students  │    │ • 360 files     │    │ • Cosine sim-   │    │   to agree      │
+  │ • 1 bug/file    │    │ • 8,640 outputs │    │   ilarity ≥0.65 │    │ • Filters 92%   │
+  │                 │    │                 │    │                 │    │   of false pos  │
+  └─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                      │                      │
+         ▼                       ▼                      ▼                      ▼
 
-| Component | Location | Purpose | Output |
-|-----------|----------|---------|--------|
-| **Main CLI** | `llm_miscons_cli.py` | Orchestrates API calls to 6 models × 4 strategies | 8,640 JSON files |
-| **Strategies** | `prompts/strategies.py` | 4 prompt architectures (baseline, taxonomy, cot, socratic) | Prompt templates |
-| **LLM Clients** | `utils/llm/openrouter.py` | API wrappers for OpenRouter, OpenAI, Anthropic, Google | API responses |
-| **Raw Detections** | `detections/{a1,a2,a3}/{strategy}/*.json` | Unprocessed LLM outputs | JSON with misconceptions |
+  authentic_seeded/      detections/              TP/FP/FN            Final metrics:
+  ├── a1/                ├── a1_multi/            classification      P=0.649, R=0.871
+  ├── a2/                ├── a2_multi/                                F1=0.744
+  └── a3/                └── a3_multi/
+```
 
-### 3. Semantic Matching Layer
+---
 
-| Component | Location | Purpose | Key Logic |
-|-----------|----------|---------|-----------|
-| **Semantic Matcher** | `utils/matching/semantic.py` | Embedding-based alignment (OpenAI text-embedding-3-large) | Cosine similarity > 0.65 |
-| **Null Detector** | `analyze.py::is_null_template_misconception()` | Filters "no misconception" false positives | Keyword + semantic match |
-| **Noise Floor** | `analyze.py::apply_noise_floor()` | Silently filters ultra-low-confidence detections | Removes score < 0.55 |
-| **Result Classifier** | `analyze.py::classify_detection()` | Maps similarity to TP/FP/FN | Ground truth comparison |
+## Stage 1: Synthetic Injection
 
-### 4. Ensemble Voting Layer ⭐ NEW
+### Purpose
+Create a dataset of student code with **known, labeled misconceptions** that can serve as ground truth for evaluation.
 
-| Component | Location | Purpose | Algorithm |
-|-----------|----------|---------|-----------|
-| **Ensemble Filter** | `analyze.py::apply_ensemble_filter()` | Consensus voting across 4 strategies | Majority vote (N≥2) |
-| **Agreement Map** | `analyze.py` | Groups detections by (student, question, misconception_id) | Counts strategies per ID |
-| **Validation** | `analyze.py` | Keeps only high-agreement detections | Rejects single-strategy outliers |
+### Process
 
-### 5. Analysis & Reporting Layer
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         SYNTHETIC INJECTION PROCESS                          │
+└─────────────────────────────────────────────────────────────────────────────┘
 
-| Component | Location | Purpose | Output |
-|-----------|----------|---------|--------|
-| **Metrics** | `utils/statistics.py` | Precision, Recall, F1, Bootstrap CIs | Numeric results |
-| **Visualization** | `utils/statistics.py` | Charts & heatmaps | PNG assets |
-| **Report Generator** | `analyze.py` | Markdown report with embedded results | `report.md` |
-| **Data Export** | `analyze.py` | CSV and JSON exports | `results.csv`, `data.json` |
+  INPUT: groundtruth.json                    OUTPUT: Student Java files
+  ───────────────────────                    ────────────────────────────
+
+  {                                          // Student: Allen_Andrew_600171
+    "id": "NM_STATE_01",                     // Question: Q1 (Acceleration)
+    "category": "Reactive State Machine",   
+    "name": "Spreadsheet View",              double v0 = 0, v1 = 0, t = 0;
+    "student_thinking": "Variables           double a = (v1 - v0) / t;  // Bug!
+      update automatically when              v0 = scan.nextDouble();
+      their sources change"                  v1 = scan.nextDouble();
+  }                                          t = scan.nextDouble();
+        │                                    System.out.println(a);
+        │                                           │
+        ▼                                           │
+  GPT-4 generates code                              │
+  that exhibits this                                ▼
+  misconception                              authentic_seeded/a1/
+                                             Allen_Andrew_600171/a1q1.java
+```
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `data/a1/groundtruth.json` | 8 misconception definitions for A1 |
+| `data/a2/groundtruth.json` | 6 misconception definitions for A2 |
+| `data/a3/groundtruth.json` | 4 misconception definitions for A3 |
+| `utils/generators/dataset_generator.py` | Generates student files |
+| `authentic_seeded/a{1,2,3}/manifest.json` | Maps student → misconception |
+
+### Important Constraint
+
+**One misconception per file.** This ensures clean labeling—each file has exactly one ground truth ID (or none if "clean").
+
+---
+
+## Stage 2: Blind Detection
+
+### Purpose
+Have LLMs analyze student code **without knowing the ground truth**, to measure their natural diagnostic ability.
+
+### Detection Grid
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              DETECTION MATRIX                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│                              PROMPTING STRATEGIES                            │
+│               ┌──────────┬──────────┬──────────┬──────────┐                 │
+│               │ baseline │ taxonomy │   cot    │ socratic │                 │
+│ ┌─────────────┼──────────┼──────────┼──────────┼──────────┤                 │
+│ │ GPT-5.2     │    ●     │    ●     │    ●     │    ●     │                 │
+│ │ GPT-5.2:r   │    ●     │    ●     │    ●     │    ●     │                 │
+│ │ Claude      │    ●     │    ●     │    ●     │    ●     │                 │
+│ │ Claude:r    │    ●     │    ●     │    ●     │    ●     │                 │
+│ │ Gemini      │    ●     │    ●     │    ●     │    ●     │                 │
+│ │ Gemini:r    │    ●     │    ●     │    ●     │    ●     │                 │
+│ └─────────────┴──────────┴──────────┴──────────┴──────────┘                 │
+│                                                                             │
+│  6 models × 4 strategies = 24 detection configurations                      │
+│  24 configs × 360 files = 8,640 total detections                            │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Prompting Strategies
+
+| Strategy | Description | Example Prompt Excerpt |
+|----------|-------------|----------------------|
+| **baseline** | Simple bug-finding | "Identify any misconceptions in this code" |
+| **taxonomy** | Provides category list | "Given these categories: [list], which applies?" |
+| **cot** | Chain-of-thought tracing | "Trace line-by-line, then identify misconceptions" |
+| **socratic** | Mental model probing | "What does the student believe about how Java works?" |
+
+### LLM Output Schema
+
+Every detection produces structured JSON:
+
+```json
+{
+  "misconceptions": [
+    {
+      "inferred_category_name": "Early Calculation Error",
+      "student_thought_process": "Student believes variables update automatically...",
+      "conceptual_gap": "Variables are assigned once, not reactive",
+      "evidence": [
+        {"line_number": 3, "code_snippet": "double a = (v1 - v0) / t;"}
+      ],
+      "confidence": 0.85
+    }
+  ]
+}
+```
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `prompts/strategies.py` | 4 prompt builders |
+| `miscons.py` | Detection orchestrator |
+| `utils/llm/*.py` | API clients (OpenAI, Anthropic, Google) |
+| `detections/{a}_multi/{strategy}/` | Output directory |
+
+---
+
+## Stage 3: Semantic Alignment
+
+### Purpose
+Match LLM outputs to ground truth despite **terminology differences**. An LLM might call it "Auto-Update Error" while we call it "Reactive State Machine"—same concept, different words.
+
+### The Matching Problem
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            THE TERMINOLOGY GAP                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  LLM Output:              "Student thinks variables auto-update"            │
+│  Ground Truth:            "NM_STATE_01: Reactive State Machine"             │
+│                                                                             │
+│  String matching:         0% overlap                                         │
+│  Semantic similarity:     87% match ✓                                        │
+│                                                                             │
+│  We use SEMANTIC EMBEDDINGS to bridge this gap.                             │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Embedding Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          SEMANTIC MATCHING PROCESS                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+  LLM Detection Text                          Ground Truth Definitions
+  ──────────────────                          ────────────────────────
+
+  "Student computed formula         ←─────→   NM_STATE_01: "Variables are
+   before reading inputs,                     treated like spreadsheet cells
+   expecting auto-update"                     that update automatically"
+
+         │                                            │
+         ▼                                            ▼
+
+  OpenAI text-embedding-3-large             OpenAI text-embedding-3-large
+  [0.12, -0.45, 0.78, ...]                  [0.15, -0.42, 0.81, ...]
+  (3072 dimensions)                         (3072 dimensions)
+
+                        │
+                        ▼
+
+              Cosine Similarity = 0.87
+
+                        │
+                        ▼
+
+              0.87 ≥ 0.65 threshold?
+                     YES ✓
+                        │
+                        ▼
+
+              MATCH: NM_STATE_01
+              Classification: TRUE POSITIVE
+```
+
+### Thresholds
+
+| Threshold | Value | Purpose |
+|-----------|-------|---------|
+| **Semantic Match** | 0.65 | Score above this = match |
+| **Noise Floor** | 0.55 | Score below this = ignore (pedantic noise) |
+
+### Classification Rules
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          CLASSIFICATION LOGIC                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Score < 0.55:     NOISE (discarded, not counted)                           │
+│                    "Didn't close Scanner" - pedantic, not misconception     │
+│                                                                             │
+│  Score 0.55-0.65:  FALSE POSITIVE (hallucination)                           │
+│                    LLM claimed something that doesn't match ground truth    │
+│                                                                             │
+│  Score ≥ 0.65:     Check if matched_id == expected_id                       │
+│                    ├── YES: TRUE POSITIVE (correct detection)               │
+│                    └── NO:  FALSE POSITIVE (wrong misconception)            │
+│                                                                             │
+│  No detection:     FALSE NEGATIVE (missed the bug)                          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `utils/matching/semantic.py` | OpenAI embedding + cosine similarity |
+| `analyze.py` | Main analysis with matching logic |
+
+---
+
+## Stage 4: Ensemble Voting
+
+### Purpose
+Reduce hallucinations by requiring **consensus** across strategies. If only 1 of 4 strategies detects something, it's likely a false positive.
+
+### The Voting Algorithm
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          ENSEMBLE VOTING LOGIC                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  For each (student, question, misconception_id) tuple:                      │
+│                                                                             │
+│      Count how many strategies detected it:                                  │
+│      ┌─────────────┬──────────────────────────────────────┐                 │
+│      │ baseline    │ Detected NM_STATE_01? YES            │                 │
+│      │ taxonomy    │ Detected NM_STATE_01? YES            │                 │
+│      │ cot         │ Detected NM_STATE_01? NO             │                 │
+│      │ socratic    │ Detected NM_STATE_01? YES            │                 │
+│      └─────────────┴──────────────────────────────────────┘                 │
+│                                                                             │
+│      Agreement count: 3/4                                                    │
+│      Threshold: ≥2                                                          │
+│      Result: VALIDATED ✓                                                     │
+│                                                                             │
+│  ────────────────────────────────────────────────────────────────────────── │
+│                                                                             │
+│      Example of REJECTION:                                                  │
+│      ┌─────────────┬──────────────────────────────────────┐                 │
+│      │ baseline    │ Detected "Redundant Logic"? NO       │                 │
+│      │ taxonomy    │ Detected "Redundant Logic"? NO       │                 │
+│      │ cot         │ Detected "Redundant Logic"? NO       │                 │
+│      │ socratic    │ Detected "Redundant Logic"? YES      │  ← hallucination│
+│      └─────────────┴──────────────────────────────────────┘                 │
+│                                                                             │
+│      Agreement count: 1/4                                                    │
+│      Threshold: ≥2                                                          │
+│      Result: REJECTED (filtered out)                                         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Impact of Ensemble Voting
+
+| Metric | Before Ensemble | After Ensemble | Change |
+|--------|-----------------|----------------|--------|
+| Precision | 0.322 | **0.649** | +107% |
+| Recall | 0.868 | 0.871 | stable |
+| F1 | 0.469 | **0.744** | +61% |
+| False Positives | 14,236 | 1,164 | -92% |
 
 ---
 
@@ -152,320 +352,149 @@ STAGE 4: ENSEMBLE VOTING (Consensus Filtering) ⭐ NEW
 
 ```
 ensemble-eval-cli/
-├── data/                              # Ground truth taxonomy
-│   ├── a1/
-│   │   ├── groundtruth.json           # 10 NM categories, 25 misconceptions
-│   │   ├── q1.md                      # Question 1 prompt
-│   │   ├── q2.md                      # Question 2 prompt
-│   │   └── q3.md                      # Question 3 prompt
-│   ├── a2/
-│   │   └── ... (same structure)
-│   └── a3/
-│       └── ... (same structure)
 │
-├── authentic_seeded/                  # Generated student code
+├── data/                               # GROUND TRUTH DEFINITIONS
 │   ├── a1/
-│   │   ├── manifest.json              # Student assignment (360 entries)
-│   │   └── {Student_ID}/
-│   │       ├── a1q1.java              # Generated Java code
-│   │       ├── a1q2.java
-│   │       └── a1q3.java
-│   ├── a2/ └── ...
-│   └── a3/ └── ...
+│   │   ├── groundtruth.json            # 8 misconceptions for Variables/Math
+│   │   ├── a1.md                       # Assignment description
+│   │   ├── q1.md, q2.md, q3.md         # Question prompts
+│   │   └── tests/                      # Test cases
+│   ├── a2/                             # 6 misconceptions for Loops/Control
+│   └── a3/                             # 4 misconceptions for Arrays/Strings
 │
-├── detections/                        # LLM detection outputs (72 subdirs)
+├── authentic_seeded/                   # GENERATED STUDENT CODE
+│   ├── a1/
+│   │   ├── manifest.json               # Student → misconception mapping
+│   │   └── {Student_Name}/
+│   │       ├── a1q1.java               # Student submission Q1
+│   │       ├── a1q2.java               # Student submission Q2
+│   │       └── a1q3.java               # Student submission Q3
+│   ├── a2/                             # 100 students × 3 questions
+│   └── a3/                             # 100 students × 3 questions
+│
+├── detections/                         # LLM DETECTION OUTPUTS
 │   ├── a1_multi/
-│   │   ├── baseline/                  # 6 models × 360 students
-│   │   │   ├── gpt-5.2/
-│   │   │   │   ├── student_q1.json
-│   │   │   │   ├── student_q2.json
-│   │   │   │   └── ...
-│   │   │   ├── gpt-5.2:reasoning/
-│   │   │   ├── claude-haiku/
-│   │   │   └── ... (6 models)
-│   │   ├── taxonomy/  └── ...
-│   │   ├── cot/       └── ...
-│   │   └── socratic/  └── ...
-│   ├── a2_multi/ └── ...
-│   └── a3_multi/ └── ...
+│   │   ├── baseline/                   # Strategy: baseline
+│   │   │   └── {model}/*.json          # Per-model outputs
+│   │   ├── taxonomy/
+│   │   ├── cot/
+│   │   └── socratic/
+│   ├── a2_multi/
+│   └── a3_multi/
 │
-├── runs/                              # Analysis results
-│   ├── multi/
-│   │   ├── run_analysis2.2/
-│   │   │   ├── config.json            # Analysis parameters
-│   │   │   ├── metrics.json           # Precision, Recall, F1
-│   │   │   ├── report.md              # Full markdown report
-│   │   │   ├── results.csv            # Detailed per-file results
-│   │   │   └── assets/
-│   │   │       ├── assignment_comparison.png
-│   │   │       ├── model_comparison.png
-│   │   │       ├── strategy_f1.png
-│   │   │       └── ... (8 PNG charts)
-│   │   └── run_analysis3/
-│   │       └── ... (same structure with ensemble results)
-│   └── index.json                     # Registry of all runs
+├── runs/                               # ANALYSIS RESULTS
+│   └── multi/
+│       └── run_final_analysis_100/     # FINAL RESULTS
+│           ├── report.md               # Full markdown report
+│           ├── metrics.json            # Numeric metrics
+│           ├── results.csv             # Per-file breakdown
+│           ├── compliance.csv          # TP/FP/FN per file
+│           └── assets/                 # PNG visualizations
+│               ├── assignment_comparison.png
+│               ├── model_comparison.png
+│               ├── strategy_f1.png
+│               ├── category_recall.png
+│               └── ...
 │
 ├── prompts/
-│   ├── __init__.py
-│   └── strategies.py                  # 4 prompt builders
+│   └── strategies.py                   # 4 prompt builders
 │
-├── pydantic_models/                   # Data models
-│   ├── evaluation.py                  # Metrics dataclasses
-│   └── submission/
-│       └── models.py                  # Detection output schema
+├── pydantic_models/
+│   ├── evaluation.py                   # DetectionResult schema
+│   └── submission/models.py            # Student submission schema
 │
 ├── utils/
 │   ├── llm/
-│   │   ├── openai.py                  # OpenAI API client
-│   │   ├── anthropic.py               # Anthropic API client
-│   │   ├── gemini.py                  # Google API client
-│   │   └── openrouter.py              # OpenRouter unified wrapper
+│   │   ├── openai.py                   # OpenAI client
+│   │   ├── anthropic.py                # Anthropic client
+│   │   └── gemini.py                   # Google client
 │   ├── matching/
-│   │   ├── semantic.py                # Cosine similarity matching
-│   │   ├── fuzzy.py                   # Token overlap (legacy)
-│   │   └── hybrid.py                  # Fused matching (legacy)
+│   │   └── semantic.py                 # Embedding pipeline
 │   ├── generators/
-│   │   └── dataset_generator.py       # Creates manifest & synthetic code
-│   ├── statistics.py                  # Metrics & visualization
-│   ├── grading.py                     # TP/FP/FN classification
-│   └── execution.py                   # Test execution
+│   │   └── dataset_generator.py        # Synthetic data generation
+│   └── statistics.py                   # Bootstrap CI, McNemar's test
 │
-├── docs/                              # This documentation
-│   ├── architecture.md                # You are here
-│   ├── analysis-pipeline.md           # Complete flow guide
-│   ├── cli-reference.md               # Command-line tools
-│   ├── matching.md                    # Semantic alignment
-│   ├── metrics-guide.md               # Precision/Recall/F1 explained
-│   ├── notional-machines.md           # 10 NM categories with examples
-│   ├── complexity-gradient.md         # A1-A3 performance gap analysis
-│   └── understanding-the-report.md    # How to read run reports
-│
-├── analyze.py                         # Main analysis script
-├── llm_miscons_cli.py                 # Detection CLI
-├── dataset_generator.py               # Data generation CLI
-├── pyproject.toml                     # UV dependencies
-└── README.md                          # Quick start
+├── docs/                               # DOCUMENTATION
+├── analyze.py                          # Main analysis CLI
+├── miscons.py                          # Detection orchestrator
+└── pipeline.py                         # Full pipeline runner
 ```
 
 ---
 
-## Data Flow Diagram (Detailed)
+## Data Models
 
-```
-┌────────────────────────────────────────────────────────────────────────────┐
-│                         COMPLETE DATA PIPELINE                             │
-└────────────────────────────────────────────────────────────────────────────┘
+### Ground Truth Schema (`groundtruth.json`)
 
-INPUT: Notional Machine Theory (5 Categories, 50+ Misconceptions)
-       │
-       ▼
-┌─────────────────────────────────────┐
-│  STAGE 1: Synthetic Injection       │
-├─────────────────────────────────────┤
-│                                     │
-│  1. Load groundtruth.json           │
-│     ├─ NM_STATE_01 (Spreadsheet)    │
-│     ├─ NM_IO_01 (Prompt Logic)      │
-│     ├─ NM_TYP_01 (Integer Division) │
-│     ├─ ... (50+ misconceptions)     │
-│     └─ ... (10 categories)          │
-│                                     │
-│  2. Create manifest.json            │
-│     ├─ 360 students                 │
-│     ├─ 40% clean (no bug)           │
-│     └─ 60% seeded (1 misconception) │
-│                                     │
-│  3. Generate Java files             │
-│     ├─ GPT-5.2 creates code         │
-│     ├─ Exhibits injected bugs       │
-│     └─ authentic_seeded/a{1,2,3}/   │
-│                                     │
-└────┬────────────────────────────────┘
-     │
-     ▼
-┌──────────────────────────────────────────┐
-│  STAGE 2: Blind Detection                │
-├──────────────────────────────────────────┤
-│                                          │
-│  For each Java file:                     │
-│    For each Strategy ∈ {baseline,        │
-│                         taxonomy,        │
-│                         cot,             │
-│                         socratic}:       │
-│      For each Model ∈ {GPT,              │
-│                        Claude,           │
-│                        Gemini,           │
-│                        ...}:             │
-│        ├─ Send code + prompt            │
-│        ├─ LLM analyzes code             │
-│        ├─ Outputs: misconceptions[]     │
-│        └─ Save to detections/           │
-│                                          │
-│  Output: 8,640 detection JSON files      │
-│  ├─ 360 files × 4 strategies × 6 models │
-│  └─ detections/{a1,a2,a3}/{strategy}/   │
-│                                          │
-└────┬───────────────────────────────────┘
-     │
-     ▼
-┌────────────────────────────────────────┐
-│  STAGE 3: Semantic Alignment           │
-├────────────────────────────────────────┤
-│                                        │
-│  For each detection:                   │
-│    1. Extract text:                    │
-│       ├─ inferred_category_name        │
-│       └─ student_thought_process       │
-│                                        │
-│    2. Embed with OpenAI                │
-│       ├─ Detection vector (1536D)      │
-│       └─ Ground truth vectors (1536D)  │
-│                                        │
-│    3. Compute similarity:              │
-│       ├─ Cosine distance to each GT    │
-│       ├─ Find max_score                │
-│       └─ Check if > 0.65               │
-│                                        │
-│    4. Filter noise:                    │
-│       ├─ If score < 0.55: discard      │
-│       ├─ If "no bug" pattern: discard  │
-│       └─ Else: proceed                 │
-│                                        │
-│    5. Classify:                        │
-│       ├─ If matched_id == expected:    │
-│       │  → TP (True Positive)          │
-│       ├─ Else if matched_id != null:   │
-│       │  → FP_CLEAN (Wrong match)      │
-│       ├─ Else if score > threshold:    │
-│       │  → FP_HALLUCIN (False alarm)   │
-│       └─ Else:                         │
-│          → FN (Missed detection)       │
-│                                        │
-│  Analysis 2.2 Results:                 │
-│  ├─ Precision: 0.313                   │
-│  ├─ Recall: 0.872                      │
-│  ├─ F1: 0.461                          │
-│  └─ Problem: 4,722 false positives     │
-│                                        │
-└────┬─────────────────────────────────┘
-     │
-     ▼
-┌──────────────────────────────────────────┐
-│  STAGE 4: Ensemble Voting ⭐             │
-├──────────────────────────────────────────┤
-│                                          │
-│  Group detections by:                    │
-│  ├─ student ID                           │
-│  ├─ question number                      │
-│  └─ misconception ID                     │
-│                                          │
-│  For each group:                         │
-│    Count strategies that agree:          │
-│    ├─ baseline says NM_STATE_01?         │
-│    ├─ taxonomy says NM_STATE_01?         │
-│    ├─ cot says NM_STATE_01?              │
-│    ├─ socratic says NM_STATE_01?         │
-│    └─ agreement_count = 2 out of 4 ✓     │
-│                                          │
-│  Decision rules:                         │
-│    ├─ If agreement_count >= 2:           │
-│    │  → VALIDATE detection               │
-│    └─ Else:                              │
-│       → REJECT detection (filter)        │
-│                                          │
-│  Analysis 3 Results:                     │
-│  ├─ Precision: 0.649 (+107%) ✅         │
-│  ├─ Recall: 0.871 (stable) ✅           │
-│  ├─ F1: 0.744 (+61%) ✅                 │
-│  └─ False Positives: -75% reduction ✅   │
-│                                          │
-└────┬──────────────────────────────────┘
-     │
-     ▼
-┌──────────────────────────────────────┐
-│  STAGE 5: Reporting & Analysis      │
-├──────────────────────────────────────┤
-│                                      │
-│  Compute metrics:                    │
-│  ├─ Precision = TP / (TP + FP)       │
-│  ├─ Recall = TP / (TP + FN)          │
-│  ├─ F1 = 2 × P × R / (P + R)         │
-│  └─ Bootstrap 95% CIs                │
-│                                      │
-│  By assignment (complexity gradient):│
-│  ├─ A3: F1 = 0.890 (easy)            │
-│  ├─ A2: F1 = 0.751 (medium)          │
-│  └─ A1: F1 = 0.592 (hard) ⚠️         │
-│                                      │
-│  By model:                           │
-│  ├─ Claude Haiku Reasoning: 0.819    │
-│  ├─ GPT-5.2 Reasoning: 0.788         │
-│  └─ Gemini Flash: 0.661              │
-│                                      │
-│  By strategy:                        │
-│  ├─ Baseline: 0.753                  │
-│  ├─ CoT: 0.750                       │
-│  ├─ Taxonomy: 0.734                  │
-│  └─ Socratic: 0.726                  │
-│                                      │
-│  Output files:                       │
-│  ├─ report.md (narrative results)    │
-│  ├─ metrics.json (numeric data)      │
-│  ├─ results.csv (per-file breakdown) │
-│  └─ assets/*.png (8 charts)          │
-│                                      │
-└──────────────────────────────────────┘
-
-OUTPUT: Publication-ready results demonstrating complexity gradient
+```json
+{
+  "misconceptions": [
+    {
+      "id": "NM_STATE_01",
+      "category": "The Reactive State Machine",
+      "name": "Spreadsheet View (Early Calculation)",
+      "explanation": "The student treats variables like spreadsheet cells...",
+      "student_thinking": "I'll define the formula first, then read inputs...",
+      "code_pattern": "Compute derived value BEFORE reading dependent inputs",
+      "applicable_questions": ["Q1", "Q2", "Q3"]
+    }
+  ]
+}
 ```
 
----
+### Manifest Schema (`manifest.json`)
 
-## Key Insights from Architecture
+```json
+{
+  "students": [
+    {
+      "name": "Allen_Andrew_600171",
+      "questions": {
+        "Q1": {"is_clean": false, "misconception_id": "NM_STATE_01"},
+        "Q2": {"is_clean": true, "misconception_id": null},
+        "Q3": {"is_clean": false, "misconception_id": "NM_TYP_01"}
+      }
+    }
+  ]
+}
+```
 
-### 1. Semantic Matching is Critical
-The system doesn't do string matching. It uses **embedding-based alignment** (OpenAI text-embedding-3-large) to bridge the gap between how LLMs describe misconceptions and how we define them theoretically.
+### Detection Output Schema
 
-**Example:**
-- LLM says: "The student thinks the program magically understands their variable names"
-- Ground Truth: "NM_IO_01: Prompt-Logic Mismatch"
-- **Similarity Score: 0.78 ✓** (matched despite different language)
-
-### 2. Ensemble Voting is the Breakthrough
-Single-strategy detection had 69% hallucination rate. By requiring ≥2 strategies to agree:
-- **Hallucinations reduced:** 4,722 → 1,164 (-75%)
-- **Accuracy improved:** F1 = 0.461 → 0.744 (+61%)
-- **Recall stable:** 0.872 → 0.871 (negligible loss)
-
-### 3. Complexity Gradient is Real
-Performance correlates with conceptual depth:
-- **A3 (Arrays/Strings):** F1 = 0.890 (concrete, visible errors)
-- **A2 (Loops/Control):** F1 = 0.751 (medium abstraction)
-- **A1 (Variables/Math):** F1 = 0.592 (abstract mental models)
-- **Gap: 30%** between A1 and A3 (50% relative drop)
-
-This is the **core thesis finding**: LLMs struggle with abstract state reasoning.
+```json
+{
+  "student": "Allen_Andrew_600171",
+  "question": "Q1",
+  "strategy": "baseline",
+  "model": "gpt-5.2",
+  "misconceptions": [
+    {
+      "inferred_category_name": "string",
+      "student_thought_process": "string",
+      "conceptual_gap": "string",
+      "evidence": [{"line_number": 3, "code_snippet": "..."}],
+      "confidence": 0.85
+    }
+  ]
+}
+```
 
 ---
 
 ## Technology Stack
 
 | Component | Technology | Version |
-|-----------|-----------|---------|
-| **Package Manager** | uv | Latest |
-| **Python** | Python | 3.12+ |
-| **Data Processing** | pandas | Latest |
-| **API Clients** | openai, anthropic, google-generativeai | Latest |
-| **Embeddings** | sentence-transformers | Latest |
-| **Visualization** | matplotlib, seaborn | Latest |
-| **Statistics** | scipy, numpy | Latest |
-| **CLI** | typer, click | Latest |
+|-----------|------------|---------|
+| Package Manager | uv | Latest |
+| Python | Python | 3.12+ |
+| LLM APIs | OpenRouter, OpenAI, Anthropic, Google | Latest |
+| Embeddings | OpenAI text-embedding-3-large | 3072D |
+| Data Processing | pandas, numpy | Latest |
+| Statistics | scipy | Latest |
+| Visualization | matplotlib, seaborn | Latest |
+| CLI | typer | Latest |
+| Validation | pydantic | v2 |
 
 ---
 
-## Next Steps
-
-See `future.md` for:
-1. **Thesis Write-up** — Publication-ready for ITiCSE/SIGCSE
-2. **Ablation Study** — Test N≥3, N≥4 ensemble thresholds
-3. **Per-Model Ensemble** — Compare strategy vs model voting
+## Next: [Analysis Pipeline](analysis-pipeline.md)
