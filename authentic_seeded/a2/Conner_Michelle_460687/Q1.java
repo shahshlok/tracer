@@ -1,0 +1,19 @@
+import java.util.Scanner;
+public class Q1{
+    public static void main(String[]a){
+        Scanner x=new Scanner(System.in);
+        System.out.print("Enter 5 integers: ");
+        int s=0;
+        int n=0;
+        int y=0;
+        int i=1;
+        if(i!=0){
+            while(i<5){
+                n=x.nextInt();
+                if(n%2==0||n%2!=1)s=s+n;
+                i=i+1;
+            }
+        }
+        System.out.println("Sum of even numbers: "+s);
+    }
+}

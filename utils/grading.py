@@ -10,28 +10,10 @@ from pydantic_models import (
     EvaluationDocument,
     LLMEvaluationResponse,
     ModelEvaluation,
-    Rubric,
     StudentFile,
     Submission,
 )
-from pydantic_models.comparison.models import Comparison
-from utils.comparison_generator import (
-    generate_category_agreement,
-    generate_category_insights,
-    generate_pairwise_differences,
-    generate_score_summary,
-)
-from utils.openrouter_sdk import get_structured_response
-
-
-def load_question(file_path: str) -> str:
-    with open(file_path) as f:
-        return f.read()
-
-
-def load_rubric(file_path: str) -> dict[str, Any]:
-    with open(file_path) as f:
-        return json.load(f)
+from utils.llm.openrouter import get_structured_response
 
 
 def load_student_submission(
@@ -54,30 +36,109 @@ def load_student_submission(
     raise FileNotFoundError(f"No .java file found for student {student_id}")
 
 
-def construct_prompt(question_text: str, rubric_data: dict[str, Any], student_code: str) -> str:
-    rubric_str = json.dumps(rubric_data)
-    prompt = f"""
-You are an expert grader for a Computer Science assignment.
+def parse_markdown_rubric(md_content: str) -> dict[str, Any]:
+    """
+    Parses a markdown table rubric into a dictionary.
+    Expected columns: Tasks, Marks, Topic, Why?
+    """
+    lines = md_content.splitlines()
+    categories = []
+    total_points = 0.0
+    title = "Rubric"
+    rubric_id = "rubric_unknown"
 
-**Question:**
-{question_text}
+    # Extract title from first heading line
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            title = stripped.lstrip("#").strip()
+            # Generate rubric_id from title
+            rubric_id = "rubric_" + title.lower().replace(" ", "_").replace("(", "").replace(
+                ")", ""
+            ).replace("-", "_")
+            break
 
-**Rubric:**
-{rubric_str}
+    # Skip header and separator lines
+    # Find the start of the table
+    start_index = 0
+    for i, line in enumerate(lines):
+        if line.strip().startswith("|") and "Tasks" in line:
+            start_index = i + 2  # Skip header and separator
+            break
 
-**Student Submission:**
-```java
-{student_code}
-```
+    for line in lines[start_index:]:
+        if not line.strip().startswith("|"):
+            continue
 
-Evaluate the student's submission based on the provided rubric.
-Provide a structured output containing:
-1. Scores for each category in the rubric.
-2. Specific feedback for each category.
-3. Identification of any misconceptions.
-4. Overall feedback.
-"""
-    return prompt
+        parts = [p.strip() for p in line.split("|")]
+        # parts[0] is empty string before first |
+        # parts[1] is Task
+        # parts[2] is Marks
+        # parts[3] is Topic
+        # parts[4] is Why?
+
+        if len(parts) < 5:
+            continue
+
+        task = parts[1]
+        marks_str = parts[2].replace("+", "").strip()
+        try:
+            points = float(marks_str)
+        except ValueError:
+            continue  # Skip if marks not parseable
+
+        topic = parts[3]
+        description = parts[4] if len(parts) > 4 else ""
+
+        categories.append(
+            {"task": task, "points": points, "topic": topic, "description": description}
+        )
+        total_points += points
+
+    return {
+        "totalPoints": total_points,
+        "categories": categories,
+        "title": title,
+        "rubric_id": rubric_id,
+    }
+
+
+def load_question(file_path: str) -> str:
+    with open(file_path) as f:
+        return f.read()
+
+
+def load_rubric(file_path: str) -> dict[str, Any]:
+    if file_path.endswith(".md"):
+        with open(file_path) as f:
+            return parse_markdown_rubric(f.read())
+    with open(file_path) as f:
+        return json.load(f)
+
+
+def construct_prompt(
+    question_text: str,
+    rubric_data: dict[str, Any],
+    student_code: str,
+    strategy: str = "minimal",
+) -> str:
+    """
+    Construct a grading prompt using the specified strategy.
+
+    Args:
+        question_text: The assignment question
+        rubric_data: The rubric dict
+        student_code: Student's code submission
+        strategy: One of "baseline", "minimal", "socratic", "rubric_only"
+                  Default is "minimal" for unbiased misconception detection research
+
+    Returns:
+        The constructed prompt string
+    """
+    from prompts.strategies import PromptStrategy, build_prompt
+
+    strategy_enum = PromptStrategy(strategy)
+    return build_prompt(strategy_enum, question_text, rubric_data, student_code)
 
 
 async def grade_with_model(model_name: str, messages: list[dict[str, str]]) -> ModelEvaluation:
@@ -94,9 +155,6 @@ async def grade_with_model(model_name: str, messages: list[dict[str, str]]) -> M
             provider="openrouter",
             run_id=f"run_{uuid.uuid4().hex[:8]}",
             config=Config(system_prompt_id="simple_direct_prompt", rubric_prompt_id="rubric_v1"),
-            scores=llm_response.scores,
-            category_scores=llm_response.category_scores,
-            feedback=llm_response.feedback,
             misconceptions=llm_response.misconceptions,
         )
     except Exception as e:
@@ -107,21 +165,20 @@ def create_evaluation_document(
     student_id: str,
     student_name: str,
     question_text: str,
-    rubric_data: dict[str, Any],
     filename: str,
     model_evals: dict[str, ModelEvaluation],
-    question_source_path: str = "data/question_cuboid.md",
-    rubric_source_path: str = "data/rubric_cuboid.json",
+    question_source_path: str = "data/question_insurance.md",
+    rubric_source_path: str = "data/rubric_insurance2.md",
 ) -> EvaluationDocument:
     # Context
     context = Context(
-        course_id="CS101",
-        course_name="Intro to CS",
+        course_id="COSC 111",
+        course_name="Intro to Programming",
         assignment_id=1,
-        assignment_title="Cuboid",  # Hardcoded as per grade_sergio.py
+        assignment_title="Insurance Compute",
         question_source_path=question_source_path,
         question_id="q1",
-        question_title="Cuboid Class",
+        question_title="Insurance Compute",
         rubric_source_path=rubric_source_path,
     )
 
@@ -134,25 +191,6 @@ def create_evaluation_document(
         files=[StudentFile(path=filename, language="Java")],
     )
 
-    # Rubric
-    rubric_categories = []
-    for cat in rubric_data["categories"]:
-        rubric_categories.append(
-            {
-                "category_id": cat["name"].lower().replace(" ", "_").replace("&", "and"),
-                "name": cat["name"],
-                "max_points": cat["points"],
-                "description": cat["description"],
-            }
-        )
-
-    rubric = Rubric(
-        rubric_id="rubric_cuboid_v1",
-        title="Cuboid Assignment Rubric",
-        total_points=rubric_data["totalPoints"],
-        categories=rubric_categories,
-    )
-
     return EvaluationDocument(
         evaluation_id=f"eval_{uuid.uuid4()}",
         schema_version="1.0.0",
@@ -160,12 +198,5 @@ def create_evaluation_document(
         created_by="cli.py",
         context=context,
         submission=submission,
-        rubric=rubric,
         models=model_evals,
-        comparison=Comparison(
-            score_summary=generate_score_summary(model_evals),
-            pairwise_differences=generate_pairwise_differences(model_evals),
-            category_agreement=(cat_agreement := generate_category_agreement(model_evals)),
-            category_insights=generate_category_insights(cat_agreement),
-        ),
     )

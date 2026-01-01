@@ -1,0 +1,216 @@
+{
+  "student": "Griffith_Stephanie_195104",
+  "question": "Q4",
+  "strategy": "taxonomy",
+  "status": "success",
+  "models": {
+    "gpt-5.2-2025-12-11": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Integer-division-as-real-division / automatic decimal expectation",
+          "student_thought_process": "The student believes they can compute the semi\u2011perimeter using integer intermediates (including integer division by 2) and then \u201cfix\u201d it afterward by casting to double, expecting the decimal part to still be there.",
+          "conceptual_gap": "In Java, when both operands are integers, division uses integer division (truncates the fractional part). Once the fraction is discarded, casting the truncated int to double cannot recover the lost .5 (or any other fractional part). To preserve decimals, the computation must stay in double (e.g., (side1+side2+side3)/2.0).",
+          "error_manifestation": "Wrong output (triangle area often incorrect; can become 0.0 or NaN if truncation makes Heron\u2019s expression negative).",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 60,
+              "code_snippet": "// Use intermediate integer values to represent the sum and then divide by 2 using integer division\nint semiPerimeterIntegerSum = (int) semiPerimeterNumerator;\nint semiPerimeterIntegerDenominator = 2;\nint semiPerimeterIntegerResult = semiPerimeterIntegerSum / semiPerimeterIntegerDenominator;"
+            },
+            {
+              "line_number": 64,
+              "code_snippet": "// Cast the result of the division to double to get the semi-perimeter as a decimal\ndouble semiPerimeterValue = (double) semiPerimeterIntegerResult;"
+            }
+          ]
+        }
+      ],
+      "count": 1
+    },
+    "claude-haiku-4-5-20251001": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Integer Division Truncation Misconception",
+          "student_thought_process": "The student believes that by casting the result of integer division to double after the division has already occurred, the lost fractional information can be recovered. They think: 'I'll do integer division first, then convert to double, and I'll get the correct decimal value.'",
+          "conceptual_gap": "Integer division (int / int) truncates toward zero before any casting happens. Once the fractional part is discarded during integer division, casting the result to double cannot recover that information. The student appears to think that casting to double after integer division will somehow give a decimal result, but it only converts the already-truncated integer to a double representation. For example, 25 / 2 = 12 (integer division), and casting 12 to double gives 12.0, not 12.5. The correct approach is to perform the division on double values: (double) semiPerimeterNumerator / 2.0.",
+          "error_manifestation": "wrong output - the semi-perimeter is computed incorrectly (rounded down to an integer), causing the final area calculation to be wrong",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 50,
+              "code_snippet": "int semiPerimeterIntegerSum = (int) sideOneLength + sideTwoLength + sideThreeLength);\nint semiPerimeterIntegerDenominator = 2;\nint semiPerimeterIntegerResult = semiPerimeterIntegerSum / semiPerimeterIntegerDenominator;\n\n// Cast the result of the division to double to get the semi-perimeter as a decimal\ndouble semiPerimeterValue = (double) semiPerimeterIntegerResult;"
+            },
+            {
+              "line_number": 50,
+              "code_snippet": "// Use intermediate integer values to represent the sum and then divide by 2 using integer division\nint semiPerimeterIntegerSum = (int) semiPerimeterNumerator;\nint semiPerimeterIntegerDenominator = 2;\nint semiPerimeterIntegerResult = semiPerimeterIntegerSum / semiPerimeterIntegerDenominator;\n\n// Cast the result of the division to double to get the semi-perimeter as a decimal\ndouble semiPerimeterValue = (double) semiPerimeterIntegerResult;"
+            }
+          ]
+        }
+      ],
+      "count": 1
+    },
+    "gemini-3-flash-preview": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Manual Lossy Type Conversion",
+          "student_thought_process": "The student believes that converting a precise decimal value (double) into an integer for intermediate arithmetic, and then casting it back to a double, is a valid or necessary way to process numerical data, likely assuming the loss of the fractional component will not invalidate the subsequent mathematical formula.",
+          "conceptual_gap": "The student fails to realize that casting a double to an int in Java is a lossy operation that permanently truncates the decimal portion. Converting the resulting integer back to a double (e.g., 8.0 instead of 8.7) does not recover the lost precision, which is critical for Heron's formula where the semi-perimeter must be accurate to avoid incorrect area results or even NaN results if (s - side) becomes negative due to truncation.",
+          "error_manifestation": "wrong output",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 60,
+              "code_snippet": "int semiPerimeterIntegerSum = (int) semiPerimeterNumerator;"
+            },
+            {
+              "line_number": 63,
+              "code_snippet": "double semiPerimeterValue = (double) semiPerimeterIntegerResult;"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Integer Division Preference",
+          "student_thought_process": "The student believes that for a result to be 'processed' correctly in a step-by-step manner, it should be stored in an integer format if it represents a count or a mid-point calculation, even when the inputs are lengths that naturally include decimals.",
+          "conceptual_gap": "Java's type system requires maintaining the 'double' type throughout the pipeline to preserve precision. The student treats the 'int' type as a temporary storage container for a 'real number' without acknowledging that 'int' cannot represent the continuous range of values required for geometry.",
+          "error_manifestation": "wrong output",
+          "confidence": 0.85,
+          "evidence": [
+            {
+              "line_number": 62,
+              "code_snippet": "int semiPerimeterIntegerResult = semiPerimeterIntegerSum / semiPerimeterIntegerDenominator;"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "gpt-5.2-2025-12-11:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Casting/precision \u201cfixes itself\u201d after integer division",
+          "student_thought_process": "The student believes they can safely convert a decimal value to an int, do `/ 2` using integer division, and then cast back to `double` to get the correct semi-perimeter (including .5 when needed).",
+          "conceptual_gap": "In Java, converting `double` to `int` truncates the fractional part permanently. Then `int / int` performs integer division (also truncating). Casting the *result* back to `double` does not recover the lost fractional information; it only changes the type of the already-truncated value. For Heron\u2019s formula, `s` must be computed in floating-point: `double s = (a+b+c)/2.0;`.",
+          "error_manifestation": "Wrong numeric output (area often incorrect, sometimes dramatically). This can also lead to a negative value under the square root (if truncation makes `s` too small), producing `NaN` from `Math.sqrt`.",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 59,
+              "code_snippet": "int semiPerimeterIntegerSum = (int) semiPerimeterNumerator;"
+            },
+            {
+              "line_number": 61,
+              "code_snippet": "int semiPerimeterIntegerResult = semiPerimeterIntegerSum / semiPerimeterIntegerDenominator;"
+            },
+            {
+              "line_number": 64,
+              "code_snippet": "double semiPerimeterValue = (double) semiPerimeterIntegerResult;"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Assuming integer arithmetic is a valid stand-in for real-number formulas",
+          "student_thought_process": "The student believes Heron\u2019s formula can be implemented by forcing intermediate steps into integers (\"represent the sum\") without changing the mathematical meaning, as long as the final variables are `double`.",
+          "conceptual_gap": "Heron\u2019s formula is defined over real numbers; forcing `s` (and implicitly the perimeter) into integers changes the formula because side lengths are generally non-integers. Java does not automatically \u201ckeep the real value around\u201d when you store something in an `int`; it overwrites it with a truncated integer approximation. The correct approach is to keep computations in `double` throughout.",
+          "error_manifestation": "Wrong semi-perimeter `s`, leading to wrong area; can also produce `NaN` if truncation makes `(s - sideX)` negative enough that the product under the square root becomes negative.",
+          "confidence": 0.85,
+          "evidence": [
+            {
+              "line_number": 58,
+              "code_snippet": "// Use intermediate integer values to represent the sum and then divide by 2 using integer division"
+            },
+            {
+              "line_number": 59,
+              "code_snippet": "int semiPerimeterIntegerSum = (int) semiPerimeterNumerator;"
+            },
+            {
+              "line_number": 60,
+              "code_snippet": "int semiPerimeterIntegerDenominator = 2;"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "claude-haiku-4-5-20251001:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Integer Division Precision Loss and Casting Misconception",
+          "student_thought_process": "The student believes that by converting a floating-point sum to an integer, performing integer division, and then casting the result back to double, they can obtain a decimal value for the semi-perimeter. They appear to think that the final cast to double will somehow recover or create decimal precision that was lost during integer division.",
+          "conceptual_gap": "In Java, type conversions do not recover lost information. When an int/int division is performed (lines 51-52), the result is truncated to an integer before any subsequent type conversion occurs. Casting this truncated integer to double (line 55) does not restore the lost fractional part. For example, if semiPerimeterNumerator = 17.071, then (int) 17.071 = 17, then 17 / 2 = 8 (integer division), and (double) 8 = 8.0. The correct approach is to use floating-point division: semiPerimeterNumerator / 2.0.",
+          "error_manifestation": "The program produces incorrect output. For the sample input (0,0), (5,0), (0,5), the semi-perimeter is incorrectly computed as 8.0 instead of approximately 8.536, causing the Heron's formula calculation to yield an incorrect triangle area (approximately 8.18 instead of 12.5).",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 47,
+              "code_snippet": "double semiPerimeterNumerator = sideOneLength + sideTwoLength + sideThreeLength;"
+            },
+            {
+              "line_number": 50,
+              "code_snippet": "int semiPerimeterIntegerSum = (int) semiPerimeterNumerator;"
+            },
+            {
+              "line_number": 51,
+              "code_snippet": "int semiPerimeterIntegerDenominator = 2;"
+            },
+            {
+              "line_number": 52,
+              "code_snippet": "int semiPerimeterIntegerResult = semiPerimeterIntegerSum / semiPerimeterIntegerDenominator;"
+            },
+            {
+              "line_number": 55,
+              "code_snippet": "double semiPerimeterValue = (double) semiPerimeterIntegerResult;"
+            },
+            {
+              "line_number": 49,
+              "code_snippet": "// Use intermediate integer values to represent the sum and then divide by 2 using integer division"
+            }
+          ]
+        }
+      ],
+      "count": 1
+    },
+    "gemini-3-flash-preview:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Retrospective Type Fluidity",
+          "student_thought_process": "The student believes that by casting the final integer result of a sequence of operations to a double, the computer will restore or 'calculate' the fractional part that was previously lost during integer division and truncation.",
+          "conceptual_gap": "In the Java execution model, information lost during integer truncation (line 60) or integer division (line 62) is discarded immediately. Casting the result back to a double at line 65 only creates a floating-point representation of the already-truncated integer (e.g., converting 7 to 7.0 instead of 7.5).",
+          "error_manifestation": "wrong output",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 60,
+              "code_snippet": "int semiPerimeterIntegerSum = (int) semiPerimeterNumerator;"
+            },
+            {
+              "line_number": 62,
+              "code_snippet": "int semiPerimeterIntegerResult = semiPerimeterIntegerSum / semiPerimeterIntegerDenominator;"
+            },
+            {
+              "line_number": 65,
+              "code_snippet": "double semiPerimeterValue = (double) semiPerimeterIntegerResult;"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Narrow Numeric Assumption",
+          "student_thought_process": "The student believes that coordinate inputs (x,y) are always whole numbers, as evidenced by the choice of the int data type for inputs despite the mathematical context of geometric distance.",
+          "conceptual_gap": "The student fails to account for the continuous nature of geometric space. In Java, using nextInt() prevents the program from handling decimal coordinates (like 2.5), which are valid inputs for a triangle's extremities.",
+          "error_manifestation": "runtime exception",
+          "confidence": 0.8,
+          "evidence": [
+            {
+              "line_number": 14,
+              "code_snippet": "int pointOneXValue = userInputScanner.nextInt();"
+            },
+            {
+              "line_number": 15,
+              "code_snippet": "int pointOneYValue = userInputScanner.nextInt();"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    }
+  },
+  "timestamp": "2025-12-29T21:06:40.842641+00:00"
+}

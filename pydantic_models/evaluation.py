@@ -5,10 +5,8 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import __version__ as MODELS_VERSION
-from .comparison.models import Comparison
 from .context import Context
 from .models import ModelEvaluation
-from .rubric import Rubric
 from .submission import Submission
 
 
@@ -40,17 +38,9 @@ class EvaluationDocument(BaseModel):
         ..., description="Student submission data with files and metadata"
     )
 
-    # Grading rubric
-    rubric: Rubric = Field(..., description="Rubric structure with categories and scoring criteria")
-
     # Per-model evaluations
     models: dict[str, ModelEvaluation] = Field(
         ..., description="Per-model grading results. Key: model name/alias"
-    )
-
-    # Comparison and analysis
-    comparison: Comparison | None = Field(
-        default=None, description="Cross-model analysis and ensemble decision"
     )
 
     @model_validator(mode="after")

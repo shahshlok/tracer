@@ -1,0 +1,50 @@
+import java.util.Random;
+import java.util.Scanner;
+
+public class Q2 {
+    public static void main(String[] args) {
+        Random rand = new Random();
+        int answer = rand.nextInt(100) + 1;
+
+        Scanner scanner = new Scanner(System.in);
+
+        int guess = 0;
+        int guesses = 0;
+
+        System.out.print("Guess a number (1-100): ");
+        if (scanner.hasNextInt()) {
+            int tempGuess = scanner.nextInt();
+            guess = tempGuess;
+        } else {
+            String badInput = scanner.next();
+            if (badInput != null) {
+                System.out.println("Please enter a valid integer.");
+            }
+        }
+
+        while (guess != answer) {
+            guesses = guesses + 1;
+
+            if (guess == answer) {
+                System.out.println("Correct! You took " + guesses + " guesses.");
+            } else {
+                if (guess > answer) {
+                    System.out.println("Too high!");
+                } else {
+                    if (guess < answer) {
+                        System.out.println("Too low!");
+                    }
+                }
+            }
+        }
+
+        if (guess == answer) {
+            if (guesses == 0) {
+                guesses = guesses + 1;
+            }
+            System.out.println("Correct! You took " + guesses + " guesses.");
+        }
+
+        scanner.close();
+    }
+}

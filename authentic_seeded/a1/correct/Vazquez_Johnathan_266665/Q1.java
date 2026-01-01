@@ -1,0 +1,26 @@
+import java.util.Scanner;
+
+public class Q1 {
+	 public static void main(String[] args) {
+  Scanner input = new Scanner(System.in);
+
+   System.out.print("Enter v0, v1, and t: ");
+
+	 double v0 = input.nextDouble();
+  double v1 = input.nextDouble();
+		  double t = input.nextDouble();
+
+ 
+  double a, b, c;
+
+
+
+  a = v1 - v0;
+	  b = t;
+   c = a / b;
+
+   double average_acceleration = c;
+
+ System.out.println("The average acceleration is " + average_acceleration);
+ }
+}

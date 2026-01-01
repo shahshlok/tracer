@@ -1,0 +1,172 @@
+{
+  "student": "Jennings_Joseph_941402",
+  "question": "Q4",
+  "strategy": "baseline",
+  "status": "success",
+  "models": {
+    "gpt-5.2-2025-12-11": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Integer truncation in floating-point formula (type casting + integer division)",
+          "student_thought_process": "The student believes converting the perimeter sum to an int (s_int) and then dividing by 2 will still correctly produce the semiperimeter s, and that the cast back to double restores the lost precision.",
+          "conceptual_gap": "In Java, casting a double to int truncates the fractional part permanently, and integer division (s_int / 2) also truncates if s_int is odd. Casting the result to double afterward does not recover the lost fractional information. Heron\u2019s formula requires the semiperimeter as a double computed with floating-point division.",
+          "error_manifestation": "Wrong numeric output (area often incorrect; can be drastically off). For some triangles it may even lead to sqrt of a negative number producing NaN due to an invalid s after truncation.",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 34,
+              "code_snippet": "int s_int;\n      s_int = (int)(side1 + side2 + side3);"
+            },
+            {
+              "line_number": 37,
+              "code_snippet": "double s;\n      s = (double)(s_int / 2);"
+            }
+          ]
+        }
+      ],
+      "count": 1
+    },
+    "claude-haiku-4-5-20251001": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Integer Division Loss of Precision",
+          "student_thought_process": "The student believes that converting the sum of three floating-point side lengths to an integer, then dividing by 2 and converting back to double, will correctly compute half the perimeter. They think the cast to int and subsequent division by 2 preserves the numerical value needed for the formula.",
+          "conceptual_gap": "The student fails to understand that casting a double to int truncates the fractional part, and integer division (/) with two integers performs floor division. The correct calculation should be (side1 + side2 + side3) / 2.0, keeping all values as doubles throughout. By converting to int first (s_int = (int)(side1 + side2 + side3)), then dividing by 2 as an integer (s_int / 2), the student loses precision twice: once during the int cast and again during integer division. For example, if the sum is 25.0, it becomes 25 as an int, then 25 / 2 = 12 (integer division), then cast back to 12.0 double, when it should be 12.5.",
+          "error_manifestation": "The program produces incorrect area calculations. For the sample input (0,0), (5,0), (0,5), the correct area should be 12.5, but the code will compute an incorrect area due to the truncated semi-perimeter value.",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 41,
+              "code_snippet": "int s_int;\n      s_int = (int)(side1 + side2 + side3);\n\n      double s;\n      s = (double)(s_int / 2);"
+            },
+            {
+              "line_number": 41,
+              "code_snippet": "s_int / 2"
+            }
+          ]
+        }
+      ],
+      "count": 1
+    },
+    "gemini-3-flash-preview": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Narrowing Conversion Precision Loss",
+          "student_thought_process": "The student believes that converting the sum of double-precision floating-point numbers to an integer intermediate variable is a necessary or safe step before calculating the semi-perimeter of a triangle.",
+          "conceptual_gap": "Casting a double to an int (a narrowing primitive conversion) causes the permanent loss of all fractional information. In geometric calculations where high precision is required, using integer types for intermediate steps like the perimeter leads to significant inaccuracies in the final output.",
+          "error_manifestation": "",
+          "confidence": 1.0,
+          "evidence": [
+            {
+              "line_number": 41,
+              "code_snippet": "s_int = (int)(side1 + side2 + side3);"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Integer Division Truncation",
+          "student_thought_process": "The student believes that casting the result of a division between two integers to a double, or assigning it to a double variable, will preserve or calculate the fractional remainder of that division.",
+          "conceptual_gap": "In Java, the division operator (/) performed on two integer operands results in integer division, which truncates any remainder immediately. Applying a double cast to the result afterwards only converts the already-truncated integer to a double-precision value (e.g., 17 / 2 becomes 8, then 8.0).",
+          "error_manifestation": "wrong output",
+          "confidence": 1.0,
+          "evidence": [
+            {
+              "line_number": 44,
+              "code_snippet": "s = (double)(s_int / 2);"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "gpt-5.2-2025-12-11:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Integer division and premature truncation in numeric formulas",
+          "student_thought_process": "The student believes they can safely cast the perimeter sum to an int and then divide by 2 to get the semiperimeter s, without affecting the correctness of the area formula.",
+          "conceptual_gap": "In Java, casting a double to int truncates the fractional part (loses precision). Also, dividing two ints uses integer division (truncates again) before any cast to double is applied. Heron\u2019s formula requires s to be computed in floating-point as (side1+side2+side3)/2.0; truncating s changes p, q, r and therefore the area.",
+          "error_manifestation": "Wrong numeric output (area is incorrect for many/most triangles, including the sample input).",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 41,
+              "code_snippet": "s_int = (int)(side1 + side2 + side3);"
+            },
+            {
+              "line_number": 44,
+              "code_snippet": "s = (double)(s_int / 2);"
+            }
+          ]
+        }
+      ],
+      "count": 1
+    },
+    "claude-haiku-4-5-20251001:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Integer Division Before Type Conversion",
+          "student_thought_process": "The student believes that casting an integer division expression to double will produce the correct floating-point result. They think `(double)(s_int / 2)` will perform floating-point division and then convert to double, giving the mathematically correct value.",
+          "conceptual_gap": "The student does not understand that in Java, integer division occurs first (truncating the remainder), and then the integer result is converted to double. The cast to double happens AFTER the integer division completes, not before it. To get floating-point division, at least one operand must be a double-type value DURING the division operation itself.",
+          "error_manifestation": "Wrong output - the calculated area is significantly smaller than the expected value (approximately 8.18 instead of 12.5)",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 29,
+              "code_snippet": "int s_int;\ns_int = (int)(side1 + side2 + side3);\n\ndouble s;\ns = (double)(s_int / 2);"
+            },
+            {
+              "line_number": 34,
+              "code_snippet": "s = (double)(s_int / 2);"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Unnecessary Type Truncation",
+          "student_thought_process": "The student believes that converting the sum of the three sides to an integer is necessary or helpful for the calculation. They may think this makes the subsequent division cleaner or more reliable.",
+          "conceptual_gap": "Converting `(side1 + side2 + side3)` to an int immediately truncates the floating-point sum, losing precision before even performing the division. Since side1, side2, and side3 are doubles (representing actual geometric distances), the sum should remain a double. The student doesn't recognize that this first truncation compounds the problem created by the subsequent integer division.",
+          "error_manifestation": "Wrong output - precision is lost in two stages: first when truncating the sum to int, then again with integer division",
+          "confidence": 0.85,
+          "evidence": [
+            {
+              "line_number": 29,
+              "code_snippet": "int s_int;\ns_int = (int)(side1 + side2 + side3);"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "gemini-3-flash-preview:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Post-Calculation Casting",
+          "student_thought_process": "The student believes that casting the result of an arithmetic expression to a double will preserve or recover the decimal precision, even if the operands themselves are integers.",
+          "conceptual_gap": "In Java, the type of an arithmetic expression is determined by its operands. Integer division (int / int) performs truncation before any assignment or casting to a double occurs. Casting to a double after the division is complete only converts the truncated integer result into a floating-point value (e.g., 17 / 2 becomes 8, and (double)8 becomes 8.0).",
+          "error_manifestation": "wrong output",
+          "confidence": 1.0,
+          "evidence": [
+            {
+              "line_number": 44,
+              "code_snippet": "s = (double)(s_int / 2);"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Premature Type Narrowing",
+          "student_thought_process": "The student believes that converting floating-point intermediate values (the sum of the sides of a triangle) into an integer is a valid or necessary step before continuing a geometric calculation.",
+          "conceptual_gap": "The student fails to recognize that geometric calculations require full floating-point precision throughout all intermediate steps. Explicitly casting a double sum to an int removes the fractional component, introducing significant rounding errors that propagate through Heron's formula.",
+          "error_manifestation": "wrong output",
+          "confidence": 0.9,
+          "evidence": [
+            {
+              "line_number": 41,
+              "code_snippet": "s_int = (int)(side1 + side2 + side3);"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    }
+  },
+  "timestamp": "2025-12-29T21:24:50.078548+00:00"
+}

@@ -1,0 +1,28 @@
+# Compliance Summary
+
+| strategy | model | total_files | raw_empty | raw_nonempty | null_only | raw_misconceptions | null_filtered | normalized_misconceptions |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline | claude-haiku-4-5-20251001 | 40 | 22 | 18 | 0 | 24 | 0 | 24 |
+| baseline | claude-haiku-4-5-20251001:reasoning | 40 | 30 | 10 | 0 | 10 | 0 | 10 |
+| baseline | gemini-3-flash-preview | 40 | 24 | 16 | 0 | 25 | 0 | 25 |
+| baseline | gemini-3-flash-preview:reasoning | 40 | 24 | 16 | 0 | 25 | 0 | 25 |
+| baseline | gpt-5.2-2025-12-11 | 40 | 15 | 25 | 0 | 28 | 0 | 28 |
+| baseline | gpt-5.2-2025-12-11:reasoning | 40 | 21 | 19 | 0 | 26 | 0 | 26 |
+| cot | claude-haiku-4-5-20251001 | 40 | 28 | 12 | 0 | 25 | 0 | 25 |
+| cot | claude-haiku-4-5-20251001:reasoning | 40 | 28 | 12 | 0 | 16 | 0 | 16 |
+| cot | gemini-3-flash-preview | 40 | 13 | 27 | 0 | 44 | 0 | 44 |
+| cot | gemini-3-flash-preview:reasoning | 40 | 16 | 24 | 0 | 43 | 0 | 43 |
+| cot | gpt-5.2-2025-12-11 | 40 | 31 | 9 | 0 | 14 | 0 | 14 |
+| cot | gpt-5.2-2025-12-11:reasoning | 40 | 27 | 13 | 0 | 20 | 0 | 20 |
+| socratic | claude-haiku-4-5-20251001 | 40 | 15 | 25 | 0 | 51 | 0 | 51 |
+| socratic | claude-haiku-4-5-20251001:reasoning | 40 | 18 | 22 | 0 | 33 | 0 | 33 |
+| socratic | gemini-3-flash-preview | 40 | 7 | 33 | 0 | 73 | 0 | 73 |
+| socratic | gemini-3-flash-preview:reasoning | 40 | 6 | 34 | 0 | 72 | 0 | 72 |
+| socratic | gpt-5.2-2025-12-11 | 40 | 10 | 30 | 0 | 54 | 0 | 54 |
+| socratic | gpt-5.2-2025-12-11:reasoning | 40 | 13 | 27 | 0 | 53 | 0 | 53 |
+| taxonomy | claude-haiku-4-5-20251001 | 40 | 21 | 19 | 0 | 30 | 0 | 30 |
+| taxonomy | claude-haiku-4-5-20251001:reasoning | 40 | 27 | 13 | 0 | 14 | 0 | 14 |
+| taxonomy | gemini-3-flash-preview | 40 | 18 | 22 | 0 | 35 | 0 | 35 |
+| taxonomy | gemini-3-flash-preview:reasoning | 40 | 15 | 25 | 0 | 43 | 0 | 43 |
+| taxonomy | gpt-5.2-2025-12-11 | 40 | 29 | 11 | 0 | 15 | 0 | 15 |
+| taxonomy | gpt-5.2-2025-12-11:reasoning | 40 | 25 | 15 | 0 | 17 | 0 | 17 |

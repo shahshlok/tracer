@@ -1,23 +1,13 @@
-"""Models for individual model evaluation results."""
+"""Models for notional machine misconception detection."""
 
 from .evaluation import (
-    CategoryScore,
-    Config,
     Evidence,
-    Feedback,
-    LLMEvaluationResponse,
-    Misconception,
-    ModelEvaluation,
-    Scores,
+    LLMDetectionResponse,
+    NotionalMisconception,
 )
 
 __all__ = [
-    "CategoryScore",
-    "Config",
     "Evidence",
-    "Feedback",
-    "LLMEvaluationResponse",
-    "Misconception",
-    "ModelEvaluation",
-    "Scores",
+    "NotionalMisconception",
+    "LLMDetectionResponse",
 ]

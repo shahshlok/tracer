@@ -1,0 +1,38 @@
+import java.util.Scanner;
+public class Q4{
+public static void main(String[] a){
+Scanner s=new Scanner(System.in);
+System.out.println("Enter three points for a triangle.");
+System.out.print("(x1, y1):");
+double x=s.nextDouble();
+double y=s.nextDouble();
+double n=s.nextDouble();
+double x2=n;
+n=s.nextDouble();
+double y2=n;
+n=s.nextDouble();
+double x3=n;
+n=s.nextDouble();
+double y3=n;
+double dx1=x2-x;
+double dy1=y2-y;
+double dx2=x3-x2;
+double dy2=y3-y2;
+double dx3=x3-x;
+double dy3=y3-y;
+double side1=Math.sqrt(dx1*dx1+dy1*dy1);
+double side2=Math.sqrt(dx2*dx2+dy2*dy2);
+double side3=Math.sqrt(dx3*dx3+dy3*dy3);
+double p=side1+side2+side3;
+double ss=0;
+if(p!=0)ss=p/2.0;
+double t1=ss-side1;
+double t2=ss-side2;
+double t3=ss-side3;
+double m=ss*t1*t2*t3;
+double area=0;
+if(m>0)area=Math.sqrt(m);
+else area=0;
+System.out.println("The area of the triangle is "+area);
+}
+}

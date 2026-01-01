@@ -1,0 +1,54 @@
+import java.util.Scanner;
+public class Q4{
+public static void main(String[] a){
+Scanner s=new Scanner(System.in);
+System.out.println("Enter three points for a triangle.");
+System.out.print("(x1, y1):");
+double x=s.nextDouble();
+double y=s.nextDouble();
+System.out.print("(x2, y2):");
+double n=s.nextDouble();
+double o=s.nextDouble();
+System.out.print("(x3, y3):");
+double p=s.nextDouble();
+double q=s.nextDouble();
+double r=x-n;
+double t=y-o;
+double u=n-p;
+double v=o-q;
+double w=p-x;
+double z=q-y;
+double d=Math.sqrt(r*r+t*t);
+double e=Math.sqrt(u*u+v*v);
+double f=Math.sqrt(w*w+z*z);
+if(d<0)d=-d;
+if(e<0)e=-e;
+if(f<0)f=-f;
+double g=d+e;
+double h=g+f;
+double i=h/2.0;
+double j=i-d;
+double k=i-e;
+double l=i-f;
+double m=i*j;
+if(m!=0)m=m;
+double b=m*k;
+if(b!=0)b=b;
+double c=b*l;
+if(c<0)c=-c;
+double s1=d+e;
+double s2=s1+f/2.0;
+if(s2!=0)s2=s2;
+double s3=s2-d;
+double s4=s2-e;
+double s5=s2-f;
+double s6=s2*s3;
+if(s6!=0)s6=s6;
+double s7=s6*s4;
+if(s7!=0)s7=s7;
+double s8=s7*s5;
+if(s8<0)s8=-s8;
+double area=Math.sqrt(s8);
+System.out.println("The area of the triangle is "+area);
+}
+}

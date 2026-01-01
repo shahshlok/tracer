@@ -1,0 +1,28 @@
+# Compliance Summary
+
+| strategy | model | total_files | raw_empty | raw_nonempty | null_only | raw_misconceptions | null_filtered | normalized_misconceptions |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline | claude-haiku-4-5-20251001 | 120 | 50 | 70 | 0 | 114 | 0 | 114 |
+| baseline | claude-haiku-4-5-20251001:reasoning | 120 | 69 | 51 | 0 | 61 | 0 | 61 |
+| baseline | gemini-3-flash-preview | 120 | 38 | 82 | 0 | 147 | 0 | 147 |
+| baseline | gemini-3-flash-preview:reasoning | 120 | 41 | 79 | 0 | 138 | 0 | 138 |
+| baseline | gpt-5.2-2025-12-11 | 120 | 18 | 102 | 0 | 147 | 0 | 147 |
+| baseline | gpt-5.2-2025-12-11:reasoning | 120 | 37 | 83 | 0 | 132 | 0 | 132 |
+| cot | claude-haiku-4-5-20251001 | 120 | 70 | 50 | 0 | 117 | 0 | 117 |
+| cot | claude-haiku-4-5-20251001:reasoning | 120 | 70 | 50 | 0 | 77 | 0 | 77 |
+| cot | gemini-3-flash-preview | 120 | 19 | 101 | 0 | 207 | 0 | 207 |
+| cot | gemini-3-flash-preview:reasoning | 120 | 20 | 100 | 0 | 199 | 0 | 199 |
+| cot | gpt-5.2-2025-12-11 | 120 | 67 | 53 | 0 | 114 | 0 | 114 |
+| cot | gpt-5.2-2025-12-11:reasoning | 120 | 39 | 81 | 0 | 160 | 0 | 160 |
+| socratic | claude-haiku-4-5-20251001 | 120 | 28 | 92 | 0 | 231 | 0 | 231 |
+| socratic | claude-haiku-4-5-20251001:reasoning | 120 | 48 | 72 | 0 | 126 | 0 | 126 |
+| socratic | gemini-3-flash-preview | 120 | 7 | 113 | 0 | 264 | 0 | 264 |
+| socratic | gemini-3-flash-preview:reasoning | 120 | 15 | 105 | 0 | 258 | 0 | 258 |
+| socratic | gpt-5.2-2025-12-11 | 120 | 22 | 98 | 0 | 251 | 0 | 251 |
+| socratic | gpt-5.2-2025-12-11:reasoning | 120 | 24 | 96 | 0 | 246 | 0 | 246 |
+| taxonomy | claude-haiku-4-5-20251001 | 120 | 46 | 74 | 0 | 146 | 0 | 146 |
+| taxonomy | claude-haiku-4-5-20251001:reasoning | 120 | 63 | 57 | 0 | 83 | 0 | 83 |
+| taxonomy | gemini-3-flash-preview | 120 | 35 | 85 | 0 | 160 | 0 | 160 |
+| taxonomy | gemini-3-flash-preview:reasoning | 120 | 42 | 78 | 0 | 148 | 0 | 148 |
+| taxonomy | gpt-5.2-2025-12-11 | 120 | 67 | 53 | 0 | 102 | 0 | 102 |
+| taxonomy | gpt-5.2-2025-12-11:reasoning | 120 | 52 | 68 | 0 | 132 | 0 | 132 |

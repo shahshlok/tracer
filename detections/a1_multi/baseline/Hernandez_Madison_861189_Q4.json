@@ -1,0 +1,213 @@
+{
+  "student": "Hernandez_Madison_861189",
+  "question": "Q4",
+  "strategy": "baseline",
+  "status": "success",
+  "models": {
+    "gpt-5.2-2025-12-11": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Integer truncation in floating\u2011point calculations",
+          "student_thought_process": "The student believes they can safely cast a floating-point sum to an int and divide by 2 to compute s, and then cast back to double without changing the intended value.",
+          "conceptual_gap": "In Java, casting a double to int truncates (drops) the fractional part. Also, integer division (int/int) truncates. Heron\u2019s formula requires s to be computed in real numbers: s = (side1 + side2 + side3) / 2. Using ints changes s for most triangles, which then changes the area and can even make the expression under the square root negative.",
+          "error_manifestation": "Wrong numeric output; can also produce NaN if s is truncated too low so that s - side_i becomes negative enough to make the radicand negative.",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 25,
+              "code_snippet": "int tempSum = (int)(side1 + side2 + side3);"
+            },
+            {
+              "line_number": 26,
+              "code_snippet": "int tempS = tempSum / 2;"
+            },
+            {
+              "line_number": 27,
+              "code_snippet": "double s = (double)tempS;"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Misunderstanding of expression evaluation order/types (integer vs double division)",
+          "student_thought_process": "The student believes that because the final variable s is a double, performing earlier steps with ints will still effectively compute the same real-number result.",
+          "conceptual_gap": "Java evaluates each operation using the operand types at that point. Once the computation is done in int space (including division), information is lost and cannot be recovered by later assigning/casting to double.",
+          "error_manifestation": "Wrong output (systematically rounded down s), leading to incorrect area.",
+          "confidence": 0.85,
+          "evidence": [
+            {
+              "line_number": 26,
+              "code_snippet": "int tempS = tempSum / 2;"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "claude-haiku-4-5-20251001": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Premature Integer Conversion and Precision Loss",
+          "student_thought_process": "The student believes that converting the sum of side lengths to an integer and then performing integer division by 2 is an acceptable way to calculate 's' in Heron's formula. The student thinks that casting back to double afterward will preserve the correct mathematical value, not realizing that precision has already been lost during the integer division step.",
+          "conceptual_gap": "The student does not understand that converting a double to an int truncates the fractional part irreversibly. Once side1 + side2 + side3 is cast to int and divided by 2 using integer division, the fractional part is permanently lost. Converting the result back to double cannot recover this lost precision. In the formula s = (side1 + side2 + side3) / 2, 's' should be a double that preserves all precision from the floating-point calculations. The correct approach is to perform the division on doubles, not on integers.",
+          "error_manifestation": "Wrong output - the calculated area will be incorrect whenever the sum of the sides has a fractional part, which is almost always the case when calculating distances between arbitrary points.",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 22,
+              "code_snippet": "int tempSum = (int)(side1 + side2 + side3);\n        int tempS = tempSum / 2;\n        double s = (double)tempS;"
+            },
+            {
+              "line_number": 25,
+              "code_snippet": "double s = (double)tempS;"
+            }
+          ]
+        }
+      ],
+      "count": 1
+    },
+    "gemini-3-flash-preview": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Forced Precision Loss",
+          "student_thought_process": "The student believes that intermediate calculation steps, such as summing side lengths or calculating a semi-perimeter, can be performed using integer types without impacting the accuracy of the final floating-point result, as long as the value is eventually converted back to a double.",
+          "conceptual_gap": "The student fails to understand that casting a double to an int (narrowing primitive conversion) and performing integer division results in the immediate and irreversible loss of fractional data (truncation). This precision loss propagates through the remaining formula, resulting in a mathematically incorrect output.",
+          "error_manifestation": "wrong output",
+          "confidence": 1.0,
+          "evidence": [
+            {
+              "line_number": 28,
+              "code_snippet": "int tempSum = (int)(side1 + side2 + side3);"
+            },
+            {
+              "line_number": 29,
+              "code_snippet": "int tempS = tempSum / 2;"
+            },
+            {
+              "line_number": 30,
+              "code_snippet": "double s = (double)tempS;"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Integer Division Truncation",
+          "student_thought_process": "The student believes that dividing an integer by 2 will yield the same result as dividing by 2.0, or they are unaware that dividing two integers in Java will discard any remainder (e.g., 17 / 2 = 8).",
+          "conceptual_gap": "In Java, division between two integers results in an integer. If the mathematical result has a fractional component, it is truncated toward zero. The student treats the division in the semi-perimeter formula (s = sum / 2) as a standard mathematical division rather than a typed programming operation.",
+          "error_manifestation": "wrong output",
+          "confidence": 0.9,
+          "evidence": [
+            {
+              "line_number": 29,
+              "code_snippet": "int tempS = tempSum / 2;"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "gpt-5.2-2025-12-11:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Precision Loss via Premature Integer Casting",
+          "student_thought_process": "The student believes they can safely convert the (double) side-length sum to an int and then back to a double without affecting the mathematical result for s.",
+          "conceptual_gap": "In Java, casting a double to int truncates (drops) the fractional part permanently. When triangle side lengths are non-integers (which is common with distance formula), truncating the perimeter changes s, which then changes the area computed by Heron\u2019s formula. Converting back to double later cannot recover the lost precision.",
+          "error_manifestation": "Wrong numeric output for area; in some cases may produce NaN if truncation makes the radicand negative (e.g., computed s becomes smaller than a side).",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 24,
+              "code_snippet": "int tempSum = (int)(side1 + side2 + side3);"
+            },
+            {
+              "line_number": 26,
+              "code_snippet": "double s = (double)tempS;"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Integer Division Behaves Like Real Division",
+          "student_thought_process": "The student believes dividing by 2 after converting to int still correctly implements s = (side1+side2+side3)/2, including .5 results when needed.",
+          "conceptual_gap": "In Java, int / int performs integer division, discarding any remainder. So if the (already-truncated) perimeter is odd, tempSum / 2 loses the .5, further distorting s and the final area.",
+          "error_manifestation": "Wrong numeric output for area (systematically rounded down semiperimeter).",
+          "confidence": 0.9,
+          "evidence": [
+            {
+              "line_number": 25,
+              "code_snippet": "int tempS = tempSum / 2;"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "claude-haiku-4-5-20251001:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Unnecessary Type Conversion and Precision Loss",
+          "student_thought_process": "The student believes that to calculate s (the semi-perimeter), they should first convert the sum of the sides to an integer, then perform division, and finally convert back to double. They may think this makes the calculation more 'structured' or that integer division by 2 is appropriate for a semi-perimeter calculation.",
+          "conceptual_gap": "The student does not understand that converting floating-point numbers to integers causes irreversible loss of precision. When side1 + side2 + side3 \u2248 17.071 is cast to int, it becomes 17. Then integer division (17 / 2) yields 8 instead of 8.5355. Converting back to double (8.0) cannot recover the lost fractional information. In Heron's formula, s must be a precise floating-point value. The correct approach is: double s = (side1 + side2 + side3) / 2.0;",
+          "error_manifestation": "wrong output",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 17,
+              "code_snippet": "int tempSum = (int)(side1 + side2 + side3);"
+            },
+            {
+              "line_number": 18,
+              "code_snippet": "int tempS = tempSum / 2;"
+            },
+            {
+              "line_number": 19,
+              "code_snippet": "double s = (double)tempS;"
+            }
+          ]
+        }
+      ],
+      "count": 1
+    },
+    "gemini-3-flash-preview:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Inappropriate Integer Truncation",
+          "student_thought_process": "The student believes that converting intermediate floating-point results to integers is a valid way to simplify calculations or that the semi-perimeter 's' in Heron's formula should be an integer, failing to realize that casting to 'int' in Java discards necessary precision.",
+          "conceptual_gap": "In Java, casting a double to an int performs truncation, not rounding, which permanently removes the fractional component. Furthermore, performing division on an integer (tempSum / 2) triggers integer division, which also discards any remainder. For geometric calculations like Heron's formula, this loss of precision results in mathematically incorrect outputs because the values for 's' and its differences from the side lengths are no longer accurate.",
+          "error_manifestation": "wrong output",
+          "confidence": 1.0,
+          "evidence": [
+            {
+              "line_number": 23,
+              "code_snippet": "int tempSum = (int)(side1 + side2 + side3);"
+            },
+            {
+              "line_number": 24,
+              "code_snippet": "int tempS = tempSum / 2;"
+            },
+            {
+              "line_number": 25,
+              "code_snippet": "double s = (double)tempS;"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Tokenization Misconception",
+          "student_thought_process": "The student believes that the Scanner's nextDouble() method can parse multiple distinct values from a single contiguous string of digits or that it follows the visual structure of the prompt (x, y) without requiring standard delimiters like whitespace.",
+          "conceptual_gap": "The Scanner class in Java uses delimiters (whitespace by default) to separate tokens. If a user inputs '00' as shown in the sample run as a single token, nextDouble() will interpret it as the single numeric value 0.0, leaving the second variable (y1) to wait for a subsequent input token. The student's code and prompt suggest they expect a single input like '00' to populate two separate double variables.",
+          "error_manifestation": "logic error / hang",
+          "confidence": 0.7,
+          "evidence": [
+            {
+              "line_number": 10,
+              "code_snippet": "double x1 = scanner.nextDouble();"
+            },
+            {
+              "line_number": 11,
+              "code_snippet": "double y1 = scanner.nextDouble();"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    }
+  },
+  "timestamp": "2025-12-29T21:26:23.909635+00:00"
+}

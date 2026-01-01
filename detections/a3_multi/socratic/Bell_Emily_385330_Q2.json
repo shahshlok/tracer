@@ -1,0 +1,213 @@
+{
+  "student": "Bell_Emily_385330",
+  "question": "Q2",
+  "strategy": "socratic",
+  "status": "success",
+  "models": {
+    "gpt-5.2-2025-12-11": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Bubble-sort logic treated as a black box (limited step-by-step model of execution)",
+          "student_thought_process": "The student believes that if they follow a known pattern (nested loops + swap), the arrays will \u201cend up sorted,\u201d without needing to reason about how the values move across iterations or why the loop bounds are exactly what they are.",
+          "conceptual_gap": "In Java, nothing \u201cmagically becomes sorted\u201d\u2014sorting emerges only from specific comparisons and swaps occurring in a particular sequence. A strong notional-machine model would include: (1) what j compares each time, (2) how swapping changes subsequent comparisons, and (3) why the inner loop shortens (n-1-i). Without that model, small off-by-one changes or swap mistakes would be hard to debug because the student wouldn\u2019t be able to predict intermediate array states.",
+          "error_manifestation": "Not an error in this submission (it works), but this belief typically manifests as fragile code: off-by-one bugs, partial sorting, or swapping only one array leading to mismatched names/scores.",
+          "confidence": 0.34,
+          "evidence": [
+            {
+              "line_number": 25,
+              "code_snippet": "for (int i = 0; i < n - 1; i++) {"
+            },
+            {
+              "line_number": 26,
+              "code_snippet": "    for (int j = 0; j < n - 1 - i; j++) {"
+            },
+            {
+              "line_number": 27,
+              "code_snippet": "        int a = scores[j];\n        int b = scores[j + 1];\n        boolean needSwap = a > b;"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Parallel arrays must be manually kept in sync (potential misconception: one swap updates the 'record')",
+          "student_thought_process": "The student may believe that swapping scores somehow also swaps the corresponding names automatically because they represent the same student conceptually.",
+          "conceptual_gap": "In Java, `names` and `scores` are two independent arrays. Swapping `scores[j]` and `scores[j+1]` changes only the integer array; Java will not infer any relationship to `names`. To keep \u201cstudent records\u201d aligned, you must explicitly swap both arrays at the same indices, or use a single combined structure (e.g., a `Student` object) and sort those.",
+          "error_manifestation": "If the student had swapped only `scores`, the output would show a correct top score paired with the wrong name (a logic error). In this submission, they avoided the bug by swapping both, but the need for the second swap is exactly where the misconception often lives.",
+          "confidence": 0.28,
+          "evidence": [
+            {
+              "line_number": 32,
+              "code_snippet": "int tempScore = scores[j];\nscores[j] = scores[j + 1];\nscores[j + 1] = tempScore;"
+            },
+            {
+              "line_number": 36,
+              "code_snippet": "String tempName = names[j];\nnames[j] = names[j + 1];\nnames[j + 1] = tempName;"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Assuming input tokens match the prompt text (prompt-as-structure misconception)",
+          "student_thought_process": "The student may believe that printing prompts like \"Enter names:\" and \"Enter scores:\" makes the user input arrive in the same grouped way (names first, then scores), and that the program can rely on the user matching that structure exactly.",
+          "conceptual_gap": "In Java, `System.out.print(...)` is only output; it does not constrain or validate input. `Scanner.next()`/`nextInt()` simply consume the next available token from the input stream. If the user types an unexpected format (extra spaces/newlines, a name with spaces, fewer tokens, or a non-integer where an int is expected), Java won\u2019t \u201cunderstand the intent of the prompt\u201d\u2014it will either block waiting for tokens or throw an `InputMismatchException`.",
+          "error_manifestation": "Potential runtime issues: the program may wait for more input than the user expects, or crash if a non-integer is typed for scores. Names with spaces (e.g., \"Mary Jane\") would be split into two names, shifting alignment.",
+          "confidence": 0.4,
+          "evidence": [
+            {
+              "line_number": 14,
+              "code_snippet": "System.out.print(\"Enter names: \");"
+            },
+            {
+              "line_number": 16,
+              "code_snippet": "names[i] = scanner.next();"
+            },
+            {
+              "line_number": 19,
+              "code_snippet": "System.out.print(\"Enter scores: \");"
+            },
+            {
+              "line_number": 21,
+              "code_snippet": "scores[i] = scanner.nextInt();"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Index validity assumed (no model of boundary cases like n=0)",
+          "student_thought_process": "The student believes that `topIndex = n - 1` is always a valid index because there will always be at least one student.",
+          "conceptual_gap": "In Java arrays are 0-indexed and valid indices are `0..n-1`. If `n` can be `0`, then `n-1` is `-1`, and accessing `names[-1]`/`scores[-1]` throws `ArrayIndexOutOfBoundsException`. A precise execution model includes checking boundary cases before indexing.",
+          "error_manifestation": "Runtime exception when `n == 0`. Also, negative `n` would crash at array creation (`NegativeArraySizeException`).",
+          "confidence": 0.55,
+          "evidence": [
+            {
+              "line_number": 44,
+              "code_snippet": "int topIndex = n - 1;"
+            },
+            {
+              "line_number": 45,
+              "code_snippet": "String topName = names[topIndex];"
+            },
+            {
+              "line_number": 46,
+              "code_snippet": "int topScore = scores[topIndex];"
+            }
+          ]
+        }
+      ],
+      "count": 4
+    },
+    "claude-haiku-4-5-20251001": {
+      "misconceptions": [],
+      "count": 0
+    },
+    "gemini-3-flash-preview": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Procedural Atomicity",
+          "student_thought_process": "The student believes that the computer requires complex logic, such as accessing array elements and performing comparisons, to be broken down into individual, named variable assignments before it can be evaluated by a control structure.",
+          "conceptual_gap": "In the Java execution model, expressions like 'scores[j] > scores[j+1]' are evaluated dynamically; the JVM can resolve array indexing and the comparison operation in a single step without needing intermediate local storage.",
+          "error_manifestation": "The code is more verbose than necessary. While not causing a functional error here, this mental model often leads to 'stale data' bugs if the underlying source (the array) is updated while the student continues to rely on the 'snapshot' variables (a and b).",
+          "confidence": 0.9,
+          "evidence": [
+            {
+              "line_number": 24,
+              "code_snippet": "int a = scores[j];"
+            },
+            {
+              "line_number": 26,
+              "code_snippet": "boolean needSwap = a > b;"
+            },
+            {
+              "line_number": 27,
+              "code_snippet": "if (needSwap)"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Semantic Tokenization Assumption",
+          "student_thought_process": "The student believes that input methods like scanner.next() are contextually aware and will read a full 'name' (even if it contains spaces) because the code is intended to manage student names.",
+          "conceptual_gap": "Java's Scanner.next() is semantically blind and strictly whitespace-delimited. It ignores the programmer's intent (and the English prompts) and only reads characters until the next space, tab, or newline is encountered.",
+          "error_manifestation": "If a user enters a multi-word name like 'Alice Smith', the program will store 'Alice' in the first array slot and 'Smith' in the second, likely leading to an InputMismatchException when the program later attempts to read 'Smith' as an integer score.",
+          "confidence": 0.85,
+          "evidence": [
+            {
+              "line_number": 14,
+              "code_snippet": "names[i] = scanner.next();"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Prompt-Input Coupling",
+          "student_thought_process": "The student believes that the input buffer is partitioned or 'reset' by each System.out.print prompt, assuming the computer pauses and waits for a specific subset of data for each loop.",
+          "conceptual_gap": "The input stream (System.in) is a continuous, independent buffer. The Scanner reads from this buffer regardless of when prompts are printed; if a user types all names and scores at once, the program will consume them immediately without stopping for subsequent prompts.",
+          "error_manifestation": "The program assumes a strict synchronous 'turn-taking' between the print statements and user typing. If the user provides more data than expected at the first prompt, the second prompt will appear to be skipped or ignored.",
+          "confidence": 0.8,
+          "evidence": [
+            {
+              "line_number": 13,
+              "code_snippet": "System.out.print(\"Enter names: \");"
+            },
+            {
+              "line_number": 18,
+              "code_snippet": "System.out.print(\"Enter scores: \");"
+            }
+          ]
+        }
+      ],
+      "count": 3
+    },
+    "gpt-5.2-2025-12-11:reasoning": {
+      "misconceptions": [],
+      "count": 0
+    },
+    "claude-haiku-4-5-20251001:reasoning": {
+      "misconceptions": [],
+      "count": 0
+    },
+    "gemini-3-flash-preview:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Intermediate Evaluation Requirement",
+          "student_thought_process": "The student believes that the computer cannot directly evaluate a complex expression within an 'if' statement or that it is 'safer' to break down every logical step into its own named variable before the computer can process it.",
+          "conceptual_gap": "In Java, control structures like 'if' can evaluate any expression that results in a boolean value. There is no need to 'pre-calculate' the comparison into a separate boolean variable or extract array elements into local variables just to compare them.",
+          "error_manifestation": "not applicable",
+          "confidence": 0.8,
+          "evidence": [
+            {
+              "line_number": 27,
+              "code_snippet": "int a = scores[j];"
+            },
+            {
+              "line_number": 28,
+              "code_snippet": "int b = scores[j + 1];"
+            },
+            {
+              "line_number": 29,
+              "code_snippet": "boolean needSwap = a > b;"
+            },
+            {
+              "line_number": 30,
+              "code_snippet": "if (needSwap)"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Variable Role Isolation",
+          "student_thought_process": "The student believes that a variable assigned a specific 'role' (like 'a' for comparison) cannot be reused for a different role (like serving as the temporary storage in a swap), even if they contain the exact same value from the same memory location.",
+          "conceptual_gap": "The student does not yet realize that once a value is stored in a variable, that variable can fulfill any role requiring that value. They redundantly re-access the array to fetch a value they already have stored in 'a'.",
+          "error_manifestation": "not applicable",
+          "confidence": 0.7,
+          "evidence": [
+            {
+              "line_number": 27,
+              "code_snippet": "int a = scores[j];"
+            },
+            {
+              "line_number": 31,
+              "code_snippet": "int tempScore = scores[j];"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    }
+  },
+  "timestamp": "2025-12-30T08:50:09.348501+00:00"
+}

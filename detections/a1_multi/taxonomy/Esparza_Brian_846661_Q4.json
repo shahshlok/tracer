@@ -1,0 +1,303 @@
+{
+  "student": "Esparza_Brian_846661",
+  "question": "Q4",
+  "strategy": "taxonomy",
+  "status": "success",
+  "models": {
+    "gpt-5.2-2025-12-11": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "\u201cInts are close enough / automatic decimal preservation\u201d (type & division truncation misunderstanding)",
+          "student_thought_process": "The student believes they can do the geometry steps mostly with ints (or by converting doubles to ints) and still get a correct/precise triangle area, and that turning an int back into a double later will recover the lost decimal information.",
+          "conceptual_gap": "In Java, casting a double to an int permanently truncates the fractional part (no rounding, no memory of decimals). Also, (intSum)/2 performs integer division, truncating again. Converting the truncated int to double afterward does not restore precision. Heron\u2019s formula is sensitive to small errors; truncating side lengths and the semiperimeter can significantly change the computed area (even to 0.0 or NaN if the inside becomes negative due to truncation).",
+          "error_manifestation": "Wrong numeric output (area too small/incorrect), and potentially NaN if the radicand becomes negative due to truncation effects.",
+          "confidence": 0.9,
+          "evidence": [
+            {
+              "line_number": 52,
+              "code_snippet": "int sideOneAsInt = (int) sideOneLength;"
+            },
+            {
+              "line_number": 53,
+              "code_snippet": "int sideTwoAsInt = (int) sideTwoLength;"
+            },
+            {
+              "line_number": 54,
+              "code_snippet": "int sideThreeAsInt = (int) sideThreeLength;"
+            },
+            {
+              "line_number": 56,
+              "code_snippet": "int semiPerimeterAsInt = (sideOneAsInt + sideTwoAsInt + sideThreeAsInt) / 2;"
+            },
+            {
+              "line_number": 57,
+              "code_snippet": "double semiPerimeterValue = semiPerimeterAsInt;"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "\u201cMath works like exact algebra\u201d (rounding/precision ignored in formula translation)",
+          "student_thought_process": "The student believes implementing Heron\u2019s formula with intermediate rounded values is still essentially the same as the mathematical formula s=(a+b+c)/2 and area=sqrt(s(s-a)(s-b)(s-c)), because the code \u2018matches the equation\u2019.",
+          "conceptual_gap": "The mathematical formula assumes real-number arithmetic on the actual side lengths. The code alters the mathematics by replacing a, b, c with truncated integers before computing s, then mixes that truncated s with the original double side lengths in the final multiplication. This is not algebraically equivalent and changes program execution results because Java evaluates exactly what is written, with specific numeric types and rounding behavior at each step.",
+          "error_manifestation": "Wrong output (systematic underestimation and inconsistent results compared to the true formula).",
+          "confidence": 0.75,
+          "evidence": [
+            {
+              "line_number": 50,
+              "code_snippet": "// Step 1: calculate s = (side1 + side2 + side3) / 2"
+            },
+            {
+              "line_number": 52,
+              "code_snippet": "int sideOneAsInt = (int) sideOneLength;"
+            },
+            {
+              "line_number": 56,
+              "code_snippet": "int semiPerimeterAsInt = (sideOneAsInt + sideTwoAsInt + sideThreeAsInt) / 2;"
+            },
+            {
+              "line_number": 61,
+              "code_snippet": "double triangleAreaValue = Math.sqrt(\n                semiPerimeterValue *\n                (semiPerimeterValue - sideOneLength) *\n                (semiPerimeterValue - sideTwoLength) *\n                (semiPerimeterValue - sideThreeLength)\n        );"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "claude-haiku-4-5-20251001": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Precision Loss from Unnecessary Integer Conversion",
+          "student_thought_process": "The student believes that converting the calculated side lengths (which are doubles from Math.sqrt) back to integers and then using those integers in Heron's formula will produce the correct result. They think the intermediate integer conversion doesn't matter because they're just 'temporarily' storing the values.",
+          "conceptual_gap": "The student fails to understand that casting double to int truncates the decimal portion, permanently losing precision. When sideOneLength (a double like 5.0 or 5.6) is cast to sideOneAsInt (an int), fractional parts are discarded. This truncated value is then used in subsequent calculations, compounding the error. The student appears to think the precision from Math.sqrt is preserved despite the explicit (int) cast, or they don't realize the magnitude of error this introduces into Heron's formula.",
+          "error_manifestation": "Wrong output - the calculated area will be significantly incorrect because the semi-perimeter and subsequent calculations use truncated integer values instead of the precise double side lengths",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 36,
+              "code_snippet": "double sideOneLength = Math.sqrt(sideOneSquaredDistance);\n        double sideTwoLength = Math.sqrt(sideTwoSquaredDistance);\n        double sideThreeLength = Math.sqrt(sideThreeSquaredDistance);"
+            },
+            {
+              "line_number": 42,
+              "code_snippet": "int sideOneAsInt = (int) sideOneLength;\n        int sideTwoAsInt = (int) sideTwoLength;\n        int sideThreeAsInt = (int) sideThreeLength;\n\n        int semiPerimeterAsInt = (sideOneAsInt + sideTwoAsInt + sideThreeAsInt) / 2;\n        double semiPerimeterValue = semiPerimeterAsInt;"
+            },
+            {
+              "line_number": 50,
+              "code_snippet": "double triangleAreaValue = Math.sqrt(\n                semiPerimeterValue *\n                (semiPerimeterValue - sideOneLength) *\n                (semiPerimeterValue - sideTwoLength) *\n                (semiPerimeterValue - sideThreeLength)\n        );"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Inconsistent Type Usage in Calculation",
+          "student_thought_process": "The student believes it's acceptable to mix integer and double types in Heron's formula calculation because Java will 'handle the conversion' automatically. They convert sides to integers for the semi-perimeter calculation, but then use the original double side lengths in the area calculation, not recognizing the semantic inconsistency.",
+          "conceptual_gap": "The student doesn't fully grasp that semiPerimeterValue (derived from integers) represents a different, less precise value than what should be used. When computing (semiPerimeterValue - sideOneLength), they're subtracting a precise double from a truncated integer-derived double, creating mathematical inconsistency. In Heron's formula, all inputs must be consistent floating-point values; mixing truncated and precise values breaks the formula.",
+          "error_manifestation": "Wrong output - the formula produces incorrect results because semiPerimeterValue and the side lengths are not mathematically consistent",
+          "confidence": 0.88,
+          "evidence": [
+            {
+              "line_number": 42,
+              "code_snippet": "int sideOneAsInt = (int) sideOneLength;\n        int sideTwoAsInt = (int) sideTwoLength;\n        int sideThreeAsInt = (int) sideThreeLength;\n\n        int semiPerimeterAsInt = (sideOneAsInt + sideTwoAsInt + sideThreeAsInt) / 2;\n        double semiPerimeterValue = semiPerimeterAsInt;"
+            },
+            {
+              "line_number": 50,
+              "code_snippet": "double triangleAreaValue = Math.sqrt(\n                semiPerimeterValue *\n                (semiPerimeterValue - sideOneLength) *\n                (semiPerimeterValue - sideTwoLength) *\n                (semiPerimeterValue - sideThreeLength)\n        );"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "gemini-3-flash-preview": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Lossy Intermediate Type Narrowing",
+          "student_thought_process": "The student believes that converting intermediate decimal results into integers is a necessary or harmless step for simplification, and that assigning these truncated values back to a double variable later will maintain the mathematical integrity of the Heron's formula calculation.",
+          "conceptual_gap": "The student fails to realize that casting a double to an int (narrowing conversion) is a lossy operation that permanently discards the fractional part. Java does not 'remember' the lost precision when the value is later assigned back to a double or used in a floating-point calculation.",
+          "error_manifestation": "wrong output",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 52,
+              "code_snippet": "int sideOneAsInt = (int) sideOneLength;"
+            },
+            {
+              "line_number": 53,
+              "code_snippet": "int sideTwoAsInt = (int) sideTwoLength;"
+            },
+            {
+              "line_number": 54,
+              "code_snippet": "int sideThreeAsInt = (int) sideThreeLength;"
+            },
+            {
+              "line_number": 57,
+              "code_snippet": "double semiPerimeterValue = semiPerimeterAsInt;"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Integer Division Truncation",
+          "student_thought_process": "The student believes that calculating the semi-perimeter (s = (a+b+c)/2) using integer variables will yield the mathematically correct result, even if the sum of the sides is odd, and that the .5 will be preserved once the result is stored in a double.",
+          "conceptual_gap": "The student does not understand that in Java, the division operator (/) performed on two integers results in an integer, discarding any remainder before the assignment to a double occurs. This is a failure to understand the 'Fluid Type' behavior where they expect mathematical behavior over programmatic type rules.",
+          "error_manifestation": "wrong output",
+          "confidence": 0.9,
+          "evidence": [
+            {
+              "line_number": 56,
+              "code_snippet": "int semiPerimeterAsInt = (sideOneAsInt + sideTwoAsInt + sideThreeAsInt) / 2;"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "gpt-5.2-2025-12-11:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Implicitly-accurate numeric types (ints behave like real numbers)",
+          "student_thought_process": "The student believes they can freely convert between int and double (or do some steps in int) without changing the mathematical meaning of the formula, and that dividing by 2 will still produce the correct \u201c.5\u201d style results when needed.",
+          "conceptual_gap": "In Java, casting a double to an int truncates the decimal part (no rounding), and int division discards any fractional remainder. Once you truncate the side lengths and compute the semi-perimeter using int arithmetic, you permanently lose precision; converting the result back to double later does not recover the lost fractional information. Heron\u2019s formula is sensitive to this, so the computed area can be significantly wrong (and in some cases the expression under the square root can even become negative due to rounding/truncation).",
+          "error_manifestation": "Wrong numeric output (area is too small/incorrect), and potentially NaN if truncation makes the radicand negative for near-degenerate triangles.",
+          "confidence": 0.9,
+          "evidence": [
+            {
+              "line_number": 50,
+              "code_snippet": "int sideOneAsInt = (int) sideOneLength;"
+            },
+            {
+              "line_number": 51,
+              "code_snippet": "int sideTwoAsInt = (int) sideTwoLength;"
+            },
+            {
+              "line_number": 52,
+              "code_snippet": "int sideThreeAsInt = (int) sideThreeLength;"
+            },
+            {
+              "line_number": 54,
+              "code_snippet": "int semiPerimeterAsInt = (sideOneAsInt + sideTwoAsInt + sideThreeAsInt) / 2;"
+            },
+            {
+              "line_number": 55,
+              "code_snippet": "double semiPerimeterValue = semiPerimeterAsInt;"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Integers as \u201csafe containers\u201d for intermediate math (overflow/precision not considered)",
+          "student_thought_process": "The student believes using int for the squared-distance calculations is always safe and exact, and that only the final square root needs to be in double to get a correct geometric length.",
+          "conceptual_gap": "While squared distances are mathematically integers when inputs are integers, Java int has a fixed range. The expression (dx*dx + dy*dy) can overflow for larger coordinate values, silently wrapping around to a wrong (possibly negative) number before Math.sqrt runs. Also, even without overflow, choosing int early can push students toward later truncation (as happened in the semi-perimeter step). Using double (or at least long) for intermediate computations avoids overflow and keeps the numeric pathway consistent.",
+          "error_manifestation": "Wrong side lengths and area for larger inputs; possibly NaN if an overflowed negative squared distance is passed to Math.sqrt.",
+          "confidence": 0.45,
+          "evidence": [
+            {
+              "line_number": 33,
+              "code_snippet": "// First we calculate the squared distances using ints"
+            },
+            {
+              "line_number": 34,
+              "code_snippet": "int sideOneSquaredDistance = (pointTwoXValue - pointOneXValue) * (pointTwoXValue - pointOneXValue)\n                + (pointTwoYValue - pointOneYValue) * (pointTwoYValue - pointOneYValue);"
+            },
+            {
+              "line_number": 37,
+              "code_snippet": "int sideTwoSquaredDistance = (pointThreeXValue - pointTwoXValue) * (pointThreeXValue - pointTwoXValue)\n                + (pointThreeYValue - pointTwoYValue) * (pointThreeYValue - pointTwoYValue);"
+            },
+            {
+              "line_number": 40,
+              "code_snippet": "int sideThreeSquaredDistance = (pointThreeXValue - pointOneXValue) * (pointThreeXValue - pointOneXValue)\n                + (pointThreeYValue - pointOneYValue) * (pointThreeYValue - pointOneYValue);"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "claude-haiku-4-5-20251001:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Unnecessary Precision Loss Through Premature Type Conversion",
+          "student_thought_process": "The student believes that intermediate calculated values like side lengths (which come from square roots and are doubles) must be converted to integers before using them in subsequent calculations. They think it's necessary to store the side lengths as integers, compute the semi-perimeter from these integer values, then convert back to doubles for the final formula.",
+          "conceptual_gap": "The student doesn't understand that converting a double to an int truncates the fractional part, permanently losing precision. When they cast sideOneLength, sideTwoLength, and sideThreeLength to int (lines 55-57), they lose the decimal information. The semi-perimeter calculated from these truncated integers (line 58) is therefore incorrect and mathematically inconsistent with using the original precise double values in Heron's formula (lines 64-68). The student seems to believe precision can be recovered or that using the original doubles later will compensate for the truncated semi-perimeter, but this doesn't work in Heron's formula where all three variables must be consistent.",
+          "error_manifestation": "Wrong output: The calculated triangle area will be incorrect because the semi-perimeter is computed from truncated side lengths while the formula uses the original non-truncated side lengths.",
+          "confidence": 0.92,
+          "evidence": [
+            {
+              "line_number": 55,
+              "code_snippet": "int sideOneAsInt = (int) sideOneLength;\n        int sideTwoAsInt = (int) sideTwoLength;\n        int sideThreeAsInt = (int) sideThreeLength;"
+            },
+            {
+              "line_number": 58,
+              "code_snippet": "int semiPerimeterAsInt = (sideOneAsInt + sideTwoAsInt + sideThreeAsInt) / 2;"
+            },
+            {
+              "line_number": 64,
+              "code_snippet": "double triangleAreaValue = Math.sqrt(\n                semiPerimeterValue *\n                (semiPerimeterValue - sideOneLength) *\n                (semiPerimeterValue - sideTwoLength) *\n                (semiPerimeterValue - sideThreeLength)\n        );"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Inconsistent Precision in Arithmetic",
+          "student_thought_process": "The student believes they can calculate the semi-perimeter from one set of values (truncated integers) but then use that result in a formula with a different set of values (non-truncated doubles), and everything will work correctly.",
+          "conceptual_gap": "In Heron's formula, the semi-perimeter must be calculated from the same side lengths that are used in the subsequent calculation. The student has created a mathematical inconsistency: semiPerimeterValue is derived from truncated integer side lengths, but then subtracted from the original double side lengths in the formula. This violates the mathematical requirement that s = (a+b+c)/2 must use the exact same values of a, b, and c that appear in the rest of the formula.",
+          "error_manifestation": "Wrong output: The formula produces incorrect results because the semi-perimeter is arithmetically inconsistent with the side lengths being used.",
+          "confidence": 0.85,
+          "evidence": [
+            {
+              "line_number": 50,
+              "code_snippet": "double sideOneLength = Math.sqrt(sideOneSquaredDistance);\n        double sideTwoLength = Math.sqrt(sideTwoSquaredDistance);\n        double sideThreeLength = Math.sqrt(sideThreeSquaredDistance);"
+            },
+            {
+              "line_number": 55,
+              "code_snippet": "int sideOneAsInt = (int) sideOneLength;"
+            },
+            {
+              "line_number": 59,
+              "code_snippet": "double semiPerimeterValue = semiPerimeterAsInt;"
+            },
+            {
+              "line_number": 65,
+              "code_snippet": "(semiPerimeterValue - sideOneLength)"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "gemini-3-flash-preview:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Intermediate Value Truncation",
+          "student_thought_process": "The student believes that converting intermediate decimal values (doubles) to integers for calculation is a safe procedure and that precision can be 'restored' by assigning the truncated result back to a double variable later.",
+          "conceptual_gap": "In Java, casting a double to an int via (int) explicitly discards the decimal portion. Furthermore, when the division operator / is used with two integer operands, it performs integer division, which truncates the remainder. This loss of precision is permanent and cannot be recovered by widening the result back to a double.",
+          "error_manifestation": "wrong output",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 49,
+              "code_snippet": "int sideOneAsInt = (int) sideOneLength;"
+            },
+            {
+              "line_number": 53,
+              "code_snippet": "int semiPerimeterAsInt = (sideOneAsInt + sideTwoAsInt + sideThreeAsInt) / 2;"
+            },
+            {
+              "line_number": 54,
+              "code_snippet": "double semiPerimeterValue = semiPerimeterAsInt;"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Integer Division Logic",
+          "student_thought_process": "The student believes that the formula for the semi-perimeter (s = (a+b+c)/2) will produce a mathematically accurate decimal result even when the inputs and the divisor are integers.",
+          "conceptual_gap": "The student fails to recognize that the behavior of the division operator in Java is determined by the types of its operands. Using an integer literal 2 instead of a double literal 2.0 triggers integer division, resulting in the loss of the .5 remainder often found in semi-perimeter calculations.",
+          "error_manifestation": "wrong output",
+          "confidence": 0.9,
+          "evidence": [
+            {
+              "line_number": 53,
+              "code_snippet": "int semiPerimeterAsInt = (sideOneAsInt + sideTwoAsInt + sideThreeAsInt) / 2;"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    }
+  },
+  "timestamp": "2025-12-29T21:20:23.631798+00:00"
+}
