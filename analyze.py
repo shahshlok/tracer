@@ -21,6 +21,7 @@ import matplotlib
 
 matplotlib.use("Agg")  # Headless
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -986,7 +987,7 @@ def generate_charts(
             ax.text(i, v + 0.05, f"{v:.2f}", ha="center", fontweight="bold")
         plt.tight_layout()
         path = assets_dir / "strategy_f1.png"
-        plt.savefig(path, dpi=200, bbox_inches="tight")
+        plt.savefig(path, dpi=300, bbox_inches="tight")
         plt.close()
         charts.append("strategy_f1.png")
 
@@ -1084,7 +1085,7 @@ def generate_charts(
             ax.set_title("Top False Positive Detections (Hallucinations)")
             plt.tight_layout()
             path = assets_dir / "hallucinations.png"
-            plt.savefig(path, dpi=200, bbox_inches="tight")
+            plt.savefig(path, dpi=300, bbox_inches="tight")
             plt.close()
             charts.append("hallucinations.png")
 
@@ -1128,7 +1129,7 @@ def generate_charts(
             ax.set_xlim(0, 1)
             plt.tight_layout()
             path = assets_dir / "semantic_distribution.png"
-            plt.savefig(path, dpi=200, bbox_inches="tight")
+            plt.savefig(path, dpi=300, bbox_inches="tight")
             plt.close()
             charts.append("semantic_distribution.png")
 
@@ -1152,12 +1153,12 @@ def generate_threshold_sensitivity_heatmap(
 
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    # Create heatmap with annotations
+    # Create heatmap with annotations (using professional colorblind-friendly palette)
     sns.heatmap(
         pivot,
         annot=True,
         fmt=".3f",
-        cmap="RdYlGn",
+        cmap="viridis",
         ax=ax,
         vmin=pivot.values.min() - 0.02,
         vmax=pivot.values.max() + 0.02,
@@ -1165,21 +1166,23 @@ def generate_threshold_sensitivity_heatmap(
         cbar_kws={"label": "F1 Score"},
     )
 
-    # Mark optimal cell with a star
+    # Highlight optimal cell with a bold rectangular border
     opt_sem = optimal_config.get("semantic_threshold")
     opt_noise = optimal_config.get("noise_floor")
     if opt_sem and opt_noise:
         col_idx = list(pivot.columns).index(opt_sem)
         row_idx = list(pivot.index).index(opt_noise)
-        ax.scatter(col_idx + 0.5, row_idx + 0.5, marker="*", s=500, c="black", zorder=10)
+        ax.add_patch(
+            Rectangle((col_idx, row_idx), 1, 1, fill=False, edgecolor="red", linewidth=4, zorder=10)
+        )
 
     ax.set_xlabel("Semantic Similarity Threshold")
     ax.set_ylabel("Noise Floor Threshold")
-    ax.set_title("Threshold Sensitivity Analysis: F1 Score\n(★ = Optimal Configuration)")
+    ax.set_title("Threshold Sensitivity Analysis: F1 Score")
 
     plt.tight_layout()
     path = assets_dir / "threshold_sensitivity_heatmap.png"
-    plt.savefig(path, dpi=200, bbox_inches="tight")
+    plt.savefig(path, dpi=300, bbox_inches="tight")
     plt.close()
 
     return "threshold_sensitivity_heatmap.png"
@@ -1211,13 +1214,14 @@ def generate_precision_recall_curve(
 
     fig, ax = plt.subplots(figsize=(10, 8))
 
-    # Plot PR curve
+    # Plot PR curve with professional color scheme
     ax.plot(
         curve_data["recall"],
         curve_data["precision"],
-        "b-o",
-        linewidth=2,
+        color="#2c3e50",
+        linewidth=2.5,
         markersize=10,
+        marker="o",
         label="PR Curve",
     )
 
@@ -1226,12 +1230,25 @@ def generate_precision_recall_curve(
         offset = (5, 5)
         fontweight = "normal"
         markersize = 10
+        alpha = 0.7
 
-        # Highlight current threshold
+        # Highlight current threshold with larger, more prominent marker
         if abs(row["semantic_threshold"] - current_threshold) < 0.01:
-            ax.scatter(row["recall"], row["precision"], s=200, c="red", zorder=5, marker="*")
+            ax.scatter(
+                row["recall"], row["precision"], s=300, c="#e74c3c", zorder=5, marker="o", alpha=1.0
+            )
             fontweight = "bold"
             offset = (8, 8)
+        else:
+            ax.scatter(
+                row["recall"],
+                row["precision"],
+                s=100,
+                c="#2c3e50",
+                zorder=5,
+                marker="o",
+                alpha=alpha,
+            )
 
         ax.annotate(
             f"{row['semantic_threshold']:.2f}",
@@ -1245,7 +1262,7 @@ def generate_precision_recall_curve(
     ax.set_xlabel("Recall", fontsize=12)
     ax.set_ylabel("Precision", fontsize=12)
     ax.set_title(
-        f"Precision-Recall Trade-off Across Semantic Thresholds\n(★ = Current Threshold {current_threshold})",
+        f"Precision-Recall Trade-off Across Semantic Thresholds (Current: {current_threshold})",
         fontsize=14,
     )
     ax.set_xlim(0, 1.05)
@@ -1272,7 +1289,7 @@ def generate_precision_recall_curve(
 
     plt.tight_layout()
     path = assets_dir / "precision_recall_curve.png"
-    plt.savefig(path, dpi=200, bbox_inches="tight")
+    plt.savefig(path, dpi=300, bbox_inches="tight")
     plt.close()
 
     return "precision_recall_curve.png"
@@ -1305,10 +1322,18 @@ def generate_ensemble_comparison_chart(
     width = 0.25
 
     bars1 = ax.bar(
-        x - width, precision, width, label="Precision", color="#3498db", edgecolor="black"
+        x - width,
+        precision,
+        width,
+        label="Precision",
+        color="#3498db",
+        edgecolor="black",
+        alpha=0.8,
     )
-    bars2 = ax.bar(x, recall, width, label="Recall", color="#2ecc71", edgecolor="black")
-    bars3 = ax.bar(x + width, f1, width, label="F1 Score", color="#e74c3c", edgecolor="black")
+    bars2 = ax.bar(x, recall, width, label="Recall", color="#27ae60", edgecolor="black", alpha=0.8)
+    bars3 = ax.bar(
+        x + width, f1, width, label="F1 Score", color="#e74c3c", edgecolor="black", alpha=0.8
+    )
 
     # Add value labels on bars
     for bars in [bars1, bars2, bars3]:
@@ -1413,23 +1438,23 @@ def generate_category_type_comparison(
         meanprops=dict(marker="D", markerfacecolor="white", markeredgecolor="black", markersize=10),
     )
 
-    # Color the boxes
-    colors = ["#2ecc71", "#e74c3c"]  # Green for structural (easy), Red for semantic (hard)
+    # Color the boxes with professional palette
+    colors = ["#3498db", "#e74c3c"]  # Blue for structural (easy), Red for semantic (hard)
     for patch, color in zip(bp["boxes"], colors):
         patch.set_facecolor(color)
-        patch.set_alpha(0.6)
+        patch.set_alpha(0.5)
 
     # Add individual points (jittered)
     np.random.seed(42)
     for i, (data, pos) in enumerate([(structural, 1), (semantic, 2)]):
-        jitter = np.random.uniform(-0.1, 0.1, len(data))
+        jitter = np.random.uniform(-0.08, 0.08, len(data))
         ax.scatter(
             [pos + j for j in jitter],
             data,
-            alpha=0.8,
-            s=100,
+            alpha=0.5,
+            s=50,
             c=colors[i],
-            edgecolor="black",
+            edgecolor="none",
             zorder=5,
         )
 
@@ -1473,7 +1498,7 @@ def generate_category_type_comparison(
 
     plt.tight_layout()
     path = assets_dir / "category_structural_vs_semantic.png"
-    plt.savefig(path, dpi=200, bbox_inches="tight")
+    plt.savefig(path, dpi=300, bbox_inches="tight")
     plt.close()
 
     return "category_structural_vs_semantic.png"
@@ -1590,12 +1615,30 @@ def generate_model_dotplot(
 
     y_pos = np.arange(len(by_model))
 
-    # Plot dots for each metric
+    # Plot dots for each metric with professional colors
     ax.scatter(
-        by_model["precision"], y_pos, s=150, c="#3498db", marker="o", label="Precision", zorder=3
+        by_model["precision"],
+        y_pos,
+        s=150,
+        c="#3498db",
+        marker="o",
+        label="Precision",
+        zorder=3,
+        alpha=0.8,
     )
-    ax.scatter(by_model["recall"], y_pos, s=150, c="#2ecc71", marker="s", label="Recall", zorder=3)
-    ax.scatter(by_model["f1"], y_pos, s=200, c="#e74c3c", marker="D", label="F1 Score", zorder=3)
+    ax.scatter(
+        by_model["recall"],
+        y_pos,
+        s=150,
+        c="#27ae60",
+        marker="s",
+        label="Recall",
+        zorder=3,
+        alpha=0.8,
+    )
+    ax.scatter(
+        by_model["f1"], y_pos, s=200, c="#e74c3c", marker="D", label="F1 Score", zorder=3, alpha=0.8
+    )
 
     # Connect dots with lines
     for i in y_pos:
@@ -1735,7 +1778,7 @@ def generate_enhanced_heatmap(
         pivot,
         annot=True,
         fmt=".2f",
-        cmap="RdYlGn",
+        cmap="viridis",
         ax=ax,
         vmin=vmin,
         vmax=vmax,
@@ -1749,7 +1792,7 @@ def generate_enhanced_heatmap(
 
     plt.tight_layout()
     path = assets_dir / "strategy_model_heatmap.png"
-    plt.savefig(path, dpi=200, bbox_inches="tight")
+    plt.savefig(path, dpi=300, bbox_inches="tight")
     plt.close()
 
     return "strategy_model_heatmap.png"
@@ -1790,19 +1833,30 @@ def generate_confidence_calibration(
     fig, ax = plt.subplots(figsize=(10, 8))
 
     # Perfect calibration line
-    ax.plot([0, 1], [0, 1], "k--", label="Perfect Calibration", linewidth=2)
+    ax.plot([0, 1], [0, 1], "k--", label="Perfect Calibration", linewidth=2, alpha=0.7)
 
-    # Actual calibration
+    # Actual calibration with smaller, professional bubbles
+    max_count = calibration["count"].max()
+    scaled_sizes = 50 + (calibration["count"] / max_count) * 150
     ax.scatter(
         calibration["mean_confidence"],
         calibration["accuracy"],
-        s=calibration["count"] / 10,  # Size by count
+        s=scaled_sizes,  # Scaled size by count
         c="#3498db",
-        alpha=0.7,
-        edgecolors="black",
+        alpha=0.6,
+        edgecolors="none",
         label="Observed",
+        zorder=5,
     )
-    ax.plot(calibration["mean_confidence"], calibration["accuracy"], "b-", alpha=0.5)
+    ax.plot(
+        calibration["mean_confidence"],
+        calibration["accuracy"],
+        "-",
+        color="#2c3e50",
+        alpha=0.5,
+        linewidth=2,
+        zorder=4,
+    )
 
     ax.set_xlabel("Mean Predicted Confidence", fontsize=12)
     ax.set_ylabel("Fraction Correct (Accuracy)", fontsize=12)
@@ -1827,7 +1881,7 @@ def generate_confidence_calibration(
 
     plt.tight_layout()
     path = assets_dir / "confidence_calibration.png"
-    plt.savefig(path, dpi=200, bbox_inches="tight")
+    plt.savefig(path, dpi=300, bbox_inches="tight")
     plt.close()
 
     return "confidence_calibration.png"
@@ -1857,7 +1911,7 @@ def generate_publication_charts(
             "font.size": 11,
             "axes.titlesize": 14,
             "axes.labelsize": 12,
-            "figure.dpi": 150,
+            "figure.dpi": 300,
         }
     )
 
@@ -1929,7 +1983,7 @@ def generate_publication_charts(
 
         plt.tight_layout()
         path = assets_dir / "misconception_recall.png"
-        plt.savefig(path, dpi=200, bbox_inches="tight")
+        plt.savefig(path, dpi=300, bbox_inches="tight")
         plt.close()
         charts.append("misconception_recall.png")
         console.print(f"  [green]✓[/green] misconception_recall.png")
@@ -1946,15 +2000,15 @@ def generate_publication_charts(
             ax.hist(
                 tp_scores,
                 bins=30,
-                alpha=0.7,
+                alpha=0.6,
                 label=f"True Positives (n={len(tp_scores)}, μ={tp_scores.mean():.2f})",
-                color="#2ecc71",
+                color="#3498db",
                 edgecolor="white",
             )
             ax.hist(
                 fp_scores,
                 bins=30,
-                alpha=0.7,
+                alpha=0.6,
                 label=f"False Positives (n={len(fp_scores)}, μ={fp_scores.mean():.2f})",
                 color="#e74c3c",
                 edgecolor="white",
@@ -1975,7 +2029,7 @@ def generate_publication_charts(
 
             plt.tight_layout()
             path = assets_dir / "semantic_distribution.png"
-            plt.savefig(path, dpi=200, bbox_inches="tight")
+            plt.savefig(path, dpi=300, bbox_inches="tight")
             plt.close()
             charts.append("semantic_distribution.png")
             console.print(f"  [green]✓[/green] semantic_distribution.png")
@@ -2022,7 +2076,7 @@ def generate_publication_charts(
 
         plt.tight_layout()
         path = assets_dir / "strategy_f1.png"
-        plt.savefig(path, dpi=200, bbox_inches="tight")
+        plt.savefig(path, dpi=300, bbox_inches="tight")
         plt.close()
         charts.append("strategy_f1.png")
         console.print(f"  [green]✓[/green] strategy_f1.png")
@@ -2074,7 +2128,7 @@ def generate_publication_charts(
 
             plt.tight_layout()
             path = assets_dir / "assignment_comparison.png"
-            plt.savefig(path, dpi=200, bbox_inches="tight")
+            plt.savefig(path, dpi=300, bbox_inches="tight")
             plt.close()
             charts.append("assignment_comparison.png")
             console.print(f"  [green]✓[/green] assignment_comparison.png")
