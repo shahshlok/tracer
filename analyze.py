@@ -125,31 +125,7 @@ def get_category_type(category: str) -> str:
     return CATEGORY_TYPE_MAP.get(category, "Unknown")
 
 
-# ---------------------------------------------------------------------------
-# Colorblind-Safe Palette (Paul Tol Scientific + IBM Carbon)
-# ---------------------------------------------------------------------------
-# Verified for deuteranopia, protanopia, tritanopia, and grayscale
-CB_BLUE = "#0173B2"  # Primary (Structural, Precision)
-CB_ORANGE = "#DE8F05"  # Secondary (Semantic, Recall)
-CB_CYAN = "#029E73"  # Tertiary (F1, TP)
-CB_MAGENTA = "#CC78BC"  # Quaternary (FN, alternatives)
-CB_GRAY = "#949494"  # Neutral (thresholds, grids)
-CB_YELLOW = "#ECE133"  # Highlights (rare use)
-CB_RED_SAFE = "#CA5E42"  # Safe red alternative (use sparingly)
 
-# Color mappings by semantic meaning
-COLORS = {
-    "structural": CB_BLUE,
-    "semantic": CB_ORANGE,
-    "precision": CB_BLUE,
-    "recall": CB_ORANGE,
-    "f1": CB_CYAN,
-    "tp": CB_CYAN,
-    "fp_clean": CB_BLUE,
-    "fp_wrong": CB_ORANGE,
-    "fn": CB_MAGENTA,
-    "noise": CB_GRAY,
-}
 
 
 app = typer.Typer(help="Analyze LLM misconception detections (v2)")
@@ -1224,7 +1200,15 @@ def generate_threshold_sensitivity_heatmap(
         col_idx = list(pivot.columns).index(opt_sem)
         row_idx = list(pivot.index).index(opt_noise)
         ax.add_patch(
-            Rectangle((col_idx, row_idx), 1, 1, fill=False, edgecolor="red", linewidth=4, zorder=10)
+            Rectangle(
+                (col_idx, row_idx),
+                1,
+                1,
+                fill=False,
+                edgecolor=CB_RED_SAFE,
+                linewidth=2,
+                zorder=10,
+            )
         )
 
     ax.set_xlabel("Semantic Similarity Threshold")
