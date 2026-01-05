@@ -1190,23 +1190,6 @@ def generate_threshold_sensitivity_heatmap(
         cbar_kws={"label": "F1 Score"},
     )
 
-    # Highlight optimal cell with a bold rectangular border
-    opt_sem = optimal_config.get("semantic_threshold")
-    opt_noise = optimal_config.get("noise_floor")
-    if opt_sem and opt_noise:
-        col_idx = list(pivot.columns).index(opt_sem)
-        row_idx = list(pivot.index).index(opt_noise)
-        ax.add_patch(
-            Rectangle(
-                (col_idx, row_idx),
-                1,
-                1,
-                fill=False,
-                edgecolor=CB_RED_SAFE,
-                linewidth=2,
-                zorder=10,
-            )
-        )
 
     ax.set_xlabel("Semantic Similarity Threshold")
     ax.set_ylabel("Noise Floor Threshold")
@@ -1621,14 +1604,14 @@ def generate_model_dotplot(
     # Shorten model names
     def shorten_model_name(name: str) -> str:
         name = str(name).split("/")[-1]
-        # Reasoning models get [Reasoning] suffix, standard models get [Standard]
+        # Reasoning models get [Reasoning] suffix, standard models have no suffix
         replacements = {
             "claude-haiku-4-5-20251001:reasoning": "Claude-Haiku-4.5 [Reasoning]",
-            "claude-haiku-4-5-20251001": "Claude-Haiku-4.5 [Standard]",
+            "claude-haiku-4-5-20251001": "Claude-Haiku-4.5",
             "gemini-3-flash-preview:reasoning": "Gemini-3-Flash [Reasoning]",
-            "gemini-3-flash-preview": "Gemini-3-Flash [Standard]",
+            "gemini-3-flash-preview": "Gemini-3-Flash",
             "gpt-5.2-2025-12-11:reasoning": "GPT-5.2 [Reasoning]",
-            "gpt-5.2-2025-12-11": "GPT-5.2 [Standard]",
+            "gpt-5.2-2025-12-11": "GPT-5.2",
         }
         for old, new in replacements.items():
             if old in name:
@@ -1781,11 +1764,11 @@ def generate_enhanced_heatmap(
         # Check reasoning variants FIRST (longer strings) to avoid substring false matches
         replacements = {
             "claude-haiku-4-5-20251001:reasoning": "Haiku-4.5 [R]",
-            "claude-haiku-4-5-20251001": "Haiku-4.5 [S]",
+            "claude-haiku-4-5-20251001": "Haiku-4.5",
             "gemini-3-flash-preview:reasoning": "Gemini-3 [R]",
-            "gemini-3-flash-preview": "Gemini-3 [S]",
+            "gemini-3-flash-preview": "Gemini-3",
             "gpt-5.2-2025-12-11:reasoning": "GPT-5.2 [R]",
-            "gpt-5.2-2025-12-11": "GPT-5.2 [S]",
+            "gpt-5.2-2025-12-11": "GPT-5.2",
         }
         for old, new in replacements.items():
             if old in name:
@@ -2002,8 +1985,6 @@ def generate_structural_semantic_bars(
     ]
     ax.legend(handles=legend_elements, loc="lower right", fontsize=11)
 
-    # Add diagnostic ceiling line
-    ax.axvline(x=0.7, color="gray", linestyle=":", linewidth=2, alpha=0.5)
 
     plt.tight_layout()
     path = assets_dir / "category_structural_vs_semantic.png"
@@ -2180,11 +2161,6 @@ def generate_strategy_performance_chart(
     ax.legend(loc="upper right", fontsize=11, framealpha=0.95)
     ax.grid(axis="y", alpha=0.3, linestyle="--", linewidth=0.8)
 
-    # Add diagnostic ceiling line at 0.7
-    ax.axhline(y=0.7, color=CB_GRAY, linestyle=":", linewidth=2, alpha=0.5)
-
-    # Add visual separator between structural and semantic groups
-    ax.axvline(x=2.5, color="black", linestyle="-", linewidth=1.5, alpha=0.3)
 
     plt.tight_layout()
     path = assets_dir / "strategy_comparison.png"
@@ -2435,14 +2411,14 @@ def generate_model_bars(
     # Shorten model names and mark reasoning models
     def shorten_model_name(name: str) -> str:
         name = str(name).split("/")[-1]
-        # Reasoning models get [Reasoning] suffix, standard models get [Standard]
+        # Reasoning models get [Reasoning] suffix, standard models have no suffix
         replacements = {
             "claude-haiku-4-5-20251001:reasoning": "Claude-Haiku-4.5 [Reasoning]",
-            "claude-haiku-4-5-20251001": "Claude-Haiku-4.5 [Standard]",
+            "claude-haiku-4-5-20251001": "Claude-Haiku-4.5",
             "gemini-3-flash-preview:reasoning": "Gemini-3-Flash [Reasoning]",
-            "gemini-3-flash-preview": "Gemini-3-Flash [Standard]",
+            "gemini-3-flash-preview": "Gemini-3-Flash",
             "gpt-5.2-2025-12-11:reasoning": "GPT-5.2 [Reasoning]",
-            "gpt-5.2-2025-12-11": "GPT-5.2 [Standard]",
+            "gpt-5.2-2025-12-11": "GPT-5.2",
         }
         for old, new in replacements.items():
             if old in name:
@@ -2509,8 +2485,6 @@ def generate_model_bars(
     ax.set_xlim(0, 1.05)
     ax.legend(loc="lower right", fontsize=11)
     ax.grid(axis="x", alpha=0.3)
-    ax.axvline(x=0.5, color=CB_GRAY, linestyle="--", alpha=0.3)
-    ax.axvline(x=0.7, color=CB_GRAY, linestyle="--", alpha=0.3)
 
     plt.tight_layout()
     path = assets_dir / "model_comparison.png"
@@ -2574,12 +2548,16 @@ def generate_publication_charts(
     if not seeded.empty:
         gt_map = {g["id"]: g for g in groundtruth}
         by_mis = metrics_by_group(seeded, ["expected_id"])
-        by_mis["name"] = by_mis["expected_id"].apply(
-            lambda x: gt_map.get(x, {}).get("name", x)[:30]
-        )
+        # Get name without parenthetical content (no truncation)
+        import re
+        def clean_name(x):
+            full_name = gt_map.get(x, {}).get("name", x)
+            # Remove parenthetical content like "(Scope Error)" or "(Off-by-One)"
+            return re.sub(r'\s*\([^)]*\)', '', full_name).strip()
+        by_mis["name"] = by_mis["expected_id"].apply(clean_name)
         by_mis = by_mis.sort_values("recall")
 
-        fig, ax = plt.subplots(figsize=(12, 10))
+        fig, ax = plt.subplots(figsize=(14, 10))  # Wider figure for longer names
 
         # Use simple RdYlGn gradient (not colorblind-friendly)
         from matplotlib import cm
@@ -2595,10 +2573,6 @@ def generate_publication_charts(
         ax.set_title("Per-Misconception Detection Recall", fontsize=14, fontweight="bold")
         ax.set_xlim(0, 1.15)
 
-        # Add diagnostic ceiling line
-        ax.axvline(
-            0.7, color=CB_GRAY, linestyle=":", linewidth=2, alpha=0.6, label="Diagnostic Ceiling"
-        )
 
         for i, (_, row) in enumerate(by_mis.iterrows()):
             n = int(row["tp"] + row["fn"])
