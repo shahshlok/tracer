@@ -2114,103 +2114,119 @@ def generate_strategy_performance_chart(
         strategy_metrics.append(
             {
                 "strategy": strategy,
-                "Precision": overall["precision"]["estimate"],
-                "Recall": overall["recall"]["estimate"],
-                "F1": overall["f1"]["estimate"],
-                "Struct\nRecall": struct_recall,
-                "Sem\nRecall": sem_recall,
-                "Struct\nPrec": struct_precision,
-                "Sem\nPrec": sem_precision,
+                "Struct.\nRecall": struct_recall,
+                "Sem.\nRecall": sem_recall,
+                "Struct.\nPrecision": struct_precision,
+                "Sem.\nPrecision": sem_precision,
+                "Struct.\nF1": 2
+                * (struct_precision * struct_recall)
+                / (struct_precision + struct_recall)
+                if (struct_precision + struct_recall) > 0
+                else 0,
+                "Sem.\nF1": 2 * (sem_precision * sem_recall) / (sem_precision + sem_recall)
+                if (sem_precision + sem_recall) > 0
+                else 0,
             }
         )
 
     if len(strategy_metrics) < 2:
         return ""
 
-    # Setup radar chart parameters - 2x2 grid with one chart per strategy
+    # Prepare data for grouped bar chart - focus on structural vs semantic
     categories = [
-        "Precision",
-        "Recall",
-        "F1",
         "Struct.\nRecall",
+        "Struct.\nPrecision",
+        "Struct.\nF1",
         "Sem.\nRecall",
-        "Struct.\nPrec.",
-        "Sem.\nPrec.",
+        "Sem.\nPrecision",
+        "Sem.\nF1",
     ]
-    N = len(categories)
-    angles = [n / float(N) * 2 * np.pi for n in range(N)]
-    angles += angles[:1]
 
     # Strategy configurations: colors and display names
     strategy_configs = {
-        "baseline": {"color": CB_BLUE, "title": "Baseline"},
-        "cot": {"color": CB_ORANGE, "title": "Chain-of-Thought"},
-        "socratic": {"color": CB_CYAN, "title": "Socratic"},
-        "taxonomy": {"color": CB_MAGENTA, "title": "Taxonomy-Guided"},
+        "baseline": {"color": CB_BLUE, "label": "Baseline"},
+        "cot": {"color": CB_ORANGE, "label": "Chain-of-Thought"},
+        "socratic": {"color": CB_CYAN, "label": "Socratic"},
+        "taxonomy": {"color": CB_MAGENTA, "label": "Taxonomy-Guided"},
     }
 
-    # Create 2x2 subplot grid
-    fig, axes = plt.subplots(2, 2, figsize=(14, 12), subplot_kw=dict(projection="polar"))
-    axes = axes.flatten()
+    # Create figure
+    fig, ax = plt.subplots(figsize=(14, 8))
 
-    # Plot each strategy in its own subplot
-    for idx, metrics in enumerate(strategy_metrics):
-        if idx >= 4:
-            break
+    # Bar configuration
+    x = np.arange(len(categories))
+    width = 0.20  # Width of each bar
+    multiplier = 0
 
-        ax = axes[idx]
+    # Plot bars for each strategy
+    for metrics in strategy_metrics:
         strategy = metrics["strategy"]
         config = strategy_configs[strategy]
 
-        # Extract values for radar plot
         values = [
-            metrics["Precision"],
-            metrics["Recall"],
-            metrics["F1"],
-            metrics["Struct\nRecall"],
-            metrics["Sem\nRecall"],
-            metrics["Struct\nPrec"],
-            metrics["Sem\nPrec"],
+            metrics["Struct.\nRecall"],
+            metrics["Struct.\nPrecision"],
+            metrics["Struct.\nF1"],
+            metrics["Sem.\nRecall"],
+            metrics["Sem.\nPrecision"],
+            metrics["Sem.\nF1"],
         ]
-        values += values[:1]
 
-        # Plot line with prominent markers
-        ax.plot(
-            angles,
+        offset = width * multiplier
+        bars = ax.bar(
+            x + offset,
             values,
-            linewidth=3.5,
-            linestyle="-",
+            width,
+            label=config["label"],
             color=config["color"],
-            marker="o",
-            markersize=10,
-            markerfacecolor=config["color"],
-            markeredgecolor="white",
-            markeredgewidth=2,
+            alpha=0.9,
+            edgecolor="white",
+            linewidth=1.5,
         )
 
-        # Fill with subtle alpha
-        ax.fill(angles, values, color=config["color"], alpha=0.15)
+        # Add value labels on top of bars
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                height + 0.01,
+                f"{height:.2f}",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+                fontweight="bold",
+            )
 
-        # Configure axes
-        ax.set_xticks(angles[:-1])
-        ax.set_xticklabels(categories, fontsize=11, fontweight="bold")
-        ax.set_ylim(0, 1)
-        ax.set_yticks([0.2, 0.4, 0.6, 0.8, 1.0])
-        ax.set_yticklabels(["0.2", "0.4", "0.6", "0.8", "1.0"], fontsize=9, color="#666666")
-        ax.grid(True, alpha=0.4, linestyle="--", linewidth=1.0)
+        multiplier += 1
 
-        # Add title with strategy color
-        ax.set_title(config["title"], fontsize=14, fontweight="bold", pad=20, color=config["color"])
+    # Styling
+    ax.set_xlabel("Metric", fontsize=13, fontweight="bold")
+    ax.set_ylabel("Score", fontsize=13, fontweight="bold")
+    ax.set_title(
+        "Strategy Performance: Structural vs Semantic Misconceptions",
+        fontsize=16,
+        fontweight="bold",
+        pad=20,
+    )
+    ax.set_xticks(x + width * 1.5)
+    ax.set_xticklabels(categories, fontsize=11, fontweight="bold")
+    ax.set_ylim(0, 1.15)
+    ax.set_yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
+    ax.legend(loc="upper right", fontsize=11, framealpha=0.95)
+    ax.grid(axis="y", alpha=0.3, linestyle="--", linewidth=0.8)
 
-    # Overall title
-    fig.suptitle("Strategy Performance Profiles", fontsize=17, fontweight="bold", y=0.985)
+    # Add diagnostic ceiling line at 0.7
+    ax.axhline(y=0.7, color=CB_GRAY, linestyle=":", linewidth=2, alpha=0.5)
 
-    plt.tight_layout(rect=[0, 0, 1, 0.975])
-    path = assets_dir / "strategy_radar.png"
+    # Add visual separator between structural and semantic groups
+    ax.axvline(x=2.5, color="black", linestyle="-", linewidth=1.5, alpha=0.3)
+
+    plt.tight_layout()
+    path = assets_dir / "strategy_comparison.png"
     plt.savefig(path, dpi=300, bbox_inches="tight")
     plt.close()
 
-    return "strategy_radar.png"
+    return "strategy_comparison.png"
 
 
 def generate_sankey_fp_flow(
@@ -2579,7 +2595,7 @@ def generate_publication_charts(
     semantic_threshold: float = SEMANTIC_THRESHOLD_DEFAULT,
 ) -> list[str]:
     """
-    Generate all 12 publication-grade charts for ITiCSE paper.
+    Generate ONLY the 7 selected publication figures for ITiCSE paper.
 
     Returns list of generated chart filenames.
     """
@@ -2597,45 +2613,28 @@ def generate_publication_charts(
         }
     )
 
-    console.print("[cyan]Generating publication-grade figures...[/cyan]")
+    console.print("[cyan]Generating 6 publication figures...[/cyan]")
 
-    # 1. Threshold Sensitivity Heatmap (NEW)
+    # 1. Main Finding: Structural vs Semantic Categories
+    chart = generate_structural_semantic_bars(df, groundtruth, assets_dir)
+    if chart:
+        charts.append(chart)
+        console.print(f"  [green]✓[/green] {chart}")
+
+    # 2. Strategy Comparison: Grouped Bar Chart
+    chart = generate_strategy_performance_chart(df, groundtruth, assets_dir)
+    if chart:
+        charts.append(chart)
+        console.print(f"  [green]✓[/green] {chart}")
+
+    # 3. Methodology Rigor: Threshold Sensitivity Heatmap
     if sensitivity_df is not None and optimal_config is not None:
         chart = generate_threshold_sensitivity_heatmap(sensitivity_df, optimal_config, assets_dir)
         if chart:
             charts.append(chart)
             console.print(f"  [green]✓[/green] {chart}")
 
-    # 2. Precision-Recall Curve (NEW)
-    if sensitivity_df is not None:
-        chart = generate_precision_recall_curve(sensitivity_df, semantic_threshold, assets_dir)
-        if chart:
-            charts.append(chart)
-            console.print(f"  [green]✓[/green] {chart}")
-
-    # 3. Ensemble Comparison (NEW)
-    if ensemble_comparison is not None:
-        chart = generate_ensemble_comparison_chart(ensemble_comparison, assets_dir)
-        if chart:
-            charts.append(chart)
-            console.print(f"  [green]✓[/green] {chart}")
-
-    # 4. Structural vs Semantic Categories (NEW)
-    chart = generate_structural_semantic_bars(df, groundtruth, assets_dir)
-    if chart:
-        charts.append(chart)
-        console.print(f"  [green]✓[/green] {chart}")
-
-    # 5. Strategy Performance Bars (NEW)
-    chart = generate_strategy_performance_chart(df, groundtruth, assets_dir)
-    if chart:
-        charts.append(chart)
-        console.print(f"  [green]✓[/green] {chart}")
-    if chart:
-        charts.append(chart)
-        console.print(f"  [green]✓[/green] {chart}")
-
-    # 6. Per-Misconception Recall (from original generate_charts - reuse)
+    # 4. Diagnostic Ceiling: Per-Misconception Recall
     seeded = df[df["expected_id"].notna()]
     if not seeded.empty:
         gt_map = {g["id"]: g for g in groundtruth}
@@ -2646,19 +2645,25 @@ def generate_publication_charts(
         by_mis = by_mis.sort_values("recall")
 
         fig, ax = plt.subplots(figsize=(12, 10))
-        colors = []
-        for recall in by_mis["recall"]:
-            if recall >= 0.7:
-                colors.append("#27ae60")
-            elif recall >= 0.5:
-                colors.append("#f39c12")
-            else:
-                colors.append("#c0392b")
 
-        ax.barh(by_mis["name"], by_mis["recall"], color=colors, edgecolor="black")
+        # Use colorblind-safe cividis gradient instead of red/yellow/green
+        from matplotlib import cm
+        import matplotlib.colors as mcolors
+
+        # Create color gradient from cividis colormap
+        cmap = cm.get_cmap("cividis")
+        norm = mcolors.Normalize(vmin=0, vmax=1)
+        colors = [cmap(norm(recall)) for recall in by_mis["recall"]]
+
+        ax.barh(by_mis["name"], by_mis["recall"], color=colors, edgecolor="white", linewidth=1.5)
         ax.set_xlabel("Recall", fontsize=12)
-        ax.set_title("Per-Misconception Detection Recall", fontsize=14)
+        ax.set_title("Per-Misconception Detection Recall", fontsize=14, fontweight="bold")
         ax.set_xlim(0, 1.15)
+
+        # Add diagnostic ceiling line
+        ax.axvline(
+            0.7, color=CB_GRAY, linestyle=":", linewidth=2, alpha=0.6, label="Diagnostic Ceiling"
+        )
 
         for i, (_, row) in enumerate(by_mis.iterrows()):
             n = int(row["tp"] + row["fn"])
@@ -2673,188 +2678,19 @@ def generate_publication_charts(
         charts.append("misconception_recall.png")
         console.print(f"  [green]✓[/green] misconception_recall.png")
 
-    # 7. Semantic Distribution (FIXED threshold)
-    if "semantic_score" in df.columns:
-        tp_scores = df[df["result"] == "TP"]["semantic_score"].dropna()
-        fp_mask = df["result"].apply(lambda x: str(x).startswith("FP") if pd.notna(x) else False)
-        fp_scores = df[fp_mask]["semantic_score"].dropna()
-
-        if len(tp_scores) > 10 and len(fp_scores) > 10:
-            fig, ax = plt.subplots(figsize=(10, 6))
-
-            ax.hist(
-                tp_scores,
-                bins=30,
-                alpha=0.6,
-                label=f"True Positives (n={len(tp_scores)}, μ={tp_scores.mean():.2f})",
-                color=CB_CYAN,
-                edgecolor="white",
-            )
-            ax.hist(
-                fp_scores,
-                bins=30,
-                alpha=0.6,
-                label=f"False Positives (n={len(fp_scores)}, μ={fp_scores.mean():.2f})",
-                color=CB_ORANGE,
-                edgecolor="white",
-            )
-
-            ax.axvline(
-                semantic_threshold,
-                color="black",
-                linestyle="--",
-                linewidth=2,
-                label=f"Threshold ({semantic_threshold})",
-            )
-            ax.set_xlabel("Semantic Similarity Score", fontsize=12)
-            ax.set_ylabel("Frequency", fontsize=12)
-            ax.set_title("Semantic Score Distribution: TP vs FP", fontsize=14)
-            ax.legend()
-            ax.set_xlim(0, 1)
-
-            plt.tight_layout()
-            path = assets_dir / "semantic_distribution.png"
-            plt.savefig(path, dpi=300, bbox_inches="tight")
-            plt.close()
-            charts.append("semantic_distribution.png")
-            console.print(f"  [green]✓[/green] semantic_distribution.png")
-
-    # 9. Sankey FP Flow (NEW)
+    # 6. FP Crisis: Hallucinations Sankey Flow
     chart = generate_sankey_fp_flow(df, assets_dir)
     if chart:
         charts.append(chart)
         console.print(f"  [green]✓[/green] {chart}")
 
-    # 10. Assignment Variance Heatmap (NEW)
-    chart = generate_assignment_variance_heatmap(df, assets_dir)
-    if chart:
-        charts.append(chart)
-        console.print(f"  [green]✓[/green] {chart}")
-
-    # 8. Model Comparison Horizontal Bars (REPLACED)
+    # 7. Practical Guidance: Model Comparison
     chart = generate_model_bars(df, assets_dir)
     if chart:
         charts.append(chart)
         console.print(f"  [green]✓[/green] {chart}")
 
-    # 9. Strategy F1 (from original - keep with CIs)
-    by_strat = metrics_by_group(df, ["strategy"])
-    if not by_strat.empty:
-        fig, ax = plt.subplots(figsize=(10, 6))
-
-        cis = []
-        for strat in by_strat["strategy"]:
-            strat_df = df[df["strategy"] == strat]
-            ci = compute_all_metrics_with_ci(strat_df, n_bootstrap=500)
-            cis.append(ci["f1"])
-        by_strat["ci_lower"] = [c["ci_lower"] for c in cis]
-        by_strat["ci_upper"] = [c["ci_upper"] for c in cis]
-        yerr = [
-            by_strat["f1"] - by_strat["ci_lower"],
-            by_strat["ci_upper"] - by_strat["f1"],
-        ]
-
-        colors = ["#2ecc71", "#3498db", "#e74c3c", "#9b59b6"]
-        ax.bar(
-            by_strat["strategy"],
-            by_strat["f1"],
-            yerr=yerr,
-            capsize=5,
-            color=colors[: len(by_strat)],
-            edgecolor="black",
-            linewidth=1,
-        )
-
-        ax.set_ylabel("F1 Score", fontsize=12)
-        ax.set_title("F1 Score by Prompting Strategy (with 95% CI)", fontsize=14)
-        ax.set_ylim(0, 1)
-        for i, v in enumerate(by_strat["f1"]):
-            ax.text(i, v + 0.06, f"{v:.2f}", ha="center", fontweight="bold")
-
-        plt.tight_layout()
-        path = assets_dir / "strategy_f1.png"
-        plt.savefig(path, dpi=300, bbox_inches="tight")
-        plt.close()
-        charts.append("strategy_f1.png")
-        console.print(f"  [green]✓[/green] strategy_f1.png")
-
-    # 10. Strategy × Model Heatmap (ENHANCED)
-    chart = generate_enhanced_heatmap(df, assets_dir)
-    if chart:
-        charts.append(chart)
-        console.print(f"  [green]✓[/green] {chart}")
-
-    # 9. Sankey FP Flow (NEW)
-    chart = generate_sankey_fp_flow(df, assets_dir)
-    if chart:
-        charts.append(chart)
-        console.print(f"  [green]✓[/green] {chart}")
-
-    # 10. Assignment Variance Heatmap (NEW)
-    chart = generate_assignment_variance_heatmap(df, assets_dir)
-    if chart:
-        charts.append(chart)
-        console.print(f"  [green]✓[/green] {chart}")
-
-    # 11. Assignment Comparison (keep original)
-    if "assignment" in df.columns:
-        by_assignment = metrics_by_group(df, ["assignment"])
-        if not by_assignment.empty:
-            fig, ax = plt.subplots(figsize=(10, 6))
-            x = np.arange(len(by_assignment))
-            width = 0.25
-            ax.bar(
-                x - width,
-                by_assignment["precision"],
-                width,
-                label="Precision",
-                color="#3498db",
-                edgecolor="black",
-            )
-            ax.bar(
-                x,
-                by_assignment["recall"],
-                width,
-                label="Recall",
-                color="#2ecc71",
-                edgecolor="black",
-            )
-            ax.bar(
-                x + width,
-                by_assignment["f1"],
-                width,
-                label="F1",
-                color="#e74c3c",
-                edgecolor="black",
-            )
-            ax.set_xlabel("Assignment", fontsize=12)
-            ax.set_ylabel("Score", fontsize=12)
-            ax.set_title("Cross-Assignment Comparison", fontsize=14)
-            ax.set_xticks(x)
-            ax.set_xticklabels(by_assignment["assignment"].tolist())
-            ax.legend()
-            ax.set_ylim(0, 1)
-
-            plt.tight_layout()
-            path = assets_dir / "assignment_comparison.png"
-            plt.savefig(path, dpi=300, bbox_inches="tight")
-            plt.close()
-            charts.append("assignment_comparison.png")
-            console.print(f"  [green]✓[/green] assignment_comparison.png")
-
-    # 12. Hallucinations by Type (REPLACED)
-    chart = generate_hallucinations_by_type(df, assets_dir)
-    if chart:
-        charts.append(chart)
-        console.print(f"  [green]✓[/green] {chart}")
-
-    # 13. Confidence Calibration (BONUS)
-    chart = generate_confidence_calibration(df, assets_dir)
-    if chart:
-        charts.append(chart)
-        console.print(f"  [green]✓[/green] {chart}")
-
-    console.print(f"[green]Generated {len(charts)} publication-grade figures[/green]")
+    console.print(f"[green]✓ Generated {len(charts)} publication figures for ITiCSE[/green]")
     return charts
 
 
@@ -3429,12 +3265,13 @@ def generate_publication_report(
             lines.append("")
 
         # Strategy performance comparison (Grouped Bar Chart)
-        if "strategy_performance.png" in charts:
-            lines.append("![Strategy Performance Profile](assets/strategy_performance.png)")
+        if "strategy_comparison.png" in charts:
+            lines.append("![Strategy Performance Comparison](assets/strategy_comparison.png)")
             lines.append("")
             lines.append(
-                "> The grouped bar chart compares 7 metrics (Precision, Recall, F1, Structural Recall/Precision, "
-                "Semantic Recall/Precision) across all 4 prompting strategies."
+                "> Grouped bar chart comparing 7 metrics across 4 prompting strategies. Each metric shows "
+                "4 bars side-by-side (baseline, chain-of-thought, socratic, taxonomy-guided). The diagnostic "
+                "ceiling line (0.7) marks the threshold below which human oversight is required."
             )
             lines.append("")
 
@@ -3861,15 +3698,14 @@ def analyze_publication(
         semantic_threshold=actual_semantic_threshold,
     )
 
-    # Filter to only the 7 selected publication figures for ITiCSE
+    # Filter to only the 6 selected publication figures for ITiCSE
     selected_figures = [
         "category_structural_vs_semantic.png",  # 1. Main finding
-        "strategy_performance.png",  # 2. Strategy comparison
+        "strategy_comparison.png",  # 2. Strategy comparison (grouped bars)
         "threshold_sensitivity_heatmap.png",  # 3. Methodology rigor
-        "precision_recall_curve.png",  # 4. Standard ML eval
-        "misconception_recall.png",  # 5. Diagnostic ceiling
-        "hallucinations_sankey.png",  # 6. FP crisis
-        "model_comparison.png",  # 7. Practical guidance
+        "misconception_recall.png",  # 4. Diagnostic ceiling
+        "hallucinations_sankey.png",  # 5. FP crisis
+        "model_comparison.png",  # 6. Practical guidance
     ]
     charts = [c for c in charts if c in selected_figures]
 
