@@ -2,7 +2,7 @@
 
 ## Taxonomic Research of Aligned Cognitive Error Recognition
 
-_Generated: 2026-01-05T06:24:58.128213+00:00_
+_Generated: 2026-01-05T07:59:20.628449+00:00_
 
 ---
 
@@ -81,14 +81,6 @@ All metrics reported in this analysis use these calibrated thresholds.
 
 ### 2.1 The Detection Gap: Structural vs Semantic Misconceptions (RQ2)
 
-> Core finding: LLMs excel at detecting structural errors but struggle with semantic mental model failures.
-
-| Category Type | Mean Recall | N Categories |
-|---------------|-------------|--------------|
-| **Structural** | **0.986** | 6 |
-| **Semantic** | **0.787** | 4 |
-| **Gap** | **+0.199** | — |
-
 ![Structural vs Semantic](assets/category_structural_vs_semantic.png)
 
 #### Per-Category Breakdown
@@ -105,8 +97,6 @@ All metrics reported in this analysis use these calibrated thresholds.
 | The Semantic Bond Machine | Structural | 0.990 | 1061 | Easy |
 | The Mutable String Machine | Structural | 0.991 | 792 | Easy |
 | The Void Machine | Structural | 0.994 | 179 | Easy |
-
-![Category Recall](assets/category_recall.png)
 
 ### 2.2 Per-Misconception Analysis
 

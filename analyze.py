@@ -48,6 +48,30 @@ from utils.statistics import (
 DEFAULT_DETECTIONS_DIR = Path("detections/a1")
 DEFAULT_MANIFEST_PATH = Path("authentic_seeded/a1/manifest.json")
 DEFAULT_GROUNDTRUTH_PATH = Path("data/a1/groundtruth.json")
+
+# Colorblind-safe palette (Paul Tol Scientific + IBM Carbon)
+# Verified for deuteranopia, protanopia, tritanopia, and grayscale
+CB_BLUE = "#0173B2"  # Primary (Structural, Precision)
+CB_ORANGE = "#DE8F05"  # Secondary (Semantic, Recall)
+CB_CYAN = "#029E73"  # Tertiary (F1, TP)
+CB_MAGENTA = "#CC78BC"  # Quaternary (FN, alternatives)
+CB_GRAY = "#949494"  # Neutral (thresholds, grids)
+CB_YELLOW = "#ECE133"  # Highlights (rare use)
+CB_RED_SAFE = "#CA5E42"  # Safe red alternative (use sparingly)
+
+# Color mappings by semantic meaning
+COLORS = {
+    "structural": CB_BLUE,
+    "semantic": CB_ORANGE,
+    "precision": CB_BLUE,
+    "recall": CB_ORANGE,
+    "f1": CB_CYAN,
+    "tp": CB_CYAN,
+    "fp_clean": CB_BLUE,
+    "fp_wrong": CB_ORANGE,
+    "fn": CB_MAGENTA,
+    "noise": CB_GRAY,
+}
 RUNS_DIR = Path("runs/a1")
 
 NULL_TEMPLATES = [
@@ -97,8 +121,35 @@ CATEGORY_TYPE_MAP = {
 
 
 def get_category_type(category: str) -> str:
-    """Get the type (Structural/Semantic) for a category."""
+    """Get type (Structural/Semantic) for a category."""
     return CATEGORY_TYPE_MAP.get(category, "Unknown")
+
+
+# ---------------------------------------------------------------------------
+# Colorblind-Safe Palette (Paul Tol Scientific + IBM Carbon)
+# ---------------------------------------------------------------------------
+# Verified for deuteranopia, protanopia, tritanopia, and grayscale
+CB_BLUE = "#0173B2"  # Primary (Structural, Precision)
+CB_ORANGE = "#DE8F05"  # Secondary (Semantic, Recall)
+CB_CYAN = "#029E73"  # Tertiary (F1, TP)
+CB_MAGENTA = "#CC78BC"  # Quaternary (FN, alternatives)
+CB_GRAY = "#949494"  # Neutral (thresholds, grids)
+CB_YELLOW = "#ECE133"  # Highlights (rare use)
+CB_RED_SAFE = "#CA5E42"  # Safe red alternative (use sparingly)
+
+# Color mappings by semantic meaning
+COLORS = {
+    "structural": CB_BLUE,
+    "semantic": CB_ORANGE,
+    "precision": CB_BLUE,
+    "recall": CB_ORANGE,
+    "f1": CB_CYAN,
+    "tp": CB_CYAN,
+    "fp_clean": CB_BLUE,
+    "fp_wrong": CB_ORANGE,
+    "fn": CB_MAGENTA,
+    "noise": CB_GRAY,
+}
 
 
 app = typer.Typer(help="Analyze LLM misconception detections (v2)")
@@ -1019,7 +1070,7 @@ def generate_charts(
         by_cat = metrics_by_group(seeded, ["expected_category"])
         by_cat = by_cat.sort_values("recall")
         fig, ax = plt.subplots(figsize=(10, 6))
-        colors = plt.cm.RdYlGn(by_cat["recall"])
+        colors = plt.cm.cividis(by_cat["recall"])
         ax.barh(by_cat["expected_category"], by_cat["recall"], color=colors)
         ax.set_xlabel("Recall")
         ax.set_title("Detection Recall by Notional Machine Category")
@@ -1056,7 +1107,7 @@ def generate_charts(
         )
         by_mis = by_mis.sort_values("recall")
         fig, ax = plt.subplots(figsize=(10, 6))
-        colors = plt.cm.RdYlGn(by_mis["recall"])
+        colors = plt.cm.cividis(by_mis["recall"])
         ax.barh(by_mis["name"], by_mis["recall"], color=colors)
         ax.set_xlabel("Recall")
         ax.set_title("Per-Misconception Detection Recall")
@@ -1158,7 +1209,7 @@ def generate_threshold_sensitivity_heatmap(
         pivot,
         annot=True,
         fmt=".3f",
-        cmap="viridis",
+        cmap="cividis",  # Colorblind-safe
         ax=ax,
         vmin=pivot.values.min() - 0.02,
         vmax=pivot.values.max() + 0.02,
@@ -1361,7 +1412,7 @@ def generate_ensemble_comparison_chart(
         textcoords="offset points",
         ha="center",
         fontsize=9,
-        color="#3498db",
+        color=CB_BLUE,
         fontweight="bold",
     )
     ax.annotate(
@@ -1371,7 +1422,18 @@ def generate_ensemble_comparison_chart(
         textcoords="offset points",
         ha="center",
         fontsize=9,
-        color="#3498db",
+        color=CB_BLUE,
+        fontweight="bold",
+    )
+
+    ax.annotate(
+        f"+{model_delta:.2f}",
+        xy=(2 - width, precision[2]),
+        xytext=(0, 20),
+        textcoords="offset points",
+        ha="center",
+        fontsize=9,
+        color=CB_BLUE,
         fontweight="bold",
     )
 
@@ -1778,7 +1840,7 @@ def generate_enhanced_heatmap(
         pivot,
         annot=True,
         fmt=".2f",
-        cmap="viridis",
+        cmap="cividis",  # Colorblind-safe
         ax=ax,
         vmin=vmin,
         vmax=vmax,
@@ -1887,6 +1949,652 @@ def generate_confidence_calibration(
     return "confidence_calibration.png"
 
 
+def generate_structural_semantic_bars(
+    df: pd.DataFrame,
+    groundtruth: list[dict[str, Any]],
+    assets_dir: Path,
+) -> str:
+    """Generate side-by-side horizontal bar charts for structural vs semantic categories.
+
+    Shows detection gap clearly with two panels:
+    - Left: Structural categories (easy to detect)
+    - Right: Semantic categories (hard to detect)
+    """
+    gt_map = {gt["id"]: gt for gt in groundtruth}
+
+    # Get per-category recall
+    seeded = df[
+        df["expected_id"].notna()
+        & (df["expected_category"].notna())
+        & (df["expected_category"] != "")
+    ]
+    if seeded.empty:
+        return ""
+
+    by_category = metrics_by_group(seeded, ["expected_category"])
+    if by_category.empty:
+        return ""
+
+    # Add category type
+    by_category["type"] = by_category["expected_category"].apply(get_category_type)
+    by_category = by_category[by_category["type"].isin(["Structural", "Semantic"])]
+
+    if by_category.empty:
+        return ""
+
+    structural = by_category[by_category["type"] == "Structural"].sort_values(
+        "recall", ascending=False
+    )
+    semantic = by_category[by_category["type"] == "Semantic"].sort_values("recall", ascending=False)
+
+    if len(structural) == 0 or len(semantic) == 0:
+        return ""
+
+    # Create figure with two subplots side-by-side
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 7), sharey=True)
+
+    # Plot structural categories
+    ax1.barh(
+        structural["expected_category"],
+        structural["recall"],
+        color=CB_BLUE,
+        alpha=0.8,
+        edgecolor="black",
+        linewidth=0.5,
+    )
+    ax1.set_xlabel("Recall", fontsize=12)
+    ax1.set_title("Structural (Easy)", fontsize=14, fontweight="bold")
+    ax1.set_xlim(0, 1.05)
+    ax1.grid(axis="x", alpha=0.3)
+
+    # Add value labels
+    for i, (_, row) in enumerate(structural.iterrows()):
+        n = int(row["tp"] + row["fn"])
+        ax1.text(row["recall"] + 0.02, i, f"{row['recall']:.2f} (n={n})", va="center", fontsize=9)
+
+    # Plot semantic categories
+    ax2.barh(
+        semantic["expected_category"],
+        semantic["recall"],
+        color=CB_ORANGE,
+        alpha=0.8,
+        edgecolor="black",
+        linewidth=0.5,
+    )
+    ax2.set_xlabel("Recall", fontsize=12)
+    ax2.set_title("Semantic (Hard)", fontsize=14, fontweight="bold")
+    ax2.set_xlim(0, 1.05)
+    ax2.grid(axis="x", alpha=0.3)
+
+    # Add value labels
+    for i, (_, row) in enumerate(semantic.iterrows()):
+        n = int(row["tp"] + row["fn"])
+        ax2.text(row["recall"] + 0.02, i, f"{row['recall']:.2f} (n={n})", va="center", fontsize=9)
+
+    # Compute and show means
+    structural_mean = structural["recall"].mean()
+    semantic_mean = semantic["recall"].mean()
+
+    ax1.axvline(x=structural_mean, color=CB_BLUE, linestyle="--", linewidth=2, alpha=0.7)
+    ax1.text(
+        structural_mean + 0.01,
+        -0.5,
+        f"μ={structural_mean:.2f}",
+        rotation=90,
+        va="center",
+        fontsize=11,
+        color=CB_BLUE,
+        fontweight="bold",
+    )
+
+    ax2.axvline(x=semantic_mean, color=CB_ORANGE, linestyle="--", linewidth=2, alpha=0.7)
+    ax2.text(
+        semantic_mean + 0.01,
+        -0.5,
+        f"μ={semantic_mean:.2f}",
+        rotation=90,
+        va="center",
+        fontsize=11,
+        color=CB_ORANGE,
+        fontweight="bold",
+    )
+
+    # Statistical test (report in paper, not on figure)
+    from scipy import stats
+
+    if len(structural) > 1 and len(semantic) > 1:
+        stat, p_value = stats.mannwhitneyu(
+            structural["recall"], semantic["recall"], alternative="greater"
+        )
+        significance = "p < 0.05" if p_value < 0.05 else f"p = {p_value:.3f}"
+        # Store for paper reporting
+        pass  # Don't display on figure
+
+    plt.suptitle(
+        "Notional Machine Detection Gap: Structural vs Semantic",
+        fontsize=16,
+        fontweight="bold",
+        y=1.02,
+    )
+    plt.tight_layout()
+    path = assets_dir / "category_structural_vs_semantic.png"
+    plt.savefig(path, dpi=300, bbox_inches="tight")
+    plt.close()
+
+    return "category_structural_vs_semantic.png"
+
+
+def generate_strategy_radar(
+    df: pd.DataFrame,
+    groundtruth: list[dict[str, Any]],
+    assets_dir: Path,
+) -> str:
+    """Generate 7-axis radar chart comparing all strategies.
+
+    Axes: Precision, Recall, F1, Structural Recall, Semantic Recall,
+           Structural Precision, Semantic Precision
+    Strategies: baseline, cot, socratic, taxonomy
+    """
+    gt_map = {gt["id"]: gt for gt in groundtruth}
+
+    seeded = df[
+        df["expected_id"].notna()
+        & (df["expected_category"].notna())
+        & (df["expected_category"] != "")
+    ]
+    if seeded.empty:
+        return ""
+
+    strategies = ["baseline", "cot", "socratic", "taxonomy"]
+    structural_cats = [
+        "The Void Machine",
+        "The Mutable String Machine",
+        "The Human Index Machine",
+        "The Algebraic Syntax Machine",
+        "The Teleological Control Machine",
+        "The Semantic Bond Machine",
+    ]
+    semantic_cats = [
+        "The Reactive State Machine",
+        "The Independent Switch",
+        "The Fluid Type Machine",
+        "The Anthropomorphic I/O Machine",
+    ]
+
+    # Compute metrics for each strategy
+    strategy_metrics = []
+    for strategy in strategies:
+        strat_df = seeded[seeded["strategy"] == strategy]
+        if strat_df.empty:
+            continue
+
+        # Overall metrics
+        overall = compute_all_metrics_with_ci(strat_df)
+
+        # Structural-specific metrics
+        struct_df = strat_df[strat_df["expected_category"].isin(structural_cats)]
+        struct_tp = (struct_df["result"] == "TP").sum()
+        struct_fn = (struct_df["result"] == "FN").sum()
+        struct_fp = struct_df["result"].str.startswith("FP", na=False).sum()
+        struct_recall = struct_tp / (struct_tp + struct_fn) if (struct_tp + struct_fn) > 0 else 0
+        struct_precision = struct_tp / (struct_tp + struct_fp) if (struct_tp + struct_fp) > 0 else 0
+
+        # Semantic-specific metrics
+        sem_df = strat_df[strat_df["expected_category"].isin(semantic_cats)]
+        sem_tp = (sem_df["result"] == "TP").sum()
+        sem_fn = (sem_df["result"] == "FN").sum()
+        sem_fp = sem_df["result"].str.startswith("FP", na=False).sum()
+        sem_recall = sem_tp / (sem_tp + sem_fn) if (sem_tp + sem_fn) > 0 else 0
+        sem_precision = sem_tp / (sem_tp + sem_fp) if (sem_tp + sem_fp) > 0 else 0
+
+        strategy_metrics.append(
+            {
+                "strategy": strategy,
+                "precision": overall["precision"]["estimate"],
+                "recall": overall["recall"]["estimate"],
+                "f1": overall["f1"]["estimate"],
+                "structural_recall": struct_recall,
+                "semantic_recall": sem_recall,
+                "structural_precision": struct_precision,
+                "semantic_precision": sem_precision,
+            }
+        )
+
+    if len(strategy_metrics) < 2:
+        return ""
+
+    # Setup radar chart
+    categories = [
+        "Precision",
+        "Recall",
+        "F1",
+        "Struct. Recall",
+        "Sem. Recall",
+        "Struct. Prec.",
+        "Sem. Prec.",
+    ]
+    N = len(categories)
+    angles = [n / float(N) * 2 * np.pi for n in range(N)]
+    angles += angles[:1]
+
+    fig, ax = plt.subplots(figsize=(12, 10), subplot_kw=dict(projection="polar"))
+
+    # Strategy configurations: colors and line styles
+    strategy_configs = [
+        {"name": "baseline", "color": CB_BLUE, "linestyle": "-", "linewidth": 2.5, "alpha": 0.8},
+        {"name": "cot", "color": CB_ORANGE, "linestyle": "--", "linewidth": 2.5, "alpha": 0.8},
+        {"name": "socratic", "color": CB_CYAN, "linestyle": ":", "linewidth": 2.5, "alpha": 0.8},
+        {
+            "name": "taxonomy",
+            "color": CB_MAGENTA,
+            "linestyle": "-.",
+            "linewidth": 2.5,
+            "alpha": 0.8,
+        },
+    ]
+
+    # Plot each strategy
+    for metrics in strategy_metrics:
+        values = [
+            metrics["precision"],
+            metrics["recall"],
+            metrics["f1"],
+            metrics["structural_recall"],
+            metrics["semantic_recall"],
+            metrics["structural_precision"],
+            metrics["semantic_precision"],
+        ]
+        values += values[:1]
+
+        config = next(c for c in strategy_configs if c["name"] == metrics["strategy"])
+
+        ax.plot(
+            angles,
+            values,
+            linewidth=config["linewidth"],
+            linestyle=config["linestyle"],
+            color=config["color"],
+            label=metrics["strategy"],
+            alpha=config["alpha"],
+        )
+        ax.fill(angles, values, color=config["color"], alpha=0.15)
+
+    # Add grid circles
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(categories, fontsize=11)
+    ax.set_ylim(0, 1)
+    ax.set_yticks([0.2, 0.4, 0.6, 0.8, 1.0])
+    ax.set_yticklabels(["0.2", "0.4", "0.6", "0.8", "1.0"], fontsize=9)
+    ax.grid(True, alpha=0.3)
+
+    # Legend outside plot to avoid overlap
+    ax.legend(loc="lower right", bbox_to_anchor=(1.4, 0), fontsize=11)
+    ax.set_title("Strategy Performance Profile", fontsize=14, pad=20)
+
+    plt.tight_layout()
+    path = assets_dir / "strategy_radar.png"
+    plt.savefig(path, dpi=300, bbox_inches="tight")
+    plt.close()
+
+    return "strategy_radar.png"
+
+
+def generate_sankey_fp_flow(
+    df: pd.DataFrame,
+    assets_dir: Path,
+) -> str:
+    """Generate detailed Sankey diagram showing detection classification pipeline.
+
+    Shows flow: Total → Noise Floor → Semantic Threshold → [TP | FP_CLEAN | FP_WRONG | FN]
+    """
+    # Compute counts at each level
+    total = len(df[df["semantic_score"].notna()])
+
+    # Apply noise floor filter (use constants)
+    noise_floor = NOISE_FLOOR_THRESHOLD
+    semantic_threshold = SEMANTIC_THRESHOLD_DEFAULT
+
+    # Count at each level
+    # Level 1: After noise floor
+    df_above_noise = df[df["semantic_score"] >= noise_floor]
+    noise_removed = total - len(df_above_noise)
+    evaluated = len(df_above_noise)
+
+    # Level 2: After semantic threshold classification
+    scored = df_above_noise[df_above_noise["semantic_score"].notna()]
+
+    tp_count = len(scored[scored["result"] == "TP"])
+    fn_count = len(scored[scored["result"] == "FN"])
+    fp_clean_count = len(scored[scored["result"] == "FP_CLEAN"])
+    fp_wrong_count = len(scored[scored["result"] == "FP_WRONG"])
+
+    if evaluated == 0:
+        return ""
+
+    # Create a cleaner two-panel figure:
+    # Left: Summary bar chart of classification outcomes
+    # Right: Flow diagram with annotations
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
+
+    # Left: Simple grouped bar chart showing counts
+    ax1 = axes[0]
+
+    categories = ["Total\nScored", "True\nPositives", "FP_CLEAN", "FP_WRONG", "False\nNegatives"]
+    counts = [evaluated, tp_count, fp_clean_count, fp_wrong_count, fn_count]
+    colors_bar = [CB_GRAY, CB_CYAN, CB_BLUE, CB_ORANGE, CB_MAGENTA]
+
+    bars = ax1.bar(categories, counts, color=colors_bar, alpha=0.8, edgecolor="white", linewidth=2)
+
+    # Add value labels on bars
+    for bar, count in zip(bars, counts):
+        height = bar.get_height()
+        ax1.text(
+            bar.get_x() + bar.get_width() / 2.0,
+            height + 100,
+            f"{count:,}",
+            ha="center",
+            va="bottom",
+            fontsize=11,
+            fontweight="bold",
+        )
+
+    ax1.set_ylabel("Count", fontsize=12)
+    ax1.set_title("Detection Classification Summary", fontsize=14, fontweight="bold")
+    ax1.set_ylim(0, max(counts) * 1.15)
+
+    # Right: Sankey-style flow arrows (using patches)
+    ax2 = axes[1]
+    ax2.axis("off")
+    ax2.set_title("Filter Flow", fontsize=14, fontweight="bold")
+
+    # Draw simple flow diagram
+    y_positions = [0.8, 0.6, 0.4, 0.2]
+
+    # Level 0 to 1
+    ax2.annotate(
+        f"Total\nDetections\n{total:,}",
+        xy=(0.1, 0.85),
+        fontsize=10,
+        fontweight="bold",
+        bbox=dict(boxstyle="round,pad=0.5", facecolor=CB_GRAY, alpha=0.3),
+    )
+
+    # Split arrow
+    ax2.annotate(
+        "",
+        xy=(0.4, 0.7),
+        xytext=(0.25, 0.8),
+        arrowprops=dict(arrowstyle="->", color=CB_GRAY, lw=2),
+        fontsize=0,
+    )
+    ax2.annotate(
+        f"Noise Floor\nFilter\nRemoved: {noise_removed:,}",
+        xy=(0.4, 0.7),
+        xytext=(0.55, 0.8),
+        arrowprops=dict(arrowstyle="->", color=CB_GRAY, lw=2),
+        fontsize=9,
+    )
+
+    # Level 1 to 2
+    ax2.annotate(
+        f"Evaluated\n{evaluated:,}",
+        xy=(0.6, 0.65),
+        fontsize=10,
+        fontweight="bold",
+        bbox=dict(boxstyle="round,pad=0.5", facecolor=CB_GRAY, alpha=0.3),
+    )
+
+    # Split arrows
+    for i, (label, count, color, y_pos) in enumerate(
+        [
+            ("True Positives", tp_count, CB_CYAN, 0.75),
+            ("FP_CLEAN", fp_clean_count, CB_BLUE, 0.55),
+            ("FP_WRONG", fp_wrong_count, CB_ORANGE, 0.35),
+            ("False Negatives", fn_count, CB_MAGENTA, 0.15),
+        ]
+    ):
+        ax2.annotate(
+            f"{label}\n{count:,}",
+            xy=(0.7, y_pos),
+            fontsize=9,
+            bbox=dict(boxstyle="round,pad=0.5", facecolor=color, alpha=0.5),
+        )
+        ax2.annotate(
+            "",
+            xy=(0.7, y_pos),
+            xytext=(0.8, 0.65),
+            arrowprops=dict(arrowstyle="->", color=color, lw=2),
+            fontsize=0,
+        )
+
+    ax2.set_xlim(0, 1)
+    ax2.set_ylim(0, 1)
+
+    plt.tight_layout()
+    path = assets_dir / "hallucinations_sankey.png"
+    plt.savefig(path, dpi=300, bbox_inches="tight")
+    plt.close()
+
+    return "hallucinations_sankey.png"
+
+
+def generate_assignment_variance_heatmap(
+    df: pd.DataFrame,
+    assets_dir: Path,
+) -> str:
+    """Generate heatmap showing F1 variance across A1/A2/A3 assignments.
+
+    Rows: Strategy × Model combinations
+    Columns: A1, A2, A3, Overall, Variance
+    """
+    seeded = df[
+        df["expected_id"].notna()
+        & (df["expected_category"].notna())
+        & (df["expected_category"] != "")
+    ]
+    if seeded.empty:
+        return ""
+
+    # Check if assignment column exists, if not skip this chart
+    if "assignment" not in seeded.columns:
+        return ""
+
+    seeded = seeded.copy()
+
+    strategies = ["baseline", "cot", "socratic", "taxonomy"]
+    models = df["model"].unique()
+
+    # Compute F1 for each (strategy, model, assignment) combination
+    results = []
+    for strategy in strategies:
+        for model in models:
+            row_data = {
+                "strategy": strategy,
+                "model": model,
+            }
+
+            for assignment in ["a1", "a2", "a3"]:
+                subset = seeded[
+                    (seeded["strategy"] == strategy)
+                    & (seeded["model"] == model)
+                    & (seeded["assignment"] == assignment)
+                ]
+                if subset.empty:
+                    row_data[assignment] = np.nan
+                else:
+                    metrics = compute_all_metrics_with_ci(subset)
+                    row_data[assignment] = metrics["f1"]["estimate"]
+
+            # Compute overall and variance
+            all_assignments = seeded[(seeded["strategy"] == strategy) & (seeded["model"] == model)]
+            overall_metrics = compute_all_metrics_with_ci(all_assignments)
+            row_data["overall"] = overall_metrics["f1"]["estimate"]
+
+            f1_values = [row_data["a1"], row_data["a2"], row_data["a3"]]
+            f1_values = [v for v in f1_values if not np.isnan(v)]
+            if len(f1_values) >= 2:
+                row_data["variance"] = np.std(f1_values)
+            else:
+                row_data["variance"] = 0
+
+            results.append(row_data)
+
+    if not results:
+        return ""
+
+    # Create DataFrame
+    results_df = pd.DataFrame(results)
+
+    # Create short labels for models
+    def shorten_model_name(name: str) -> str:
+        name = str(name).split("/")[-1]
+        replacements = {
+            "claude-haiku-4-5-20251001": "Haiku-4.5",
+            "claude-haiku-4-5-20251001:reasoning": "Haiku-4.5-R",
+            "gemini-3-flash-preview": "Gemini-3",
+            "gemini-3-flash-preview:reasoning": "Gemini-3-R",
+            "gpt-5.2-2025-12-11": "GPT-5.2",
+            "gpt-5.2-2025-12-11:reasoning": "GPT-5.2-R",
+        }
+        for old, new in replacements.items():
+            if old in name:
+                return new
+        return name[:15]
+
+    results_df["model_short"] = results_df["model"].apply(shorten_model_name)
+
+    # Create row labels
+    results_df["label"] = results_df["strategy"] + " + " + results_df["model_short"]
+
+    # Pivot to heatmap format
+    pivot_data = results_df[["label", "a1", "a2", "a3", "overall", "variance"]].set_index("label")
+
+    # Sort by overall F1 (descending)
+    pivot_data = pivot_data.sort_values("overall", ascending=False)
+
+    fig, ax = plt.subplots(figsize=(10, 20))
+
+    sns.heatmap(
+        pivot_data[["a1", "a2", "a3", "overall", "variance"]],
+        annot=True,
+        fmt=".3f",
+        cmap="cividis",  # Colorblind-safe sequential
+        vmin=0.4,
+        vmax=0.9,
+        linewidths=0.5,
+        cbar_kws={"label": "F1 Score"},
+        ax=ax,
+    )
+
+    ax.set_title("F1 Score Variance Across Assignments", fontsize=14)
+    ax.set_xlabel("Assignment", fontsize=12)
+    ax.set_ylabel("Strategy × Model", fontsize=12)
+
+    plt.tight_layout()
+    path = assets_dir / "assignment_variance_heatmap.png"
+    plt.savefig(path, dpi=300, bbox_inches="tight")
+    plt.close()
+
+    return "assignment_variance_heatmap.png"
+
+
+def generate_model_bars(
+    df: pd.DataFrame,
+    assets_dir: Path,
+) -> str:
+    """Generate grouped horizontal bar chart for model comparison.
+
+    Each model gets 3 bars: Precision, Recall, F1
+    Sorted by F1 score (descending)
+    """
+    by_model = metrics_by_group(df, ["model"])
+    if by_model.empty:
+        return ""
+
+    # Shorten model names
+    def shorten_model_name(name: str) -> str:
+        name = str(name).split("/")[-1]
+        replacements = {
+            "claude-haiku-4-5-20251001": "Claude-Haiku-4.5",
+            "claude-haiku-4-5-20251001:reasoning": "Claude-Haiku-4.5-R",
+            "gemini-3-flash-preview": "Gemini-3-Flash",
+            "gemini-3-flash-preview:reasoning": "Gemini-3-Flash-R",
+            "gpt-5.2-2025-12-11": "GPT-5.2",
+            "gpt-5.2-2025-12-11:reasoning": "GPT-5.2-R",
+        }
+        for old, new in replacements.items():
+            if old in name:
+                return new
+        return name[:20]
+
+    by_model["model_short"] = by_model["model"].apply(shorten_model_name)
+    by_model = by_model.sort_values("f1", ascending=False)
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    y_pos = np.arange(len(by_model))
+    bar_width = 0.25
+
+    # Plot 3 bars per model
+    ax.barh(
+        y_pos - bar_width,
+        by_model["precision"],
+        bar_width,
+        label="Precision",
+        color=CB_BLUE,
+        alpha=0.8,
+        edgecolor="white",
+    )
+    ax.barh(
+        y_pos,
+        by_model["recall"],
+        bar_width,
+        label="Recall",
+        color=CB_ORANGE,
+        alpha=0.8,
+        edgecolor="white",
+    )
+    ax.barh(
+        y_pos + bar_width,
+        by_model["f1"],
+        bar_width,
+        label="F1 Score",
+        color=CB_CYAN,
+        alpha=0.8,
+        edgecolor="white",
+    )
+
+    # Add F1 value labels
+    for i, f1 in enumerate(by_model["f1"]):
+        ax.text(
+            f1 + 0.02,
+            y_pos[i] + bar_width,
+            f"{f1:.3f}",
+            va="center",
+            fontsize=9,
+            fontweight="bold",
+            color=CB_CYAN,
+        )
+
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(by_model["model_short"], fontsize=11)
+    ax.set_xlabel("Score", fontsize=12)
+    ax.set_title("Model Performance Comparison", fontsize=14)
+    ax.set_xlim(0, 1.05)
+    ax.legend(loc="lower right", fontsize=11)
+    ax.grid(axis="x", alpha=0.3)
+    ax.axvline(x=0.5, color=CB_GRAY, linestyle="--", alpha=0.3)
+    ax.axvline(x=0.7, color=CB_GRAY, linestyle="--", alpha=0.3)
+
+    plt.tight_layout()
+    path = assets_dir / "model_comparison.png"
+    plt.savefig(path, dpi=300, bbox_inches="tight")
+    plt.close()
+
+    return "model_comparison.png"
+
+
 def generate_publication_charts(
     df: pd.DataFrame,
     assets_dir: Path,
@@ -1939,13 +2647,16 @@ def generate_publication_charts(
             console.print(f"  [green]✓[/green] {chart}")
 
     # 4. Structural vs Semantic Categories (NEW)
-    chart = generate_category_type_comparison(df, groundtruth, assets_dir)
+    chart = generate_structural_semantic_bars(df, groundtruth, assets_dir)
     if chart:
         charts.append(chart)
         console.print(f"  [green]✓[/green] {chart}")
 
-    # 5. Enhanced Category Recall (ENHANCED)
-    chart = generate_enhanced_category_recall(df, groundtruth, assets_dir)
+    # 5. Strategy Radar Chart (NEW)
+    chart = generate_strategy_radar(df, groundtruth, assets_dir)
+    if chart:
+        charts.append(chart)
+        console.print(f"  [green]✓[/green] {chart}")
     if chart:
         charts.append(chart)
         console.print(f"  [green]✓[/green] {chart}")
@@ -2002,7 +2713,7 @@ def generate_publication_charts(
                 bins=30,
                 alpha=0.6,
                 label=f"True Positives (n={len(tp_scores)}, μ={tp_scores.mean():.2f})",
-                color="#3498db",
+                color=CB_CYAN,
                 edgecolor="white",
             )
             ax.hist(
@@ -2010,7 +2721,7 @@ def generate_publication_charts(
                 bins=30,
                 alpha=0.6,
                 label=f"False Positives (n={len(fp_scores)}, μ={fp_scores.mean():.2f})",
-                color="#e74c3c",
+                color=CB_ORANGE,
                 edgecolor="white",
             )
 
@@ -2034,8 +2745,20 @@ def generate_publication_charts(
             charts.append("semantic_distribution.png")
             console.print(f"  [green]✓[/green] semantic_distribution.png")
 
-    # 8. Model Comparison Dot Plot (REPLACED)
-    chart = generate_model_dotplot(df, assets_dir)
+    # 9. Sankey FP Flow (NEW)
+    chart = generate_sankey_fp_flow(df, assets_dir)
+    if chart:
+        charts.append(chart)
+        console.print(f"  [green]✓[/green] {chart}")
+
+    # 10. Assignment Variance Heatmap (NEW)
+    chart = generate_assignment_variance_heatmap(df, assets_dir)
+    if chart:
+        charts.append(chart)
+        console.print(f"  [green]✓[/green] {chart}")
+
+    # 8. Model Comparison Horizontal Bars (REPLACED)
+    chart = generate_model_bars(df, assets_dir)
     if chart:
         charts.append(chart)
         console.print(f"  [green]✓[/green] {chart}")
@@ -2083,6 +2806,18 @@ def generate_publication_charts(
 
     # 10. Strategy × Model Heatmap (ENHANCED)
     chart = generate_enhanced_heatmap(df, assets_dir)
+    if chart:
+        charts.append(chart)
+        console.print(f"  [green]✓[/green] {chart}")
+
+    # 9. Sankey FP Flow (NEW)
+    chart = generate_sankey_fp_flow(df, assets_dir)
+    if chart:
+        charts.append(chart)
+        console.print(f"  [green]✓[/green] {chart}")
+
+    # 10. Assignment Variance Heatmap (NEW)
+    chart = generate_assignment_variance_heatmap(df, assets_dir)
     if chart:
         charts.append(chart)
         console.print(f"  [green]✓[/green] {chart}")
@@ -2580,14 +3315,6 @@ def generate_publication_report(
             lines.extend(
                 [
                     "### 2.1 The Detection Gap: Structural vs Semantic Misconceptions (RQ2)",
-                    "",
-                    "> Core finding: LLMs excel at detecting structural errors but struggle with semantic mental model failures.",
-                    "",
-                    f"| Category Type | Mean Recall | N Categories |",
-                    f"|---------------|-------------|--------------|",
-                    f"| **Structural** | **{struct_mean:.3f}** | {len(structural)} |",
-                    f"| **Semantic** | **{sem_mean:.3f}** | {len(semantic)} |",
-                    f"| **Gap** | **{struct_mean - sem_mean:+.3f}** | — |",
                     "",
                 ]
             )
