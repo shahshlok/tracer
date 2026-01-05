@@ -33,7 +33,6 @@ from utils.matching.semantic import (
     cosine_similarity,
     get_embedding,
     precompute_groundtruth_embeddings,
-    semantic_match_misconception,
 )
 from utils.statistics import (
     analyze_semantic_scores,
@@ -241,6 +240,300 @@ def is_null_template_misconception(
 
 
 # ---------------------------------------------------------------------------
+# Scoring + Threshold Classification
+# ---------------------------------------------------------------------------
+FILE_KEY_COLS = ["strategy", "model", "student", "question"]
+
+
+def semantic_best_match(
+    detection: dict[str, str],
+    precomputed_gt_embeddings: dict[str, list[float]],
+) -> tuple[str | None, float, str]:
+    """
+    Get the best semantic match for a detection without applying a threshold.
+
+    Returns:
+        (best_match_id, best_score, match_method)
+    """
+    detection_text = build_detection_text(detection)
+    if not detection_text.strip():
+        return None, 0.0, "no_text"
+
+    try:
+        detection_embedding = get_embedding(detection_text)
+    except Exception:
+        return None, 0.0, "embedding_error"
+
+    best_match_id = None
+    best_score = 0.0
+    for gt_id, gt_embedding in precomputed_gt_embeddings.items():
+        similarity = cosine_similarity(detection_embedding, gt_embedding)
+        if similarity > best_score:
+            best_score = similarity
+            best_match_id = gt_id
+
+    return best_match_id, best_score, "semantic"
+
+
+def build_scored_df(
+    detections_dir: Path,
+    manifest: dict[str, Any],
+    groundtruth: list[dict[str, Any]],
+    null_template_threshold: float = NULL_TEMPLATE_THRESHOLD,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Build a scored detection dataframe without applying semantic/noise thresholds.
+
+    Returns:
+        scored_df: One row per detection with best_match_id and semantic_score
+        file_df: One row per (student, question, strategy, model) with raw/null counts
+    """
+    gt_map = {m["id"]: m for m in groundtruth}
+    console.print("[cyan]Precomputing groundtruth embeddings...[/cyan]")
+    gt_embeddings = precompute_groundtruth_embeddings(groundtruth)
+
+    null_embeddings = build_null_template_embeddings()
+
+    strategies = discover_strategies(detections_dir)
+    console.print(f"[green]Strategies:[/green] {', '.join(strategies)}")
+
+    rows: list[dict[str, Any]] = []
+    file_rows: list[dict[str, Any]] = []
+    det_count = 0
+
+    for strategy in strategies:
+        strategy_dir = detections_dir / strategy
+        detections = load_detections_for_strategy(strategy_dir)
+        console.print(f"  [dim]{strategy}: {len(detections)} files[/dim]")
+
+        for det in detections:
+            det_count += 1
+            if det_count % 100 == 0:
+                console.print(f"    [dim]Processed {det_count} detections...[/dim]")
+            student = det.get("student", "")
+            question = det.get("question", "")
+            expected_id, is_clean = get_expected(manifest, student, question)
+            expected_category = (
+                gt_map.get(expected_id, {}).get("category", "") if expected_id else ""
+            )
+
+            for model, payload in det.get("models", {}).items():
+                mis_list = payload.get("misconceptions", []) or []
+                null_flags = [
+                    is_null_template_misconception(mis, null_embeddings, null_template_threshold)
+                    for mis in mis_list
+                ]
+                normalized_mis = [mis for mis, is_null in zip(mis_list, null_flags) if not is_null]
+                null_filtered_count = sum(1 for is_null in null_flags if is_null)
+
+                for mis in normalized_mis:
+                    adapted = adapt_detection(mis)
+                    best_match_id, semantic_score, match_method = semantic_best_match(
+                        adapted,
+                        gt_embeddings,
+                    )
+
+                    rows.append(
+                        {
+                            "strategy": strategy,
+                            "model": model,
+                            "student": student,
+                            "question": question,
+                            "expected_id": expected_id,
+                            "expected_category": expected_category,
+                            "is_clean": is_clean,
+                            "detected_name": adapted["name"],
+                            "detected_thinking": adapted["student_belief"][:200]
+                            if adapted["student_belief"]
+                            else "",
+                            "best_match_id": best_match_id,
+                            "semantic_score": semantic_score,
+                            "match_method": match_method,
+                            "confidence": mis.get("confidence"),
+                        }
+                    )
+
+                file_rows.append(
+                    {
+                        "strategy": strategy,
+                        "model": model,
+                        "student": student,
+                        "question": question,
+                        "expected_id": expected_id,
+                        "expected_category": expected_category,
+                        "is_clean": is_clean,
+                        "raw_misconceptions": len(mis_list),
+                        "null_filtered": null_filtered_count,
+                        "raw_empty": len(mis_list) == 0,
+                        "raw_nonempty": len(mis_list) > 0,
+                        "null_only": len(mis_list) > 0 and len(normalized_mis) == 0,
+                    }
+                )
+
+    console.print(f"[green]Total detections processed: {det_count}[/green]")
+    return pd.DataFrame(rows), pd.DataFrame(file_rows)
+
+
+def _build_compliance_df(
+    file_df: pd.DataFrame,
+    scored_df: pd.DataFrame,
+    noise_floor: float,
+) -> pd.DataFrame:
+    if file_df.empty:
+        return pd.DataFrame()
+
+    counts = pd.DataFrame(columns=FILE_KEY_COLS + ["noise_filtered", "evaluated_misconceptions"])
+    if not scored_df.empty:
+        grouped = scored_df.groupby(FILE_KEY_COLS)["semantic_score"]
+        counts = grouped.agg(
+            noise_filtered=lambda s: int((s < noise_floor).sum()),
+            evaluated_misconceptions=lambda s: int((s >= noise_floor).sum()),
+        ).reset_index()
+
+    compliance_df = file_df.merge(counts, on=FILE_KEY_COLS, how="left")
+    compliance_df["noise_filtered"] = compliance_df["noise_filtered"].fillna(0).astype(int)
+    compliance_df["evaluated_misconceptions"] = (
+        compliance_df["evaluated_misconceptions"].fillna(0).astype(int)
+    )
+
+    return compliance_df[
+        [
+            "strategy",
+            "model",
+            "student",
+            "question",
+            "raw_misconceptions",
+            "null_filtered",
+            "noise_filtered",
+            "evaluated_misconceptions",
+            "raw_empty",
+            "raw_nonempty",
+            "null_only",
+        ]
+    ]
+
+
+def classify_scored_df(
+    scored_df: pd.DataFrame,
+    file_df: pd.DataFrame,
+    semantic_threshold: float,
+    noise_floor: float,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Apply thresholds to scored detections and generate TP/FP/FN rows.
+    """
+    if scored_df.empty and file_df.empty:
+        return pd.DataFrame(), pd.DataFrame()
+
+    if scored_df.empty:
+        filtered = scored_df.copy()
+    else:
+        filtered = scored_df[scored_df["semantic_score"] >= noise_floor].copy()
+
+    if not filtered.empty:
+        match_mask = filtered["semantic_score"] >= semantic_threshold
+        filtered["matched_id"] = filtered["best_match_id"].where(match_mask)
+        filtered["matched_id"] = filtered["matched_id"].where(
+            pd.notna(filtered["matched_id"]), None
+        )
+
+        if "match_method" in filtered.columns:
+            is_semantic = filtered["match_method"] == "semantic"
+            filtered.loc[is_semantic & ~match_mask, "match_method"] = "below_threshold"
+    else:
+        filtered["matched_id"] = None
+
+    if not filtered.empty:
+        filtered["result"] = "FP_HALLUCINATION"
+        clean_mask = filtered["is_clean"] == True
+        filtered.loc[clean_mask, "result"] = "FP_CLEAN"
+
+        match_mask = filtered["matched_id"].notna()
+        expected_mask = filtered["expected_id"].notna()
+        tp_mask = (
+            ~clean_mask
+            & match_mask
+            & expected_mask
+            & (filtered["matched_id"] == filtered["expected_id"])
+        )
+        filtered.loc[tp_mask, "result"] = "TP"
+
+        fp_wrong_mask = ~clean_mask & match_mask & ~tp_mask
+        filtered.loc[fp_wrong_mask, "result"] = "FP_WRONG"
+
+    # Add FN rows for expected misconceptions that were not detected
+    fn_rows: list[dict[str, Any]] = []
+    if not file_df.empty:
+        tp_keys = set(
+            tuple(row)
+            for row in filtered.loc[filtered["result"] == "TP", FILE_KEY_COLS].itertuples(
+                index=False, name=None
+            )
+        )
+        for row in file_df.itertuples(index=False):
+            expected_id = getattr(row, "expected_id")
+            is_clean = getattr(row, "is_clean")
+            if is_clean or not expected_id:
+                continue
+            key = (
+                getattr(row, "strategy"),
+                getattr(row, "model"),
+                getattr(row, "student"),
+                getattr(row, "question"),
+            )
+            if key in tp_keys:
+                continue
+            fn_rows.append(
+                {
+                    "strategy": getattr(row, "strategy"),
+                    "model": getattr(row, "model"),
+                    "student": getattr(row, "student"),
+                    "question": getattr(row, "question"),
+                    "expected_id": expected_id,
+                    "expected_category": getattr(row, "expected_category"),
+                    "is_clean": False,
+                    "detected_name": "",
+                    "detected_thinking": "",
+                    "matched_id": None,
+                    "semantic_score": 0.0,
+                    "match_method": "no_detection",
+                    "result": "FN",
+                    "confidence": None,
+                }
+            )
+
+    result_cols = [
+        "strategy",
+        "model",
+        "student",
+        "question",
+        "expected_id",
+        "expected_category",
+        "is_clean",
+        "detected_name",
+        "detected_thinking",
+        "matched_id",
+        "semantic_score",
+        "match_method",
+        "result",
+        "confidence",
+    ]
+
+    result_rows = []
+    if not filtered.empty:
+        filtered = filtered.drop(columns=["best_match_id"], errors="ignore")
+        result_rows.append(filtered[result_cols])
+    if fn_rows:
+        result_rows.append(pd.DataFrame(fn_rows)[result_cols])
+
+    results_df = (
+        pd.concat(result_rows, ignore_index=True) if result_rows else pd.DataFrame(columns=result_cols)
+    )
+    compliance_df = _build_compliance_df(file_df, scored_df, noise_floor)
+    return results_df, compliance_df
+
+
+# ---------------------------------------------------------------------------
 # Ensemble Voting (Majority Consensus)
 # ---------------------------------------------------------------------------
 def apply_strategy_ensemble_filter(
@@ -443,64 +736,28 @@ def apply_ensemble_filter(
 # Threshold Sensitivity Analysis (ITiCSE Publication Feature)
 # ---------------------------------------------------------------------------
 def reclassify_at_threshold(
-    df: pd.DataFrame,
+    scored_df: pd.DataFrame,
+    file_df: pd.DataFrame,
     semantic_threshold: float,
     noise_floor: float,
 ) -> pd.DataFrame:
     """
-    Reclassify results at a different threshold using stored semantic scores.
+    Reclassify scored detections at a different threshold.
 
     This allows threshold sensitivity analysis without recomputing embeddings.
     """
-    rows = []
-
-    for _, row in df.iterrows():
-        score = row.get("semantic_score", 0.0)
-        original_result = row["result"]
-        is_clean = row.get("is_clean", False)
-        expected_id = row.get("expected_id")
-        matched_id = row.get("matched_id")
-
-        # Skip FN rows - they don't have scores to reclassify
-        if original_result == "FN":
-            rows.append(dict(row))
-            continue
-
-        # Apply noise floor filter
-        if score < noise_floor:
-            # Below noise floor - filter out entirely
-            continue
-
-        # Reclassify based on semantic threshold
-        if score >= semantic_threshold:
-            # Above threshold - check if it matches expected
-            if is_clean:
-                new_result = "FP_CLEAN"
-            elif matched_id == expected_id and expected_id is not None:
-                new_result = "TP"
-            elif matched_id:
-                new_result = "FP_WRONG"
-            else:
-                new_result = "FP_HALLUCINATION"
-        else:
-            # Below semantic threshold but above noise floor
-            if is_clean:
-                new_result = "FP_CLEAN"
-            else:
-                new_result = "FP_HALLUCINATION"
-
-        row_copy = dict(row)
-        row_copy["result"] = new_result
-        rows.append(row_copy)
-
-    # Need to add back FN rows for cases where TP became something else
-    result_df = pd.DataFrame(rows)
-
-    return result_df
+    results_df, _ = classify_scored_df(
+        scored_df,
+        file_df,
+        semantic_threshold=semantic_threshold,
+        noise_floor=noise_floor,
+    )
+    return results_df
 
 
 def compute_threshold_sensitivity(
-    base_df: pd.DataFrame,
+    scored_df: pd.DataFrame,
+    file_df: pd.DataFrame,
     semantic_thresholds: list[float] | None = None,
     noise_floors: list[float] | None = None,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
@@ -508,7 +765,8 @@ def compute_threshold_sensitivity(
     Compute metrics across a grid of threshold values.
 
     Args:
-        base_df: Results DataFrame with semantic_score column (from build_results_df with low threshold)
+        scored_df: Scored detections with semantic_score and best_match_id
+        file_df: File-level metadata for proper FN accounting
         semantic_thresholds: List of semantic thresholds to test
         noise_floors: List of noise floor thresholds to test
 
@@ -533,7 +791,9 @@ def compute_threshold_sensitivity(
     for sem_thresh in semantic_thresholds:
         for noise_floor in noise_floors:
             # Reclassify at this threshold combination
-            reclassified = reclassify_at_threshold(base_df, sem_thresh, noise_floor)
+            reclassified = reclassify_at_threshold(
+                scored_df, file_df, sem_thresh, noise_floor
+            )
 
             if reclassified.empty:
                 continue
@@ -592,144 +852,19 @@ def build_results_df(
     - High cosine similarity = LLM understood the mental model
     - We track the raw semantic score for every detection for analysis
     """
-
-    gt_map = {m["id"]: m for m in groundtruth}
-    console.print("[cyan]Precomputing groundtruth embeddings...[/cyan]")
-    gt_embeddings = precompute_groundtruth_embeddings(groundtruth)
-
-    null_embeddings = build_null_template_embeddings()
-
-    strategies = discover_strategies(detections_dir)
-    console.print(f"[green]Strategies:[/green] {', '.join(strategies)}")
-
-    rows: list[dict[str, Any]] = []
-    compliance_rows: list[dict[str, Any]] = []
-    det_count = 0
-
-    for strategy in strategies:
-        strategy_dir = detections_dir / strategy
-        detections = load_detections_for_strategy(strategy_dir)
-        console.print(f"  [dim]{strategy}: {len(detections)} files[/dim]")
-
-        for det in detections:
-            det_count += 1
-            if det_count % 100 == 0:
-                console.print(f"    [dim]Processed {det_count} detections...[/dim]")
-            student = det.get("student", "")
-            question = det.get("question", "")
-            expected_id, is_clean = get_expected(manifest, student, question)
-            expected_category = (
-                gt_map.get(expected_id, {}).get("category", "") if expected_id else ""
-            )
-
-            for model, payload in det.get("models", {}).items():
-                mis_list = payload.get("misconceptions", []) or []
-                null_flags = [
-                    is_null_template_misconception(mis, null_embeddings, null_template_threshold)
-                    for mis in mis_list
-                ]
-                normalized_mis = [mis for mis, is_null in zip(mis_list, null_flags) if not is_null]
-                null_filtered_count = sum(1 for is_null in null_flags if is_null)
-                noise_filtered_count = 0  # Will be updated as we process detections
-
-                has_tp = False
-                detection_rows_for_file: list[dict[str, Any]] = []
-
-                for mis in normalized_mis:
-                    adapted = adapt_detection(mis)
-
-                    # Semantic matching - the core of Cognitive Alignment
-                    matched_id, semantic_score, match_method = semantic_match_misconception(
-                        adapted["name"],
-                        adapted["description"],
-                        adapted["student_belief"],
-                        groundtruth,
-                        threshold=semantic_threshold,
-                        precomputed_gt_embeddings=gt_embeddings,
-                    )
-
-                    # NOISE FLOOR FILTER: Skip "pedantic" detections (e.g., "didn't close Scanner")
-                    # These are below threshold AND below noise floor - treat as noise, not hallucination
-                    if semantic_score < noise_floor_threshold:
-                        noise_filtered_count += 1
-                        continue  # Skip this detection entirely
-
-                    # Classify result based on semantic match
-                    if is_clean:
-                        result_type = "FP_CLEAN"
-                    elif matched_id == expected_id:
-                        result_type = "TP"
-                        has_tp = True
-                    elif matched_id:
-                        result_type = "FP_WRONG"
-                    else:
-                        # Above noise floor but below match threshold = hallucination
-                        result_type = "FP_HALLUCINATION"
-
-                    detection_rows_for_file.append(
-                        {
-                            "strategy": strategy,
-                            "model": model,
-                            "student": student,
-                            "question": question,
-                            "expected_id": expected_id,
-                            "expected_category": expected_category,
-                            "is_clean": is_clean,
-                            "detected_name": adapted["name"],
-                            "detected_thinking": adapted["student_belief"][:200]
-                            if adapted["student_belief"]
-                            else "",
-                            "matched_id": matched_id,
-                            "semantic_score": semantic_score,
-                            "match_method": match_method,
-                            "result": result_type,
-                            "confidence": mis.get("confidence"),
-                        }
-                    )
-
-                # Add all detection rows for this file
-                rows.extend(detection_rows_for_file)
-
-                # Track compliance with noise filtering stats
-                compliance_rows.append(
-                    {
-                        "strategy": strategy,
-                        "model": model,
-                        "student": student,
-                        "question": question,
-                        "raw_misconceptions": len(mis_list),
-                        "null_filtered": null_filtered_count,
-                        "noise_filtered": noise_filtered_count,
-                        "evaluated_misconceptions": len(detection_rows_for_file),
-                        "raw_empty": len(mis_list) == 0,
-                        "raw_nonempty": len(mis_list) > 0,
-                        "null_only": len(mis_list) > 0 and len(normalized_mis) == 0,
-                    }
-                )
-
-                # Record FN if no true positive found
-                if not is_clean and expected_id and not has_tp:
-                    rows.append(
-                        {
-                            "strategy": strategy,
-                            "model": model,
-                            "student": student,
-                            "question": question,
-                            "expected_id": expected_id,
-                            "expected_category": expected_category,
-                            "is_clean": False,
-                            "detected_name": "",
-                            "detected_thinking": "",
-                            "matched_id": None,
-                            "semantic_score": 0.0,
-                            "match_method": "no_detection",
-                            "result": "FN",
-                            "confidence": None,
-                        }
-                    )
-
-    console.print(f"[green]Total detections processed: {det_count}[/green]")
-    return pd.DataFrame(rows), pd.DataFrame(compliance_rows)
+    scored_df, file_df = build_scored_df(
+        detections_dir,
+        manifest,
+        groundtruth,
+        null_template_threshold=null_template_threshold,
+    )
+    results_df, compliance_df = classify_scored_df(
+        scored_df,
+        file_df,
+        semantic_threshold=semantic_threshold,
+        noise_floor=noise_floor_threshold,
+    )
+    return results_df, compliance_df
 
 
 def compute_metrics(df: pd.DataFrame) -> dict[str, Any]:
@@ -2783,8 +2918,8 @@ def analyze_publication(
     console.print("")
 
     ASSIGNMENTS = ["a1", "a2", "a3"]
-    all_dfs = []
-    all_compliance_dfs = []
+    all_scored_dfs = []
+    all_file_dfs = []
     combined_groundtruth: list[dict[str, Any]] = []
     total_students = 0
     seeds = []
@@ -2818,40 +2953,36 @@ def analyze_publication(
         console.print(f"  Students: {manifest.get('student_count', 'N/A')}")
         console.print(f"  Misconceptions: {len(groundtruth)}")
 
-        # Build results with LOW thresholds for sensitivity analysis
-        # We'll reclassify at different thresholds later
-        build_threshold = min(SEMANTIC_THRESHOLD_GRID) if run_sensitivity else semantic_threshold
-        build_noise = min(NOISE_FLOOR_GRID) if run_sensitivity else noise_floor
-
-        df, compliance_df = build_results_df(
+        scored_df, file_df = build_scored_df(
             detections_dir,
             manifest,
             groundtruth,
-            semantic_threshold=build_threshold,
-            noise_floor_threshold=build_noise,
         )
 
-        if not df.empty:
-            df["assignment"] = assignment
-            all_dfs.append(df)
+        if not scored_df.empty:
+            scored_df["assignment"] = assignment
+            all_scored_dfs.append(scored_df)
 
-        if not compliance_df.empty:
-            compliance_df["assignment"] = assignment
-            all_compliance_dfs.append(compliance_df)
+        if not file_df.empty:
+            file_df["assignment"] = assignment
+            all_file_dfs.append(file_df)
 
-    if not all_dfs:
+    if not all_file_dfs:
         console.print("[red]No results from any assignment![/red]")
         return
 
     # Combine all DataFrames
-    combined_df = pd.concat(all_dfs, ignore_index=True)
-    combined_compliance_df = (
-        pd.concat(all_compliance_dfs, ignore_index=True) if all_compliance_dfs else pd.DataFrame()
+    combined_scored_df = (
+        pd.concat(all_scored_dfs, ignore_index=True) if all_scored_dfs else pd.DataFrame()
+    )
+    combined_file_df = (
+        pd.concat(all_file_dfs, ignore_index=True) if all_file_dfs else pd.DataFrame()
     )
 
     console.print(f"\n[bold]Combined dataset:[/bold]")
     console.print(f"  Total students: {total_students}")
-    console.print(f"  Total detection rows: {len(combined_df):,}")
+    console.print(f"  Total files: {len(combined_file_df):,}")
+    console.print(f"  Total scored detections: {len(combined_scored_df):,}")
     console.print(f"  Unique misconceptions: {len(combined_groundtruth)}")
 
     # Phase 2: Threshold Sensitivity Analysis
@@ -2860,13 +2991,20 @@ def analyze_publication(
 
     if run_sensitivity:
         console.print("\n[bold]Phase 2: Threshold Sensitivity Analysis...[/bold]")
-        sensitivity_df, optimal_config = compute_threshold_sensitivity(combined_df)
-
-        # Reclassify at the chosen threshold
-        console.print(
-            f"\n[cyan]Reclassifying at semantic={semantic_threshold}, noise={noise_floor}...[/cyan]"
+        sensitivity_df, optimal_config = compute_threshold_sensitivity(
+            combined_scored_df,
+            combined_file_df,
         )
-        combined_df = reclassify_at_threshold(combined_df, semantic_threshold, noise_floor)
+
+    console.print(
+        f"\n[cyan]Classifying at semantic={semantic_threshold}, noise={noise_floor}...[/cyan]"
+    )
+    combined_df, combined_compliance_df = classify_scored_df(
+        combined_scored_df,
+        combined_file_df,
+        semantic_threshold=semantic_threshold,
+        noise_floor=noise_floor,
+    )
 
     # Phase 3: Compute metrics
     console.print("\n[bold]Phase 3: Computing metrics...[/bold]")
