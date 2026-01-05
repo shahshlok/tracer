@@ -1708,13 +1708,14 @@ def generate_enhanced_heatmap(
     # Shorten model names
     def shorten_model_name(name: str) -> str:
         name = str(name).split("/")[-1]
+        # Check reasoning variants FIRST (longer strings) to avoid substring false matches
         replacements = {
-            "claude-haiku-4-5-20251001": "Haiku-4.5",
             "claude-haiku-4-5-20251001:reasoning": "Haiku-4.5-R",
-            "gemini-3-flash-preview": "Gemini-3",
+            "claude-haiku-4-5-20251001": "Haiku-4.5",
             "gemini-3-flash-preview:reasoning": "Gemini-3-R",
-            "gpt-5.2-2025-12-11": "GPT-5.2",
+            "gemini-3-flash-preview": "Gemini-3",
             "gpt-5.2-2025-12-11:reasoning": "GPT-5.2-R",
+            "gpt-5.2-2025-12-11": "GPT-5.2",
         }
         for old, new in replacements.items():
             if old in name:
