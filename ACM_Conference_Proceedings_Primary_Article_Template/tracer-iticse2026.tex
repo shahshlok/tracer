@@ -1,0 +1,378 @@
+%%
+%% TRACER: ITiCSE 2026 Submission
+%% Computing Education Research Track
+%%
+\documentclass[sigconf,anonymous,review]{acmart}
+
+%% For final camera-ready, change to:
+%% \documentclass[sigconf]{acmart}
+
+\AtBeginDocument{%
+  \providecommand\BibTeX{{Bib\TeX}}}
+
+%% Rights management (update after acceptance)
+\setcopyright{acmlicensed}
+\copyrightyear{2026}
+\acmYear{2026}
+\acmDOI{XXXXXXX.XXXXXXX}
+\acmConference[ITiCSE '26]{Proceedings of the 2026 ACM Conference on Innovation and Technology in Computer Science Education}{July 2026}{Milan, Italy}
+\acmISBN{978-1-4503-XXXX-X/2026/07}
+
+%% Packages
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+
+%% Custom commands
+\newcommand{\tracer}{\textsc{Tracer}}
+\newcommand{\rqone}{RQ1}
+\newcommand{\rqtwo}{RQ2}
+\newcommand{\rqthree}{RQ3}
+
+\begin{document}
+
+%%
+%% Title
+%%
+\title{TRACER: Evaluating LLM Alignment with Notional Machine Theory for Student Misconception Detection}
+
+%%
+%% Author (single author for review)
+%%
+\author{Anonymous Author}
+\affiliation{%
+  \institution{Anonymous Institution}
+  \city{Anonymous City}
+  \country{Anonymous Country}
+}
+\email{anonymous@example.com}
+
+\renewcommand{\shortauthors}{Anonymous}
+
+%%
+%% Abstract
+%%
+\begin{abstract}
+Large Language Models (LLMs) are increasingly deployed for automated feedback in introductory programming courses, yet it remains unclear whether they can identify \emph{why} students err---their underlying mental models---rather than merely \emph{what} is syntactically wrong. We present \tracer{}, a synthetic benchmark for evaluating LLM cognitive alignment with notional machine theory. Our methodology generates 300 synthetic students across 3 CS1 assignments, each with precisely one of 18 misconceptions from 10 notional machine categories. We evaluate 6 LLMs (GPT-5.2, Claude Haiku 4.5, Gemini 3 Flash, each with and without extended reasoning) using 4 prompting strategies, producing 21,600 detection instances. Semantic embedding matching validates detections against ground truth. Our key finding reveals a \textbf{detection gap}: structural misconceptions (syntax-visible) achieve 99\% recall, while semantic misconceptions (intent-hidden) achieve only 64\%---a 35 percentage point difference. Ensemble voting across models improves F1 by +0.055. These results suggest LLMs can reliably automate feedback for surface-level errors but require human oversight for deeper cognitive diagnosis. \tracer{} provides a reproducible methodology for benchmarking LLM cognitive alignment without human subjects data.
+\end{abstract}
+
+%%
+%% CCS Concepts
+%%
+\begin{CCSXML}
+<ccs2012>
+ <concept>
+  <concept_id>10003456.10003457.10003527.10003531</concept_id>
+  <concept_desc>Social and professional topics~Computing education</concept_desc>
+  <concept_significance>500</concept_significance>
+ </concept>
+ <concept>
+  <concept_id>10010147.10010178.10010179</concept_id>
+  <concept_desc>Computing methodologies~Natural language processing</concept_desc>
+  <concept_significance>300</concept_significance>
+ </concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Social and professional topics~Computing education}
+\ccsdesc[300]{Computing methodologies~Natural language processing}
+
+%%
+%% Keywords
+%%
+\keywords{notional machines, misconceptions, LLM evaluation, CS1, cognitive alignment, mental models}
+
+\maketitle
+
+%%
+%% ==========================================================================
+%% INTRODUCTION
+%% ==========================================================================
+%%
+\section{Introduction}
+
+Large Language Models (LLMs) now power millions of student interactions through tools like GitHub Copilot and ChatGPT-based tutoring systems. These systems provide instant feedback on student code, promising to scale personalized instruction in introductory programming courses. However, a fundamental question remains unanswered: \emph{Do LLMs understand why students make errors, or do they merely detect what is syntactically wrong?}
+
+Consider a student who writes \texttt{arr[5]} to access the last element of a 5-element array. A surface-level bug detector identifies an ``array index out of bounds'' error. But an expert CS educator recognizes the underlying \emph{mental model}: the student believes arrays use 1-based indexing, as in mathematical notation. This distinction matters---effective feedback addresses the cognitive cause, not just the symptom~\cite{sorva2013notional}.
+
+Prior work on LLMs in computing education has focused on code completion accuracy~\cite{chen2021codex}, bug detection precision, and homework assistance patterns. Yet no study has systematically measured whether LLMs align with established CS education theory about student mental models---specifically, the notional machine framework introduced by du Boulay~\cite{duboulay1986} and elaborated by Sorva~\cite{sorva2013notional}.
+
+We address this gap with \tracer{} (\textbf{T}axonomic \textbf{R}esearch of \textbf{A}ligned \textbf{C}ognitive \textbf{E}rror \textbf{R}ecognition), a synthetic benchmark for evaluating LLM cognitive alignment. Our contributions are:
+
+\begin{enumerate}
+    \item \textbf{A reproducible methodology} for generating synthetic student code with known misconception labels, enabling precise measurement without human subjects data.
+    \item \textbf{Evidence of a detection gap}: LLMs detect structural misconceptions (99\% recall) far more accurately than semantic misconceptions (64\% recall).
+    \item \textbf{Practical guidance} on when LLM feedback can be trusted and when human oversight remains essential.
+\end{enumerate}
+
+%%
+%% ==========================================================================
+%% BACKGROUND
+%% ==========================================================================
+%%
+\section{Background}
+
+\subsection{Notional Machines and Mental Models}
+
+A \emph{notional machine} is an idealized, pedagogical model of program execution that instructors use to explain how code behaves~\cite{duboulay1986}. Students construct \emph{mental models}---internal representations of how programs work---based on their exposure to notional machines, prior experiences, and intuitions. When these mental models are incomplete or incorrect, students produce systematic errors that reflect their misconceptions~\cite{sorva2013notional}.
+
+Sorva's taxonomy identifies common misconception patterns, such as the belief that variables work like spreadsheet cells (updating automatically when dependencies change) or that array indices mirror mathematical conventions (starting at 1)~\cite{sorva2013notional}. These misconceptions are not random bugs; they are logical consequences of flawed mental models.
+
+\subsection{LLMs in Computing Education}
+
+LLMs have been rapidly adopted in CS education for code generation~\cite{chen2021codex}, automated feedback, and tutoring. Studies have evaluated their accuracy in completing programming exercises, their tendency to produce buggy or insecure code, and their effects on student learning outcomes.
+
+However, evaluations have largely focused on \emph{surface-level correctness}: Does the LLM's code compile? Does it pass test cases? These metrics do not capture whether LLMs can diagnose \emph{cognitive} causes of student errors. Our work bridges this gap by measuring alignment with established notional machine theory.
+
+%%
+%% ==========================================================================
+%% METHODOLOGY
+%% ==========================================================================
+%%
+\section{Methodology}
+
+\subsection{The \tracer{} Framework}
+
+\tracer{} implements a 4-stage pipeline: (1)~synthetic data generation with known labels, (2)~blind LLM detection, (3)~semantic embedding matching against ground truth, and (4)~ensemble voting to reduce hallucinations. Each stage maps to our research questions:
+
+\begin{itemize}
+    \item \textbf{\rqone{} (Cognitive Alignment):} Can LLMs distinguish notional machine misconception categories when analyzing buggy student code?
+    \item \textbf{\rqtwo{} (Detection Gap):} Do structural misconceptions elicit higher detection accuracy than semantic misconceptions?
+    \item \textbf{\rqthree{} (Mitigation):} Which prompting strategies and ensemble methods reduce the detection gap?
+\end{itemize}
+
+\subsection{Synthetic Dataset Generation}
+
+Real student data presents challenges for benchmarking: ground truth labels are often ambiguous, privacy concerns limit sharing, and sample sizes are constrained. We instead generate synthetic student code with precisely controlled misconception labels using a 6-step pipeline:
+
+\begin{enumerate}
+    \item \textbf{Generate correct code:} GPT-5.1 produces a working solution using a persona prompt (coding style + cognitive profile).
+    \item \textbf{Compile validation:} \texttt{javac} verifies the code compiles.
+    \item \textbf{Test validation:} All test cases pass.
+    \item \textbf{Inject misconception:} GPT-5.1 rewrites the code following explicit instructions from \texttt{groundtruth.json} to exhibit exactly one misconception.
+    \item \textbf{Compile validation:} The seeded code must still compile.
+    \item \textbf{Test validation:} At least one test case must fail, confirming the bug is observable.
+\end{enumerate}
+
+This pipeline produces 300 synthetic students across 3 CS1 assignments (A1: variables/math, A2: loops/control, A3: arrays/strings), each with 1 seeded file containing a known misconception and 3 clean (correct) files---a 1:3 ratio that enables false positive measurement.
+
+We define 18 specific misconceptions within 10 notional machine categories, split into two types:
+
+\begin{itemize}
+    \item \textbf{Structural (6 categories):} Errors visible in code syntax, such as off-by-one array access or precedence mistakes.
+    \item \textbf{Semantic (4 categories):} Errors hidden in intent, such as computing a formula before reading inputs or misunderstanding if-else scope.
+\end{itemize}
+
+Table~\ref{tab:misconceptions} summarizes categories with example misconceptions.
+
+\begin{table}[t]
+  \caption{Notional Machine Categories and Types}
+  \label{tab:misconceptions}
+  \begin{tabular}{lll}
+    \toprule
+    Category & Type & Example Misconception \\
+    \midrule
+    The Void Machine & Structural & Ignoring method return values \\
+    The Human Index Machine & Structural & 1-based array indexing \\
+    The Mutable String Machine & Structural & Expecting string mutation \\
+    The Algebraic Syntax Machine & Structural & Operator precedence errors \\
+    The Semantic Bond Machine & Structural & Lossy variable swap \\
+    The Teleological Control & Structural & Off-by-one loop bounds \\
+    \midrule
+    The Reactive State Machine & Semantic & Spreadsheet-style variables \\
+    The Independent Switch & Semantic & Dangling else confusion \\
+    The Fluid Type Machine & Semantic & Integer division blindness \\
+    The Anthropomorphic I/O & Semantic & Prompt-logic mismatch \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Detection Protocol}
+
+We evaluate 6 LLMs from 3 providers, each in base and extended-reasoning modes:
+
+\begin{itemize}
+    \item OpenAI: GPT-5.2, GPT-5.2:reasoning
+    \item Anthropic: Claude Haiku 4.5, Claude Haiku 4.5:reasoning
+    \item Google: Gemini 3 Flash, Gemini 3 Flash:reasoning
+\end{itemize}
+
+Each LLM analyzes every student file using 4 prompting strategies: \emph{baseline} (simple bug-finding), \emph{taxonomy} (provides category list), \emph{chain-of-thought} (line-by-line tracing), and \emph{Socratic} (mental model probing). This produces $300 \times 4 \times 6 \times 4 = 28,800$ detection instances (360 files $\times$ 6 models $\times$ 4 strategies $\times$ 4 questions per student, though only seeded files count toward TP/FN).
+
+LLM outputs are structured JSON containing: \texttt{inferred\_category\_name}, \texttt{student\_thought\_process}, and \texttt{conceptual\_gap}. We extract these fields for semantic matching.
+
+\subsection{Semantic Matching}
+
+LLMs may describe the same misconception using different terminology (e.g., ``Auto-Update Error'' vs. ``Reactive State Machine''). We bridge this terminology gap using semantic embeddings:
+
+\begin{enumerate}
+    \item Embed LLM detection text using OpenAI \texttt{text-embedding-3-large} (3072 dimensions).
+    \item Embed each ground truth misconception definition.
+    \item Compute cosine similarity between detection and all ground truth entries.
+    \item If max similarity $\geq 0.55$ and matches the expected misconception ID, classify as True Positive (TP); otherwise False Positive (FP).
+\end{enumerate}
+
+We filter detections with similarity $< 0.60$ as noise (pedantic comments like ``didn't close Scanner''). Thresholds were calibrated via grid search over 30 configurations (6 semantic $\times$ 5 noise floor values), selecting the pair that maximized F1 score.
+
+%%
+%% ==========================================================================
+%% RESULTS
+%% ==========================================================================
+%%
+\section{Results}
+
+\subsection{\rqone{}: Overall Cognitive Alignment}
+
+Table~\ref{tab:overall} presents aggregate performance across all detections.
+
+\begin{table}[t]
+  \caption{Overall Detection Performance}
+  \label{tab:overall}
+  \begin{tabular}{lccc}
+    \toprule
+    Metric & Value & 95\% CI \\
+    \midrule
+    Precision & 0.478 & [0.470, 0.486] \\
+    Recall & 0.916 & [0.910, 0.921] \\
+    F1 Score & 0.628 & [0.621, 0.635] \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+LLMs achieve high recall (91.6\%)---they detect most seeded misconceptions---but moderate precision (47.8\%)---they also report many false positives. Raw counts: TP = 7,698; FP = 8,391; FN = 709.
+
+\subsection{\rqtwo{}: The Detection Gap}
+
+Figure~\ref{fig:gap} reveals the central finding: a 35 percentage point gap between structural and semantic misconceptions.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{../runs/multi/run_iticse_final/assets/category_structural_vs_semantic.png}
+  \caption{Recall by misconception type. Structural misconceptions (syntax-visible) are detected with near-perfect recall, while semantic misconceptions (intent-hidden) show substantially lower and more variable recall.}
+  \Description{Bar chart showing structural misconceptions at ~99% recall and semantic misconceptions at ~64% recall.}
+  \label{fig:gap}
+\end{figure}
+
+Table~\ref{tab:by-type} quantifies this gap:
+
+\begin{table}[t]
+  \caption{Recall by Misconception Type}
+  \label{tab:by-type}
+  \begin{tabular}{lcc}
+    \toprule
+    Type & \# Categories & Mean Recall \\
+    \midrule
+    Structural & 6 & 0.99 \\
+    Semantic & 4 & 0.64 \\
+    \midrule
+    \textbf{Gap} & --- & \textbf{0.35} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Individual misconceptions vary widely. The easiest to detect: ``The Void Machine'' (99.4\% recall)---ignoring return values is syntactically obvious. The hardest: ``Dangling Else'' (17.2\% recall)---indentation misleads about scope, requiring reasoning about programmer intent rather than visible code.
+
+\subsection{\rqthree{}: Mitigation Strategies}
+
+\textbf{Prompting Strategies.} Table~\ref{tab:strategies} compares the 4 approaches.
+
+\begin{table}[t]
+  \caption{Performance by Prompting Strategy}
+  \label{tab:strategies}
+  \begin{tabular}{lccc}
+    \toprule
+    Strategy & Precision & Recall & F1 \\
+    \midrule
+    baseline & 0.530 & 0.908 & 0.669 \\
+    taxonomy & 0.514 & 0.927 & 0.661 \\
+    chain-of-thought & 0.512 & 0.894 & 0.651 \\
+    socratic & 0.402 & 0.933 & 0.561 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Surprisingly, \emph{baseline} (simple prompts) achieves the highest F1. Socratic prompting increases recall (93.3\%) but at severe precision cost (40.2\%)---it finds more misconceptions but also hallucinates more. McNemar's test confirms significant pairwise differences (p $<$ 0.05) between baseline~vs.~taxonomy and cot~vs.~socratic.
+
+\textbf{Ensemble Voting.} Requiring agreement across multiple models dramatically improves precision. Table~\ref{tab:ensemble} shows results.
+
+\begin{table}[t]
+  \caption{Ensemble Voting Effect}
+  \label{tab:ensemble}
+  \begin{tabular}{lcccc}
+    \toprule
+    Method & Precision & Recall & F1 & $\Delta$F1 \\
+    \midrule
+    Raw (no ensemble) & 0.478 & 0.916 & 0.629 & --- \\
+    Strategy ($\geq$2/4) & 0.510 & 0.916 & 0.655 & +0.026 \\
+    Model ($\geq$2/6) & 0.547 & 0.911 & 0.684 & +0.055 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Model-level ensemble achieves the best F1 (0.684), improving precision by 6.9 percentage points while maintaining 91.1\% recall.
+
+\textbf{Model Comparison.} Claude Haiku 4.5 with reasoning mode achieves the highest individual F1 (0.750), outperforming GPT-5.2 (0.670) and Gemini 3 Flash (0.538). Extended reasoning modes provide marginal benefits for Claude but not for other models.
+
+%%
+%% ==========================================================================
+%% DISCUSSION
+%% ==========================================================================
+%%
+\section{Discussion}
+
+\subsection{Implications for Educators}
+
+Our results suggest a principled division of labor between LLMs and human instructors:
+
+\begin{itemize}
+    \item \textbf{Safe for automation:} Structural misconceptions (array bounds, string immutability, operator precedence) can be reliably detected by LLMs. Automated feedback for these errors is trustworthy.
+    \item \textbf{Requires human oversight:} Semantic misconceptions (variable state reasoning, control flow scope, type coercion) have detection rates as low as 17\%. Instructors should manually review LLM diagnoses of these errors before presenting feedback to students.
+\end{itemize}
+
+Practitioners deploying LLM tutors should implement ensemble methods (multiple models or strategies with voting) to reduce hallucinations. A simple threshold---require $\geq$2 of 6 models to agree---improves F1 by 9\%.
+
+\subsection{Threats to Validity}
+
+\textbf{Construct validity.} Our synthetic bugs may not perfectly match real student error patterns. LLMs follow explicit injection instructions, potentially producing cleaner or more consistent bugs than genuine student code. We mitigate this through the 6-step validation pipeline (bugs must compile and fail tests) but acknowledge this limitation. Replication with authentic student data is needed.
+
+\textbf{Internal validity.} Threshold optimization via grid search may overfit to our dataset. We report the full sensitivity analysis (30 configurations) and find that our selected thresholds lie in a stable region where small perturbations do not substantially change results.
+
+\textbf{External validity.} Findings are constrained to: (1)~Java, (2)~18 misconceptions from one taxonomy, (3)~specific LLM versions (December 2025 snapshots). Generalization to Python, other misconception frameworks, or future LLM releases requires further study.
+
+\subsection{Limitations}
+
+Our synthetic data imposes one bug per file; real student code often contains multiple interacting errors. All synthetic students originate from a single generator model (GPT-5.1), limiting diversity. We also cannot assess longitudinal phenomena like scaffolding effects or learning progression.
+
+%%
+%% ==========================================================================
+%% CONCLUSION
+%% ==========================================================================
+%%
+\section{Conclusion}
+
+We presented \tracer{}, a synthetic benchmark for evaluating LLM cognitive alignment with notional machine theory. Our central finding is a \emph{detection gap}: LLMs reliably detect structural misconceptions (99\% recall) but struggle with semantic misconceptions (64\% recall). This 35 percentage point gap has practical implications---LLMs can automate feedback for surface-level errors but require human oversight for deeper cognitive diagnosis.
+
+Ensemble voting improves performance, and simple prompts outperform pedagogically-motivated alternatives like Socratic questioning. Future work should validate these findings with authentic student data, extend the taxonomy to additional languages and conceptual areas, and investigate why Socratic prompting increases hallucination rates.
+
+\tracer{} provides a reproducible methodology for benchmarking LLM cognitive alignment without human subjects, enabling the CS education community to systematically evaluate AI tutoring systems against established learning theory.
+
+%%
+%% Acknowledgments
+%%
+\begin{acks}
+Removed for anonymous review.
+\end{acks}
+
+%%
+%% Ethics Statement
+%%
+\section*{Ethics Statement}
+This study uses entirely synthetic data generated by seeding known misconceptions into LLM-generated student code. No human participants were involved; therefore, institutional ethics board approval was not required.
+
+%%
+%% Bibliography
+%%
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}
