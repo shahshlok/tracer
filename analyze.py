@@ -13,6 +13,7 @@ ITiCSE/SIGCSE-grade analysis with:
 from __future__ import annotations
 
 import json
+import random
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -268,6 +269,7 @@ def is_null_template_misconception(
 # Scoring + Threshold Classification
 # ---------------------------------------------------------------------------
 BASE_FILE_KEY_COLS = ["strategy", "model", "student", "question"]
+SPLIT_KEY_COLS = ["student", "question"]
 
 
 def get_file_key_cols(scored_df: pd.DataFrame | None = None, file_df: pd.DataFrame | None = None):
@@ -286,6 +288,114 @@ def get_file_key_cols(scored_df: pd.DataFrame | None = None, file_df: pd.DataFra
     if has_assignment:
         cols.append("assignment")
     return cols
+
+
+def get_split_key_cols(
+    scored_df: pd.DataFrame | None = None, file_df: pd.DataFrame | None = None
+) -> list[str]:
+    """
+    Determine file-identity columns for calibration splits.
+
+    We split by (student, question) and include assignment if present to keep
+    all strategies/models for a file in the same split.
+    """
+    cols = list(SPLIT_KEY_COLS)
+    has_assignment = False
+    if scored_df is not None and "assignment" in scored_df.columns:
+        has_assignment = True
+    if file_df is not None and "assignment" in file_df.columns:
+        has_assignment = True
+    if has_assignment:
+        cols.append("assignment")
+    return cols
+
+
+def split_by_file_keys(
+    scored_df: pd.DataFrame,
+    file_df: pd.DataFrame,
+    train_frac: float = 0.8,
+    seed: int = 42,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, Any]]:
+    """
+    Split scored/file dataframes into calibration (dev) and evaluation (test) sets.
+
+    Splitting is done by file identity (student/question[/assignment]) so all
+    strategies/models for a given file stay in the same split.
+    """
+    if scored_df.empty and file_df.empty:
+        return scored_df, file_df, scored_df, file_df, {
+            "train_frac": train_frac,
+            "test_frac": 1 - train_frac,
+            "seed": seed,
+            "key_cols": get_split_key_cols(scored_df, file_df),
+            "train_key_count": 0,
+            "test_key_count": 0,
+            "train_keys": [],
+            "test_keys": [],
+        }
+
+    key_cols = get_split_key_cols(scored_df, file_df)
+    key_source = file_df if not file_df.empty else scored_df
+    unique_keys = key_source[key_cols].drop_duplicates()
+    keys = list(unique_keys.itertuples(index=False, name=None))
+
+    rng = random.Random(seed)
+    rng.shuffle(keys)
+
+    if not keys:
+        return (
+            scored_df.iloc[0:0].copy(),
+            file_df.iloc[0:0].copy(),
+            scored_df.iloc[0:0].copy(),
+            file_df.iloc[0:0].copy(),
+            {
+                "train_frac": train_frac,
+                "test_frac": 1 - train_frac,
+                "seed": seed,
+                "key_cols": key_cols,
+                "train_key_count": 0,
+                "test_key_count": 0,
+                "train_keys": [],
+                "test_keys": [],
+            },
+        )
+
+    if len(keys) == 1:
+        train_size = 1
+    else:
+        train_size = int(len(keys) * train_frac)
+        train_size = max(1, min(train_size, len(keys) - 1))
+
+    train_keys = set(keys[:train_size])
+    test_keys = set(keys[train_size:])
+
+    train_key_df = pd.DataFrame(list(train_keys), columns=key_cols)
+    test_key_df = pd.DataFrame(list(test_keys), columns=key_cols)
+
+    def filter_by_keys(df: pd.DataFrame, key_df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return df
+        if key_df.empty:
+            return df.iloc[0:0].copy()
+        return df.merge(key_df, on=key_cols, how="inner")
+
+    dev_scored = filter_by_keys(scored_df, train_key_df)
+    dev_file = filter_by_keys(file_df, train_key_df)
+    test_scored = filter_by_keys(scored_df, test_key_df)
+    test_file = filter_by_keys(file_df, test_key_df)
+
+    split_info = {
+        "train_frac": train_frac,
+        "test_frac": 1 - train_frac,
+        "seed": seed,
+        "key_cols": key_cols,
+        "train_key_count": len(train_keys),
+        "test_key_count": len(test_keys),
+        "train_keys": [dict(zip(key_cols, key)) for key in sorted(train_keys)],
+        "test_keys": [dict(zip(key_cols, key)) for key in sorted(test_keys)],
+    }
+
+    return dev_scored, dev_file, test_scored, test_file, split_info
 
 
 def semantic_best_match(
@@ -2925,6 +3035,7 @@ def generate_publication_report(
     semantic_threshold: float = SEMANTIC_THRESHOLD_DEFAULT,
     noise_floor: float = NOISE_FLOOR_THRESHOLD,
     compliance_df: pd.DataFrame | None = None,
+    calibration_info: dict[str, Any] | None = None,
 ) -> Path:
     """
     Generate publication-grade report for ITiCSE paper.
@@ -2973,17 +3084,37 @@ def generate_publication_report(
         "",
         f"**Dataset:** {manifest.get('student_count', 'N/A')} students × 3 assignments × 4 strategies × 6 models",
         "",
-        "### Key Metrics",
-        "",
-        "| Metric | Value | 95% CI |",
-        "|--------|-------|--------|",
-        f"| **Precision** | **{overall_with_ci['precision']['estimate']:.3f}** | [{overall_with_ci['precision']['ci_lower']:.3f}, {overall_with_ci['precision']['ci_upper']:.3f}] |",
-        f"| **Recall** | **{overall_with_ci['recall']['estimate']:.3f}** | [{overall_with_ci['recall']['ci_lower']:.3f}, {overall_with_ci['recall']['ci_upper']:.3f}] |",
-        f"| **F1 Score** | **{overall_with_ci['f1']['estimate']:.3f}** | [{overall_with_ci['f1']['ci_lower']:.3f}, {overall_with_ci['f1']['ci_upper']:.3f}] |",
-        "",
-        f"**Raw Counts:** TP={overall['tp']:,} | FP={overall['fp']:,} | FN={overall['fn']:,}",
-        "",
     ]
+    if calibration_info:
+        key_cols = calibration_info.get("key_cols", [])
+        key_cols_str = ", ".join(key_cols) if key_cols else "file keys"
+        train_frac = calibration_info.get("train_frac", 0.0)
+        test_frac = calibration_info.get("test_frac", 0.0)
+        seed = calibration_info.get("seed", "N/A")
+        train_keys = calibration_info.get("train_key_count", 0)
+        test_keys = calibration_info.get("test_key_count", 0)
+        lines.extend(
+            [
+                f"**Calibration split:** {train_frac:.0%} dev / {test_frac:.0%} test by {key_cols_str} (seed {seed})",
+                f"**Dev/Test files:** {train_keys:,} / {test_keys:,}",
+                "**Reported metrics:** test split only.",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "### Key Metrics",
+            "",
+            "| Metric | Value | 95% CI |",
+            "|--------|-------|--------|",
+            f"| **Precision** | **{overall_with_ci['precision']['estimate']:.3f}** | [{overall_with_ci['precision']['ci_lower']:.3f}, {overall_with_ci['precision']['ci_upper']:.3f}] |",
+            f"| **Recall** | **{overall_with_ci['recall']['estimate']:.3f}** | [{overall_with_ci['recall']['ci_lower']:.3f}, {overall_with_ci['recall']['ci_upper']:.3f}] |",
+            f"| **F1 Score** | **{overall_with_ci['f1']['estimate']:.3f}** | [{overall_with_ci['f1']['ci_lower']:.3f}, {overall_with_ci['f1']['ci_upper']:.3f}] |",
+            "",
+            f"**Raw Counts:** TP={overall['tp']:,} | FP={overall['fp']:,} | FN={overall['fn']:,}",
+            "",
+        ]
+    )
 
     # Key Findings Summary
     if ensemble_comparison:
@@ -3045,6 +3176,8 @@ def generate_publication_report(
                 "- **5 noise floor values:** "
                 + ", ".join(f"{v:.2f}" for v in sorted(sensitivity_df["noise_floor"].unique())),
                 f"- **Total configurations:** {grid_size} (6 × 5)",
+                "",
+                "Thresholds were calibrated on the **dev split** and applied to the held-out **test split**.",
                 "",
                 "For each configuration, we computed full precision, recall, and F1 scores "
                 "across all detections, then selected the pair that maximized F1 score.",
@@ -3568,6 +3701,14 @@ def analyze_publication(
         False,
         help="Include misconception names/categories in embedding text (for ablation; defaults to student-thinking-only)",
     ),
+    calibration_split: float = typer.Option(
+        0.8,
+        help="Fraction of files used for threshold calibration (dev); remainder is held-out test",
+    ),
+    calibration_seed: int = typer.Option(
+        42,
+        help="Random seed for calibration/test split",
+    ),
 ):
     """
     Run publication-grade multi-assignment analysis for ITiCSE paper.
@@ -3590,6 +3731,10 @@ def analyze_publication(
     console.print(f"Sensitivity analysis: {'Yes' if run_sensitivity else 'No'}")
     console.print(
         f"Embedding labels: {'Yes (ablation)' if include_label_text else 'No (thinking-only)'}"
+    )
+    console.print(
+        f"Calibration split: {calibration_split:.0%} dev / {1 - calibration_split:.0%} test "
+        f"(seed {calibration_seed})"
     )
     console.print("")
 
@@ -3662,15 +3807,47 @@ def analyze_publication(
     console.print(f"  Total scored detections: {len(combined_scored_df):,}")
     console.print(f"  Unique misconceptions: {len(combined_groundtruth)}")
 
-    # Phase 2: Threshold Sensitivity Analysis
+    # Create run directory early so we can persist split metadata
+    run_id = run_name if run_name.startswith("run_") else f"run_{run_name}"
+    run_dir = Path("runs/multi") / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    # Phase 2: Calibration/Test Split
+    console.print("\n[bold]Phase 2: Calibration/Test split...[/bold]")
+    (
+        dev_scored_df,
+        dev_file_df,
+        test_scored_df,
+        test_file_df,
+        split_info,
+    ) = split_by_file_keys(
+        combined_scored_df,
+        combined_file_df,
+        train_frac=calibration_split,
+        seed=calibration_seed,
+    )
+
+    split_summary = {k: v for k, v in split_info.items() if k not in ("train_keys", "test_keys")}
+    (run_dir / "calibration_split.json").write_text(json.dumps(split_info, indent=2))
+
+    console.print(
+        f"  Dev files: {split_summary['train_key_count']:,} | "
+        f"Test files: {split_summary['test_key_count']:,}"
+    )
+    console.print(
+        f"  Dev detections: {len(dev_scored_df):,} | "
+        f"Test detections: {len(test_scored_df):,}"
+    )
+
+    # Phase 3: Threshold Sensitivity Analysis (calibration/dev only)
     sensitivity_df = None
     optimal_config = None
 
     if run_sensitivity:
-        console.print("\n[bold]Phase 2: Threshold Sensitivity Analysis...[/bold]")
+        console.print("\n[bold]Phase 3: Threshold Sensitivity Analysis...[/bold]")
         sensitivity_df, optimal_config = compute_threshold_sensitivity(
-            combined_scored_df,
-            combined_file_df,
+            dev_scored_df,
+            dev_file_df,
         )
 
     if run_sensitivity and optimal_config:
@@ -3686,40 +3863,37 @@ def analyze_publication(
         actual_noise_floor = noise_floor
 
     console.print(
-        f"\n[cyan]Classifying at semantic={actual_semantic_threshold}, "
+        f"\n[cyan]Classifying held-out test set at semantic={actual_semantic_threshold}, "
         f"noise={actual_noise_floor}...[/cyan]"
     )
-    combined_df, combined_compliance_df = classify_scored_df(
-        combined_scored_df,
-        combined_file_df,
+    test_df, test_compliance_df = classify_scored_df(
+        test_scored_df,
+        test_file_df,
         semantic_threshold=actual_semantic_threshold,
         noise_floor=actual_noise_floor,
     )
 
-    # Phase 3: Compute metrics
-    console.print("\n[bold]Phase 3: Computing metrics...[/bold]")
-    overall = compute_metrics(combined_df)
+    # Phase 4: Compute metrics
+    console.print("\n[bold]Phase 4: Computing metrics...[/bold]")
+    overall = compute_metrics(test_df)
     console.print(
         f"Overall: P={overall['precision']:.3f} R={overall['recall']:.3f} F1={overall['f1']:.3f}"
     )
 
-    # Phase 4: Ensemble comparison
-    console.print("\n[bold]Phase 4: Computing ensemble comparison...[/bold]")
+    # Phase 5: Ensemble comparison
+    console.print("\n[bold]Phase 5: Computing ensemble comparison...[/bold]")
     ensemble_comparison = compute_ensemble_comparison(
-        combined_df, strategy_threshold=2, model_threshold=2
+        test_df, strategy_threshold=2, model_threshold=2
     )
 
-    # Phase 5: Create run directory and generate figures
-    console.print("\n[bold]Phase 5: Generating publication figures...[/bold]")
-    run_id = run_name if run_name.startswith("run_") else f"run_{run_name}"
-    run_dir = Path("runs/multi") / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
+    # Phase 6: Generate figures
+    console.print("\n[bold]Phase 6: Generating publication figures...[/bold]")
     assets_dir = run_dir / "assets"
     assets_dir.mkdir(exist_ok=True)
 
     # Generate all publication charts
     charts = generate_publication_charts(
-        combined_df,
+        test_df,
         assets_dir,
         combined_groundtruth,
         sensitivity_df=sensitivity_df,
@@ -3739,15 +3913,15 @@ def analyze_publication(
     ]
     charts = [c for c in charts if c in selected_figures]
 
-    # Phase 6: Generate report
-    console.print("\n[bold]Phase 6: Generating publication report...[/bold]")
+    # Phase 7: Generate report
+    console.print("\n[bold]Phase 7: Generating publication report...[/bold]")
     combined_manifest = {
         "student_count": total_students,
         "seed": ",".join(seeds) if seeds else "multiple",
     }
 
     report_path = generate_publication_report(
-        combined_df,
+        test_df,
         combined_groundtruth,
         combined_manifest,
         run_dir,
@@ -3757,19 +3931,20 @@ def analyze_publication(
         ensemble_comparison=ensemble_comparison,
         semantic_threshold=actual_semantic_threshold,
         noise_floor=actual_noise_floor,
-        compliance_df=combined_compliance_df,
+        compliance_df=test_compliance_df,
+        calibration_info=split_summary,
     )
 
-    # Phase 7: Save artifacts
-    console.print("\n[bold]Phase 7: Saving artifacts...[/bold]")
-    combined_df.to_csv(run_dir / "results.csv", index=False)
+    # Phase 8: Save artifacts
+    console.print("\n[bold]Phase 8: Saving artifacts...[/bold]")
+    test_df.to_csv(run_dir / "results.csv", index=False)
     (run_dir / "metrics.json").write_text(json.dumps(overall, indent=2))
 
     if sensitivity_df is not None:
         sensitivity_df.to_csv(run_dir / "sensitivity.csv", index=False)
 
-    if not combined_compliance_df.empty:
-        combined_compliance_df.to_csv(run_dir / "compliance.csv", index=False)
+    if not test_compliance_df.empty:
+        test_compliance_df.to_csv(run_dir / "compliance.csv", index=False)
 
     config = {
         "mode": "publication",
@@ -3779,6 +3954,11 @@ def analyze_publication(
         "actual_noise_floor": actual_noise_floor,
         "run_sensitivity": run_sensitivity,
         "include_label_text": include_label_text,
+        "calibration_split": calibration_split,
+        "calibration_seed": calibration_seed,
+        "calibration_key_cols": split_summary.get("key_cols", []),
+        "dev_key_count": split_summary.get("train_key_count", 0),
+        "test_key_count": split_summary.get("test_key_count", 0),
         "optimal_config": optimal_config,
         "total_students": total_students,
         "assignments": ASSIGNMENTS,
