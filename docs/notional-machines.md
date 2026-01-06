@@ -522,4 +522,4 @@ Strings are immutable. Assignment copies the reference; reassigning `s2` just po
 
 ---
 
-## Previous: [Dataset Generation](dataset-generation.md) | Next: [Analysis Pipeline](analysis-pipeline.md)
+## Previous: [Dataset Generation](dataset-generation.md) | Next: [Methodology](methodology.md)

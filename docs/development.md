@@ -273,4 +273,4 @@ Potential future work:
 
 ---
 
-## Previous: [Prompts](prompts.md) | Back to [README](../README.md)
+## Previous: [CLI Reference](cli-reference.md) | Next: [Context & Limitations](context.md)

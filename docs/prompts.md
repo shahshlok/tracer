@@ -274,4 +274,4 @@ STRATEGIES = {
 
 ---
 
-## Previous: [CLI Reference](cli-reference.md) | Next: [Development](development.md)
+## Previous: [Complexity Gradient](complexity-gradient.md) | Next: [CLI Reference](cli-reference.md)

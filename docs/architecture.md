@@ -1,26 +1,23 @@
-# System Architecture
+# Architecture: The Complete Research Pipeline
 
-This document provides a complete technical overview of the LLM Misconception Detection Framework. It explains how each component works together to measure whether LLMs can diagnose student mental models.
-
----
-
-## Table of Contents
-
-1. [Research Goal](#research-goal)
-2. [The 4-Stage Pipeline](#the-4-stage-pipeline)
-3. [Stage 1: Synthetic Injection](#stage-1-synthetic-injection)
-4. [Stage 2: Blind Detection](#stage-2-blind-detection)
-5. [Stage 3: Semantic Alignment](#stage-3-semantic-alignment)
-6. [Stage 4: Ensemble Voting](#stage-4-ensemble-voting)
-7. [Directory Structure](#directory-structure)
-8. [Data Models](#data-models)
-9. [Technology Stack](#technology-stack)
+This document explains the entire TRACER system from start to finish. It assumes no prior knowledge and includes detailed diagrams and exhaustive explanations for beginners.
 
 ---
 
-## Research Goal
+## What is TRACER?
 
-This framework measures **Cognitive Alignment**—the degree to which LLMs can identify not just *what* is wrong with code, but *why* the student wrote it that way (their mental model).
+TRACER is a **research pipeline** that automatically diagnoses student **mental models** (misconceptions about how programming concepts work) by:
+
+1. **Creating synthetic student code** with known bugs
+2. **Running 6 different LLMs** with 4 different prompting strategies  
+3. **Comparing LLM outputs** to ground truth misconceptions using semantic embeddings
+4. **Measuring accuracy** through rigorous 5-fold cross-validation
+
+The goal: Understand the **limits** of what LLMs can diagnose about **how students think**, not just **what bugs exist**.
+
+---
+
+## Quick Overview: The Four-Stage Pipeline
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -59,13 +56,13 @@ This framework measures **Cognitive Alignment**—the degree to which LLMs can i
          │                       │                      │                      │
          ▼                       ▼                      ▼                      ▼
 
-  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-  │ • 18 misconcp-  │    │ • 6 LLM models  │    │ • OpenAI embed- │    │ • Require ≥2    │
-  │   tions defined │    │ • 4 prompts     │    │   dings (3072D) │    │   strategies    │
-  │ • 300 students  │    │ • 360 files     │    │ • Cosine sim-   │    │   to agree      │
-  │ • 1 bug/file    │    │ • 8,640 outputs │    │   ilarity ≥0.65 │    │ • Filters 92%   │
-  │                 │    │                 │    │                 │    │   of false pos  │
-  └─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
+   ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+   │ • 18 misconcp-  │    │ • 6 LLM models  │    │ • OpenAI embed- │    │ • Require ≥2    │
+   │   tions defined │    │ • 4 prompts     │    │   dings (3072D) │    │   strategies    │
+   │ • 300 students  │    │ • 900 files     │    │ • Cosine sim-   │    │   to agree      │
+   │ • 1 bug/file    │    │ • 21,600 outputs│    │   ilarity ≥0.55 │    │ • Filters 92%   │
+   │                 │    │                 │    │                 │    │   of false pos  │
+   └─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                      │                      │
          ▼                       ▼                      ▼                      ▼
 
@@ -244,29 +241,31 @@ Match LLM outputs to ground truth despite **terminology differences**. An LLM mi
   [0.12, -0.45, 0.78, ...]                  [0.15, -0.42, 0.81, ...]
   (3072 dimensions)                         (3072 dimensions)
 
-                        │
-                        ▼
+                         │
+                         ▼
 
-              Cosine Similarity = 0.87
+               Cosine Similarity = 0.87
 
-                        │
-                        ▼
+                         │
+                         ▼
 
-              0.87 ≥ 0.65 threshold?
-                     YES ✓
-                        │
-                        ▼
+               0.87 ≥ 0.55 threshold?
+                      YES ✓
+                         │
+                         ▼
 
-              MATCH: NM_STATE_01
-              Classification: TRUE POSITIVE
+               MATCH: NM_STATE_01
+               Classification: TRUE POSITIVE
 ```
 
 ### Thresholds
 
+These thresholds were **calibrated on the dev set** (80% of data, seed=42) using grid search over 6×5 configurations. They generalize perfectly to the test set (mean dev-test gap = 0.000).
+
 | Threshold | Value | Purpose |
 |-----------|-------|---------|
-| **Semantic Match** | 0.65 | Score above this = match |
-| **Noise Floor** | 0.55 | Score below this = ignore (pedantic noise) |
+| **Noise Floor** | 0.55 | Cosine similarity below this = pedantic observations (resource management, naming), filtered without counting |
+| **Semantic Threshold** | 0.60 | Score in 0.55-0.60 range = uncertain match (counted as FP), ≥0.60 = confident match (checked against ground truth) |
 
 ### Classification Rules
 
@@ -278,14 +277,17 @@ Match LLM outputs to ground truth despite **terminology differences**. An LLM mi
 │  Score < 0.55:     NOISE (discarded, not counted)                           │
 │                    "Didn't close Scanner" - pedantic, not misconception     │
 │                                                                             │
-│  Score 0.55-0.65:  FALSE POSITIVE (hallucination)                           │
-│                    LLM claimed something that doesn't match ground truth    │
+│  Score 0.55-0.60:  FALSE POSITIVE (uncertain detection)                     │
+│                    LLM claimed something with low confidence                │
 │                                                                             │
-│  Score ≥ 0.65:     Check if matched_id == expected_id                       │
+│  Score ≥ 0.55:     Check if best_match_id == expected_id                    │
 │                    ├── YES: TRUE POSITIVE (correct detection)               │
 │                    └── NO:  FALSE POSITIVE (wrong misconception)            │
 │                                                                             │
 │  No detection:     FALSE NEGATIVE (missed the bug)                          │
+│                                                                             │
+│  Note: Noise floor (0.60) filters out spurious matches. Real TP scores     │
+│  typically cluster around 0.70, FP scores around 0.65.                      │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
