@@ -1,109 +1,109 @@
 <coding_guidelines>
-# TRACER: Agent Guidance & Architecture
+# TRACER: Agent Guidance (Paper-Grade)
 
-**T**axonomic **R**esearch of **A**ligned **C**ognitive **E**rror **R**ecognition
+TRACER is a **synthetic benchmark** for evaluating whether LLMs can diagnose **student mental models** (Notional Machines) when given buggy CS1 code. Do not frame this as “LLMs understand students”; frame it as measurable **alignment signals** under controlled ground truth.
 
-This repository contains a research harness for a Bachelor's Honours Thesis targeting **ITiCSE/SIGCSE**.
-The goal is **not** to build a grading tool, but to measure the **Cognitive Alignment** of LLMs with CS Education theory—specifically, their ability to diagnose student *mental models* (Notional Machines).
-
----
-
-## 1. Core Architecture
-
-The system operates on a **Synthetic Injection -> Blind Detection -> Semantic Alignment** pipeline.
-
-### Stage 1: The Notional Machine Injection (Dataset Generation)
-*   **Source:** We use rigorous JSON definitions of Notional Machines, not random bugs.
-*   **Files:** `data/a1/groundtruth.json`, `data/a2/groundtruth.json`, `data/a3/groundtruth.json`
-*   **Mechanism:**
-    *   Select a specific misconception (e.g., `NM_STATE_01`).
-    *   Use LLM to inject it into a valid solution using `student_thinking` and `instructions_for_llm` fields.
-    *   **Constraint:** One misconception per file to ensure clean labeling.
-*   **Generator:** `utils/generators/dataset_generator.py`
-
-### Stage 2: The Blind Diagnosis (Detection)
-*   **Philosophy:** We do *not* give the LLM the answer key. We measure if it can "discover" the Notional Machine failure.
-*   **The Instrument:** LLMs must output JSON (via Pydantic) containing:
-    1.  `inferred_category_name` (String, open-ended)
-    2.  `student_thought_process` (Narrative description)
-    3.  `evidence` (Line numbers)
-*   **Prompts:** 4 strategies in `prompts/strategies.py`:
-    1.  **Baseline:** Simple error classification
-    2.  **Taxonomy:** Explicit Notional Machine categories provided
-    3.  **CoT:** Chain-of-thought line-by-line tracing
-    4.  **Socratic:** Mental model probing
-*   **Detector:** `miscons.py`
-
-### Stage 3: Semantic Alignment (Evaluation)
-*   **The Challenge:** LLM might call it "Auto-Update Error" while we call it "Reactive State Machine."
-*   **The Solution:** Cosine Similarity via OpenAI `text-embedding-3-large`.
-*   **Logic:**
-    *   Embed the `student_thought_process` from LLM detection
-    *   Embed the `explanation` + `student_thinking` from Ground Truth
-    *   If `Similarity ≥ 0.65`, count as **True Positive**
-*   **Analyzer:** `analyze.py`
+This file is a living contract: anything that makes results easier to “look good” but less defensible should be treated as a bug.
 
 ---
 
-## 2. The Notional Machine Taxonomy
+## 1) Architecture (Pipeline)
 
-The thesis focuses on **category-level detection variance**, not assignment complexity.
+TRACER runs a **Synthetic Injection → Blind Detection → Semantic Alignment** pipeline:
 
-### Key Finding: Structural vs. Semantic Misconceptions
-
-| Category | Type | Detection | Example Misconception |
-|----------|------|-----------|----------------------|
-| The Void Machine | Structural | **Easy** (99%) | Calling Math.sqrt() without assignment |
-| The Mutable String Machine | Structural | **Easy** (99%) | String immutability ignored |
-| The Human Index Machine | Structural | **Easy** (97%) | 1-based array indexing |
-| The Teleological Control Machine | Structural | **Easy** (93%) | Loop control flow errors |
-| The Reactive State Machine | Semantic | **Hard** (65%) | Variables as spreadsheet cells |
-| The Independent Switch | Semantic | **Hard** (63%) | if/else-if confusion |
-| The Fluid Type Machine | Semantic | **Hard** (59%) | Integer division blindness |
-
-### Per-Assignment Categories
-
-| Assignment | Categories | Avg Recall |
-|------------|------------|------------|
-| **A1** | Void, Algebraic Syntax, Anthropomorphic I/O, Reactive State, Fluid Type | 0.767 |
-| **A2** | Teleological Control, Independent Switch | 0.861 |
-| **A3** | Human Index, Semantic Bond, Mutable String | 0.971 |
+1. **Injection (dataset generation):** inject exactly one misconception per file using IDs in:
+   - `data/a1/groundtruth.json`
+   - `data/a2/groundtruth.json`
+   - `data/a3/groundtruth.json`
+2. **Blind diagnosis (detection):** LLM sees code (not answer key) and outputs structured JSON (Pydantic in `pydantic_models/`).
+3. **Evaluation (semantic alignment):** map the LLM’s *thinking narrative* to ground truth using embeddings and cosine similarity.
 
 ---
 
-## 3. Methodology Standards
+## 2) Scientific Non‑Negotiables (These Make It Publishable)
 
-**1. The "Honest N-Count"**
-*   Report results based on **Unique (student, question, misconception)** tuples.
-*   Example: "Of 13 files containing 'Spreadsheet View', 65% were correctly diagnosed."
+### 2.1 Unit of Analysis (avoid metric inflation)
+Report at **file-level**: one decision per unique file instance, not “one row per detection”.
 
-**2. The "Hallucination Trap"**
-*   Track **False Positives** aggressively (current: 14,236 FPs vs 6,745 TPs).
-*   `FP_CLEAN`: LLM invented a bug in correct code
-*   `FP_WRONG`: LLM detected wrong misconception
-*   `FP_HALLUCINATION`: LLM invented non-existent error pattern
+- A “file” is identified by: `(assignment, student, question, strategy, model)`
+- A file can contain multiple detected misconceptions; you must collapse to a single outcome per file for P/R/F1.
 
-**3. Statistical Rigor**
-*   **Bootstrap CIs:** 1000 resamples for precision/recall/F1
-*   **McNemar's Test:** Paired strategy comparison
-*   **Cochran's Q:** Omnibus test across all strategies
-*   **Cliff's Delta:** Effect size for semantic score separation
+If you don’t do this, TPs/FPs can be double-counted and the paper gets shredded in review.
 
-**4. Ensemble Voting**
-*   **Strategy Ensemble:** ≥2/4 strategies must agree
-*   **Model Ensemble:** ≥2/6 models must agree
-*   Purpose: Trade recall for precision to reduce hallucinations
+### 2.2 Calibration Leakage (dev/test split)
+Threshold selection is part of the model. If you choose thresholds on the same data you evaluate on, your numbers are optimistic by construction.
+
+- **Calibrate thresholds on dev only** (e.g., 80% of files)
+- **Report metrics on held-out test only** (remaining 20%)
+- Persist split metadata (seed, key columns) alongside the run artifacts.
+
+If results are reported without a held-out evaluation, describe them as exploratory and expect reviewer pushback.
+
+### 2.3 Label Leakage (embedding text confound)
+Embedding “labels” (misconception names/categories) into the text you embed can create a shortcut: the matcher may align on shared wording rather than the student-thinking narrative.
+
+Policy:
+- **Default analysis must be thinking-only** (student belief vs groundtruth explanation+student_thinking).
+- Run a **label-included ablation** explicitly, and describe it as a leaky/upper-bound condition.
+- If label-included performance changes materially, call it out as a validity threat that you measured.
 
 ---
 
-## 4. Operational Directives for Agents
+## 3) Matching + Caching Rules (Semantic Only)
 
-1.  **Do not invent new taxonomies.** Use IDs from `data/*/groundtruth.json`.
-2.  **Preserve the Pydantic Models.** The output schema in `pydantic_models/` is the scientific instrument.
-3.  **Focus on the Category Gap.** The thesis is about variance across *Notional Machine categories*, not assignments.
-4.  **Track Both Ensembles.** Report strategy-ensemble and model-ensemble results in all analyses.
-5.  **The Diagnostic Ceiling:** Misconceptions <70% recall require human oversight:
-    *   `NM_LOGIC_02` (Dangling Else): 16% recall
-    *   `NM_TYP_02` (Narrowing Cast): 31% recall
-    *   `NM_STATE_01` (Spreadsheet View): 65% recall
+This repo is semantic-matching-only. Do not reintroduce fuzzy/hybrid matchers unless explicitly requested.
+
+- Embedding model: OpenAI `text-embedding-3-large`.
+- Disk cache: `.embedding_cache/` stores embeddings keyed by hash of `(model + exact text)`.
+- Cache expectation:
+  - Re-runs with identical embedding texts should reuse the cache.
+  - Switching thinking-only ↔ label-included changes embedding texts, so cache hits will be limited (this is expected).
+
+---
+
+## 4) Reporting Requirements (Report.md Must Be “Write-the-Paper Ready”)
+
+Every publication run should output:
+
+1. **Config + provenance**
+   - run name, timestamp
+   - detection sources (assignments, strategies, models)
+   - whether embeddings include label text
+   - threshold ranges + selected thresholds
+   - dev/test split info (seed, key columns, file counts)
+2. **Core metrics**
+   - TP/FP/FN + Precision/Recall/F1 with CIs (bootstrap)
+   - FP breakdown (`FP_CLEAN`, `FP_WRONG`, `FP_HALLUCINATION`)
+3. **RQ-level breakdowns**
+   - category recall table
+   - per-misconception recall table with N
+   - per-strategy and per-model tables
+4. **Ensembles**
+   - report raw, strategy-ensemble, model-ensemble metrics side-by-side
+5. **Threats to validity (must be explicit)**
+   - synthetic data limitation
+   - one-misconception-per-file simplification
+   - same generator model for dataset
+   - threshold calibration details
+   - label-leakage ablation result
+
+---
+
+## 5) Operational Directives (Hard Constraints)
+
+1. **Do not invent new taxonomies.** Use IDs from `data/*/groundtruth.json`.
+2. **Preserve the Pydantic models.** `pydantic_models/` is the instrument; don’t drift the schema casually.
+3. **Always include `assignment` in multi-assignment keys** to avoid cross-assignment collisions.
+4. **Be honest about what’s measured:** “alignment of narratives via embeddings,” not “true understanding.”
+5. **Be blunt in analysis:** if a method creates shortcuts (label leakage) or leakage (tuning on test), it must be disclosed or fixed.
+
+---
+
+## 6) Canonical Commands (uv)
+
+Thinking-only (primary):
+- `uv run python analyze.py analyze-publication --run-name codex_iticse`
+
+Label-included (ablation / upper bound):
+- `uv run python analyze.py analyze-publication --run-name codex_iticse_labels --include-label-text`
 </coding_guidelines>
