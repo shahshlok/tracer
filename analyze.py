@@ -267,12 +267,31 @@ def is_null_template_misconception(
 # ---------------------------------------------------------------------------
 # Scoring + Threshold Classification
 # ---------------------------------------------------------------------------
-FILE_KEY_COLS = ["strategy", "model", "student", "question"]
+BASE_FILE_KEY_COLS = ["strategy", "model", "student", "question"]
+
+
+def get_file_key_cols(scored_df: pd.DataFrame | None = None, file_df: pd.DataFrame | None = None):
+    """
+    Determine the key columns that uniquely identify a file-level decision.
+
+    Always includes strategy/model/student/question, and includes assignment when present
+    to avoid cross-assignment collisions in multi-assignment runs.
+    """
+    cols = list(BASE_FILE_KEY_COLS)
+    has_assignment = False
+    if scored_df is not None and "assignment" in scored_df.columns:
+        has_assignment = True
+    if file_df is not None and "assignment" in file_df.columns:
+        has_assignment = True
+    if has_assignment:
+        cols.append("assignment")
+    return cols
 
 
 def semantic_best_match(
     detection: dict[str, str],
     precomputed_gt_embeddings: dict[str, list[float]],
+    include_labels: bool = False,
 ) -> tuple[str | None, float, str]:
     """
     Get the best semantic match for a detection without applying a threshold.
@@ -280,7 +299,7 @@ def semantic_best_match(
     Returns:
         (best_match_id, best_score, match_method)
     """
-    detection_text = build_detection_text(detection)
+    detection_text = build_detection_text(detection, include_labels=include_labels)
     if not detection_text.strip():
         return None, 0.0, "no_text"
 
@@ -305,6 +324,7 @@ def build_scored_df(
     manifest: dict[str, Any],
     groundtruth: list[dict[str, Any]],
     null_template_threshold: float = NULL_TEMPLATE_THRESHOLD,
+    include_labels_in_embeddings: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Build a scored detection dataframe without applying semantic/noise thresholds.
@@ -315,7 +335,9 @@ def build_scored_df(
     """
     gt_map = {m["id"]: m for m in groundtruth}
     console.print("[cyan]Precomputing groundtruth embeddings...[/cyan]")
-    gt_embeddings = precompute_groundtruth_embeddings(groundtruth)
+    gt_embeddings = precompute_groundtruth_embeddings(
+        groundtruth, include_labels=include_labels_in_embeddings
+    )
 
     null_embeddings = build_null_template_embeddings()
 
@@ -356,6 +378,7 @@ def build_scored_df(
                     best_match_id, semantic_score, match_method = semantic_best_match(
                         adapted,
                         gt_embeddings,
+                        include_labels=include_labels_in_embeddings,
                     )
 
                     rows.append(
@@ -407,26 +430,24 @@ def _build_compliance_df(
     if file_df.empty:
         return pd.DataFrame()
 
-    counts = pd.DataFrame(columns=FILE_KEY_COLS + ["noise_filtered", "evaluated_misconceptions"])
+    file_key_cols = get_file_key_cols(scored_df, file_df)
+    counts = pd.DataFrame(columns=file_key_cols + ["noise_filtered", "evaluated_misconceptions"])
     if not scored_df.empty:
-        grouped = scored_df.groupby(FILE_KEY_COLS)["semantic_score"]
+        grouped = scored_df.groupby(file_key_cols)["semantic_score"]
         counts = grouped.agg(
             noise_filtered=lambda s: int((s < noise_floor).sum()),
             evaluated_misconceptions=lambda s: int((s >= noise_floor).sum()),
         ).reset_index()
 
-    compliance_df = file_df.merge(counts, on=FILE_KEY_COLS, how="left")
+    compliance_df = file_df.merge(counts, on=file_key_cols, how="left")
     compliance_df["noise_filtered"] = compliance_df["noise_filtered"].fillna(0).astype(int)
     compliance_df["evaluated_misconceptions"] = (
         compliance_df["evaluated_misconceptions"].fillna(0).astype(int)
     )
 
     return compliance_df[
-        [
-            "strategy",
-            "model",
-            "student",
-            "question",
+        file_key_cols
+        + [
             "raw_misconceptions",
             "null_filtered",
             "noise_filtered",
@@ -486,12 +507,14 @@ def classify_scored_df(
         fp_wrong_mask = ~clean_mask & match_mask & ~tp_mask
         filtered.loc[fp_wrong_mask, "result"] = "FP_WRONG"
 
+    file_key_cols = get_file_key_cols(scored_df, file_df)
+
     # Add FN rows for expected misconceptions that were not detected
     fn_rows: list[dict[str, Any]] = []
     if not file_df.empty:
         tp_keys = set(
             tuple(row)
-            for row in filtered.loc[filtered["result"] == "TP", FILE_KEY_COLS].itertuples(
+            for row in filtered.loc[filtered["result"] == "TP", file_key_cols].itertuples(
                 index=False, name=None
             )
         )
@@ -500,12 +523,7 @@ def classify_scored_df(
             is_clean = getattr(row, "is_clean")
             if is_clean or not expected_id:
                 continue
-            key = (
-                getattr(row, "strategy"),
-                getattr(row, "model"),
-                getattr(row, "student"),
-                getattr(row, "question"),
-            )
+            key = tuple(getattr(row, col) for col in file_key_cols)
             if key in tp_keys:
                 continue
             fn_rows.append(
@@ -527,11 +545,7 @@ def classify_scored_df(
                 }
             )
 
-    result_cols = [
-        "strategy",
-        "model",
-        "student",
-        "question",
+    result_cols = file_key_cols + [
         "expected_id",
         "expected_category",
         "is_clean",
@@ -557,7 +571,65 @@ def classify_scored_df(
         else pd.DataFrame(columns=result_cols)
     )
     compliance_df = _build_compliance_df(file_df, scored_df, noise_floor)
-    return results_df, compliance_df
+    return collapse_to_file_level(results_df), compliance_df
+
+
+def collapse_to_file_level(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Collapse multiple detections per file into a single decision.
+
+    Priority (seeded files): TP > FP_WRONG/FP_HALLUCINATION > FN
+    Priority (clean files): FP_CLEAN/FP_HALLUCINATION > drop (no detection)
+    """
+    if df.empty:
+        return df
+
+    file_key_cols = get_file_key_cols(df, df)
+    cols = list(df.columns)
+    collapsed_rows: list[dict[str, Any]] = []
+
+    def pick_best(sub: pd.DataFrame) -> pd.Series:
+        return sub.sort_values("semantic_score", ascending=False).iloc[0]
+
+    for keys, grp in df.groupby(file_key_cols, dropna=False):
+        if not isinstance(keys, tuple):
+            keys = (keys,)
+        row_base = {col: key for col, key in zip(file_key_cols, keys)}
+        is_clean = bool(grp["is_clean"].iloc[0]) if "is_clean" in grp.columns else False
+
+        tp = grp[grp["result"] == "TP"]
+        fp_wrong = grp[grp["result"] == "FP_WRONG"]
+        fp_clean = grp[grp["result"] == "FP_CLEAN"]
+        fp_hall = grp[grp["result"] == "FP_HALLUCINATION"]
+        fn = grp[grp["result"] == "FN"]
+
+        chosen: pd.Series | None = None
+        if not is_clean:
+            if not tp.empty:
+                chosen = pick_best(tp)
+            elif not fp_wrong.empty:
+                chosen = pick_best(fp_wrong)
+            elif not fp_hall.empty:
+                chosen = pick_best(fp_hall)
+            elif not fn.empty:
+                chosen = fn.iloc[0]
+        else:
+            if not fp_clean.empty:
+                chosen = pick_best(fp_clean)
+            elif not fp_hall.empty:
+                chosen = pick_best(fp_hall)
+            else:
+                # Clean file, no flagged misconceptions -> drop from metrics
+                continue
+
+        if chosen is None:
+            continue
+
+        merged = {col: chosen.get(col) for col in cols}
+        merged.update(row_base)
+        collapsed_rows.append(merged)
+
+    return pd.DataFrame(collapsed_rows, columns=cols)
 
 
 # ---------------------------------------------------------------------------
@@ -593,7 +665,12 @@ def apply_strategy_ensemble_filter(
         matched_id = row["matched_id"]
         if pd.isna(matched_id):
             matched_id = None
-        key = (row["student"], row["question"], matched_id)
+        key = (
+            row.get("student"),
+            row.get("question"),
+            row.get("assignment") if "assignment" in df.columns else None,
+            matched_id,
+        )
         if key not in agreement_map:
             agreement_map[key] = set()
         agreement_map[key].add(row["strategy"])
@@ -602,7 +679,7 @@ def apply_strategy_ensemble_filter(
     validated = {
         key
         for key, strategies in agreement_map.items()
-        if len(strategies) >= threshold and key[2] is not None
+        if len(strategies) >= threshold and key[3] is not None
     }
 
     if not silent:
@@ -614,7 +691,12 @@ def apply_strategy_ensemble_filter(
         matched_id = row["matched_id"]
         if pd.isna(matched_id):
             matched_id = None
-        key = (row["student"], row["question"], matched_id)
+        key = (
+            row.get("student"),
+            row.get("question"),
+            row.get("assignment") if "assignment" in df.columns else None,
+            matched_id,
+        )
         result = row["result"]
 
         if result == "FN":
@@ -670,7 +752,13 @@ def apply_model_ensemble_filter(
         matched_id = row["matched_id"]
         if pd.isna(matched_id):
             matched_id = None
-        key = (row["student"], row["question"], row["strategy"], matched_id)
+        key = (
+            row.get("student"),
+            row.get("question"),
+            row.get("assignment") if "assignment" in df.columns else None,
+            row["strategy"],
+            matched_id,
+        )
         if key not in agreement_map:
             agreement_map[key] = set()
         agreement_map[key].add(row["model"])
@@ -679,7 +767,7 @@ def apply_model_ensemble_filter(
     validated = {
         key
         for key, models in agreement_map.items()
-        if len(models) >= threshold and key[3] is not None
+        if len(models) >= threshold and key[4] is not None
     }
 
     if not silent:
@@ -691,7 +779,13 @@ def apply_model_ensemble_filter(
         matched_id = row["matched_id"]
         if pd.isna(matched_id):
             matched_id = None
-        key = (row["student"], row["question"], row["strategy"], matched_id)
+        key = (
+            row.get("student"),
+            row.get("question"),
+            row.get("assignment") if "assignment" in df.columns else None,
+            row["strategy"],
+            matched_id,
+        )
         result = row["result"]
 
         if result == "FN":
@@ -868,6 +962,7 @@ def build_results_df(
     semantic_threshold: float = SEMANTIC_THRESHOLD_DEFAULT,
     null_template_threshold: float = NULL_TEMPLATE_THRESHOLD,
     noise_floor_threshold: float = NOISE_FLOOR_THRESHOLD,
+    include_labels_in_embeddings: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Build results dataframe using semantic embedding matching.
@@ -882,6 +977,7 @@ def build_results_df(
         manifest,
         groundtruth,
         null_template_threshold=null_template_threshold,
+        include_labels_in_embeddings=include_labels_in_embeddings,
     )
     results_df, compliance_df = classify_scored_df(
         scored_df,
@@ -980,7 +1076,9 @@ def generate_charts(
             cis = []
             for strat in by_strat["strategy"]:
                 strat_df = df[df["strategy"] == strat]
-                ci = compute_all_metrics_with_ci(strat_df, n_bootstrap=500)
+                ci = compute_all_metrics_with_ci(
+                    strat_df, n_bootstrap=500, cluster_cols=get_file_key_cols(strat_df, strat_df)
+                )
                 cis.append(ci["f1"])
             by_strat["ci_lower"] = [c["ci_lower"] for c in cis]
             by_strat["ci_upper"] = [c["ci_upper"] for c in cis]
@@ -2038,8 +2136,10 @@ def generate_strategy_performance_chart(
         if strat_df.empty:
             continue
 
-        # Overall metrics
-        overall = compute_all_metrics_with_ci(strat_df)
+        # Overall metrics (clustered by file key)
+        overall = compute_all_metrics_with_ci(
+            strat_df, cluster_cols=get_file_key_cols(strat_df, strat_df)
+        )
 
         # Structural-specific metrics
         struct_df = strat_df[strat_df["expected_category"].isin(structural_cats)]
@@ -2319,12 +2419,16 @@ def generate_assignment_variance_heatmap(
                 if subset.empty:
                     row_data[assignment] = np.nan
                 else:
-                    metrics = compute_all_metrics_with_ci(subset)
+                    metrics = compute_all_metrics_with_ci(
+                        subset, cluster_cols=get_file_key_cols(subset, subset)
+                    )
                     row_data[assignment] = metrics["f1"]["estimate"]
 
             # Compute overall and variance
             all_assignments = seeded[(seeded["strategy"] == strategy) & (seeded["model"] == model)]
-            overall_metrics = compute_all_metrics_with_ci(all_assignments)
+            overall_metrics = compute_all_metrics_with_ci(
+                all_assignments, cluster_cols=get_file_key_cols(all_assignments, all_assignments)
+            )
             row_data["overall"] = overall_metrics["f1"]["estimate"]
 
             f1_values = [row_data["a1"], row_data["a2"], row_data["a3"]]
@@ -2824,7 +2928,9 @@ def generate_publication_report(
     overall = compute_metrics(df)
 
     console.print("[cyan]Computing bootstrap confidence intervals...[/cyan]")
-    overall_with_ci = compute_all_metrics_with_ci(df, n_bootstrap=1000)
+    overall_with_ci = compute_all_metrics_with_ci(
+        df, n_bootstrap=1000, cluster_cols=get_file_key_cols(df, df)
+    )
 
     # Compute breakdowns
     by_assignment = (
@@ -3451,6 +3557,10 @@ def analyze_publication(
         True,
         help="Run threshold sensitivity analysis (adds ~10 min)",
     ),
+    include_label_text: bool = typer.Option(
+        False,
+        help="Include misconception names/categories in embedding text (for ablation; defaults to student-thinking-only)",
+    ),
 ):
     """
     Run publication-grade multi-assignment analysis for ITiCSE paper.
@@ -3471,6 +3581,7 @@ def analyze_publication(
     console.print(f"Semantic threshold: {semantic_threshold}")
     console.print(f"Noise floor: {noise_floor}")
     console.print(f"Sensitivity analysis: {'Yes' if run_sensitivity else 'No'}")
+    console.print(f"Embedding labels: {'Yes (ablation)' if include_label_text else 'No (thinking-only)'}")
     console.print("")
 
     ASSIGNMENTS = ["a1", "a2", "a3"]
@@ -3513,6 +3624,7 @@ def analyze_publication(
             detections_dir,
             manifest,
             groundtruth,
+            include_labels_in_embeddings=include_label_text,
         )
 
         if not scored_df.empty:
@@ -3657,6 +3769,7 @@ def analyze_publication(
         "actual_semantic_threshold": actual_semantic_threshold,
         "actual_noise_floor": actual_noise_floor,
         "run_sensitivity": run_sensitivity,
+        "include_label_text": include_label_text,
         "optimal_config": optimal_config,
         "total_students": total_students,
         "assignments": ASSIGNMENTS,
@@ -3954,7 +4067,9 @@ def generate_multi_report(
 
     # Compute bootstrap CIs for overall metrics
     console.print("[cyan]Computing bootstrap confidence intervals...[/cyan]")
-    overall_with_ci = compute_all_metrics_with_ci(df, n_bootstrap=1000)
+    overall_with_ci = compute_all_metrics_with_ci(
+        df, n_bootstrap=1000, cluster_cols=get_file_key_cols(df, df)
+    )
 
     lines = [
         "# Multi-Assignment LLM Misconception Detection Report",
@@ -4562,7 +4677,9 @@ def generate_ensemble_report(
 
     # Compute bootstrap CIs for overall metrics
     console.print("[cyan]Computing bootstrap confidence intervals...[/cyan]")
-    overall_with_ci = compute_all_metrics_with_ci(df, n_bootstrap=1000)
+    overall_with_ci = compute_all_metrics_with_ci(
+        df, n_bootstrap=1000, cluster_cols=get_file_key_cols(df, df)
+    )
 
     lines = [
         "# Analysis 3: Ensemble Voting Report",

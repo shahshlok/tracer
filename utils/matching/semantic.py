@@ -118,28 +118,39 @@ def cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
 
-def build_detection_text(detection: dict[str, Any]) -> str:
-    """Build searchable text from a detection."""
+def build_detection_text(detection: dict[str, Any], include_labels: bool = False) -> str:
+    """
+    Build searchable text from a detection.
+
+    When include_labels=False (default) we only use the student belief narrative to
+    avoid leaking category/label terms into the embedding match. This better reflects
+    "thinking" alignment instead of name-matching.
+    """
     parts = []
-    if detection.get("name"):
+    if include_labels and detection.get("name"):
         parts.append(f"Misconception: {detection['name']}")
-    if detection.get("description"):
+    if include_labels and detection.get("description"):
         parts.append(f"Description: {detection['description']}")
     if detection.get("student_belief"):
         parts.append(f"Student believes: {detection['student_belief']}")
     return " ".join(parts)
 
 
-def build_groundtruth_text(gt: dict[str, Any]) -> str:
-    """Build searchable text from a groundtruth entry."""
+def build_groundtruth_text(gt: dict[str, Any], include_labels: bool = False) -> str:
+    """
+    Build searchable text from a groundtruth entry.
+
+    When include_labels=False (default) we exclude the misconception name/category to
+    prevent label leakage; we keep the explanation + student_thinking narrative.
+    """
     parts = []
-    if gt.get("name"):  # Fixed: was misconception_name
+    if include_labels and gt.get("name"):  # Fixed: was misconception_name
         parts.append(f"Misconception: {gt['name']}")
     if gt.get("explanation"):  # Fixed: was misconception_explanation
         parts.append(f"Explanation: {gt['explanation']}")
     if gt.get("student_thinking"):
         parts.append(f"Student thinking: {gt['student_thinking']}")
-    if gt.get("category"):  # Added: include category for better matching
+    if include_labels and gt.get("category"):  # Added: include category for better matching
         parts.append(f"Category: {gt['category']}")
     return " ".join(parts)
 
@@ -151,6 +162,7 @@ def semantic_match_misconception(
     groundtruth: list[dict[str, Any]],
     threshold: float = 0.7,
     precomputed_gt_embeddings: dict[str, list[float]] | None = None,
+    include_labels: bool = False,
 ) -> tuple[str | None, float, str]:
     """
     Match a detected misconception using semantic embeddings.
@@ -171,7 +183,8 @@ def semantic_match_misconception(
             "name": detected_name,
             "description": detected_description,
             "student_belief": detected_student_belief,
-        }
+        },
+        include_labels=include_labels,
     )
 
     if not detection_text.strip():
@@ -195,7 +208,7 @@ def semantic_match_misconception(
     else:
         # Fallback: compute embeddings on the fly (slow!)
         for gt in groundtruth:
-            gt_text = build_groundtruth_text(gt)
+            gt_text = build_groundtruth_text(gt, include_labels=include_labels)
             if not gt_text.strip():
                 continue
 
@@ -215,7 +228,9 @@ def semantic_match_misconception(
     return None, best_score, "below_threshold"
 
 
-def precompute_groundtruth_embeddings(groundtruth: list[dict[str, Any]]) -> dict[str, list[float]]:
+def precompute_groundtruth_embeddings(
+    groundtruth: list[dict[str, Any]], include_labels: bool = False
+) -> dict[str, list[float]]:
     """
     Precompute embeddings for all groundtruth entries.
     Call this once before batch matching to speed up comparisons.
@@ -223,7 +238,7 @@ def precompute_groundtruth_embeddings(groundtruth: list[dict[str, Any]]) -> dict
     embeddings = {}
     for gt in groundtruth:
         gt_id = gt.get("id", "")
-        gt_text = build_groundtruth_text(gt)
+        gt_text = build_groundtruth_text(gt, include_labels=include_labels)
         if gt_text.strip():
             try:
                 embeddings[gt_id] = get_embedding(gt_text)

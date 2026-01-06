@@ -26,6 +26,7 @@ def compute_bootstrap_ci(
     n_bootstrap: int = 1000,
     confidence_level: float = 0.95,
     random_state: int = 42,
+    cluster_cols: list[str] | None = None,
 ) -> dict[str, float]:
     """
     Compute bootstrap confidence interval for a classification metric.
@@ -41,8 +42,18 @@ def compute_bootstrap_ci(
         Dict with 'estimate', 'ci_lower', 'ci_upper', 'std_error'
     """
     rng = np.random.default_rng(random_state)
-    n_samples = len(df)
 
+    # Cluster-aware resampling (e.g., one row per file) to avoid overly optimistic CIs
+    if cluster_cols:
+        if not set(cluster_cols).issubset(df.columns):
+            cluster_cols = None
+        else:
+            df = df.copy()
+            df["__cluster_key__"] = df[cluster_cols].astype(str).agg("|".join, axis=1)
+            clusters = df["__cluster_key__"].unique()
+            if len(clusters) == 0:
+                return {"estimate": 0.0, "ci_lower": 0.0, "ci_upper": 0.0, "std_error": 0.0}
+    n_samples = len(df if not cluster_cols else clusters)
     if n_samples == 0:
         return {"estimate": 0.0, "ci_lower": 0.0, "ci_upper": 0.0, "std_error": 0.0}
 
@@ -68,9 +79,12 @@ def compute_bootstrap_ci(
     # Bootstrap resampling
     bootstrap_estimates = []
     for _ in range(n_bootstrap):
-        # Resample with replacement
-        indices = rng.choice(n_samples, size=n_samples, replace=True)
-        sample_df = df.iloc[indices]
+        if cluster_cols:
+            sampled_clusters = rng.choice(clusters, size=len(clusters), replace=True)
+            sample_df = df[df["__cluster_key__"].isin(sampled_clusters)]
+        else:
+            indices = rng.choice(len(df), size=len(df), replace=True)
+            sample_df = df.iloc[indices]
         bootstrap_estimates.append(compute_metric(sample_df))
 
     bootstrap_estimates = np.array(bootstrap_estimates)
@@ -93,6 +107,7 @@ def compute_all_metrics_with_ci(
     df: pd.DataFrame,
     n_bootstrap: int = 1000,
     confidence_level: float = 0.95,
+    cluster_cols: list[str] | None = None,
 ) -> dict[str, dict[str, float]]:
     """
     Compute precision, recall, and F1 with bootstrap CIs.
@@ -101,9 +116,13 @@ def compute_all_metrics_with_ci(
         Dict mapping metric name to CI dict
     """
     return {
-        "precision": compute_bootstrap_ci(df, "precision", n_bootstrap, confidence_level),
-        "recall": compute_bootstrap_ci(df, "recall", n_bootstrap, confidence_level),
-        "f1": compute_bootstrap_ci(df, "f1", n_bootstrap, confidence_level),
+        "precision": compute_bootstrap_ci(
+            df, "precision", n_bootstrap, confidence_level, cluster_cols=cluster_cols
+        ),
+        "recall": compute_bootstrap_ci(
+            df, "recall", n_bootstrap, confidence_level, cluster_cols=cluster_cols
+        ),
+        "f1": compute_bootstrap_ci(df, "f1", n_bootstrap, confidence_level, cluster_cols=cluster_cols),
     }
 
 
@@ -142,9 +161,17 @@ def compute_mcnemar_test(
             "error": "One or both strategies have no data",
         }
 
-    # Create keys for pairing
-    df_a["key"] = df_a["student"] + "_" + df_a["question"] + "_" + df_a["model"].astype(str)
-    df_b["key"] = df_b["student"] + "_" + df_b["question"] + "_" + df_b["model"].astype(str)
+    # Create keys for pairing (include assignment if present to avoid collisions)
+    key_parts = ["student", "question"]
+    if "assignment" in df.columns:
+        key_parts.append("assignment")
+    key_parts.append("model")
+
+    def build_key(sub: pd.DataFrame) -> pd.Series:
+        return sub[key_parts].astype(str).agg("_".join, axis=1)
+
+    df_a["key"] = build_key(df_a)
+    df_b["key"] = build_key(df_b)
 
     # Get correct/incorrect for each
     df_a["correct_a"] = df_a["result"] == "TP"

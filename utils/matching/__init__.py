@@ -1,12 +1,10 @@
-"""Matching module for comparing LLM detections against ground truth."""
+"""Matching module for comparing LLM detections against ground truth.
 
-from .classifier import MatchResult, classify_detection
-from .fuzzy import fuzzy_match_misconception
+This project currently uses semantic embedding matching as the primary scientific
+instrument. Other matchers (e.g., fuzzy/hybrid) are intentionally optional and
+may not be present in all configurations.
+"""
+
 from .semantic import semantic_match_misconception
 
-__all__ = [
-    "fuzzy_match_misconception",
-    "semantic_match_misconception",
-    "classify_detection",
-    "MatchResult",
-]
+__all__ = ["semantic_match_misconception"]
