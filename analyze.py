@@ -323,16 +323,22 @@ def split_by_file_keys(
     strategies/models for a given file stay in the same split.
     """
     if scored_df.empty and file_df.empty:
-        return scored_df, file_df, scored_df, file_df, {
-            "train_frac": train_frac,
-            "test_frac": 1 - train_frac,
-            "seed": seed,
-            "key_cols": get_split_key_cols(scored_df, file_df),
-            "train_key_count": 0,
-            "test_key_count": 0,
-            "train_keys": [],
-            "test_keys": [],
-        }
+        return (
+            scored_df,
+            file_df,
+            scored_df,
+            file_df,
+            {
+                "train_frac": train_frac,
+                "test_frac": 1 - train_frac,
+                "seed": seed,
+                "key_cols": get_split_key_cols(scored_df, file_df),
+                "train_key_count": 0,
+                "test_key_count": 0,
+                "train_keys": [],
+                "test_keys": [],
+            },
+        )
 
     key_cols = get_split_key_cols(scored_df, file_df)
     key_source = file_df if not file_df.empty else scored_df
@@ -396,6 +402,104 @@ def split_by_file_keys(
     }
 
     return dev_scored, dev_file, test_scored, test_file, split_info
+
+
+def stratified_kfold_by_category(
+    scored_df: pd.DataFrame,
+    file_df: pd.DataFrame,
+    n_folds: int = 5,
+    seed: int = 42,
+) -> list[tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, Any]]]:
+    """
+    Create stratified k-fold splits by Notional Machine category.
+
+    Stratification ensures each fold has balanced representation of:
+    - Each expected_category (Notional Machine type)
+    - CLEAN files (no expected_category) as a separate stratum
+
+    Returns:
+        List of (dev_scored, dev_file, test_scored, test_file, fold_info) tuples
+    """
+    if scored_df.empty and file_df.empty:
+        return []
+
+    key_cols = get_split_key_cols(scored_df, file_df)
+    key_source = file_df if not file_df.empty else scored_df
+
+    # Build mapping: file_key -> expected_category (for stratification)
+    # Use the most common category for each file key (should be unique anyway)
+    file_to_category: dict[tuple, str] = {}
+    for row in key_source.itertuples(index=False):
+        key = tuple(getattr(row, col) for col in key_cols)
+        category = (
+            getattr(row, "expected_category", None) if hasattr(row, "expected_category") else None
+        )
+        if key not in file_to_category:
+            # Use "CLEAN" for files without expected_category
+            file_to_category[key] = category if category else "CLEAN"
+
+    # Group keys by category
+    category_to_keys: dict[str, list[tuple]] = {}
+    for key, category in file_to_category.items():
+        cat = category if category else "CLEAN"
+        if cat not in category_to_keys:
+            category_to_keys[cat] = []
+        category_to_keys[cat].append(key)
+
+    # Shuffle each category's keys
+    rng = random.Random(seed)
+    for cat in category_to_keys:
+        rng.shuffle(category_to_keys[cat])
+
+    # Distribute keys to folds in round-robin within each category (stratified)
+    fold_keys: list[set[tuple]] = [set() for _ in range(n_folds)]
+    for cat, keys in category_to_keys.items():
+        for i, key in enumerate(keys):
+            fold_keys[i % n_folds].add(key)
+
+    # Build fold splits
+    folds = []
+    for fold_idx in range(n_folds):
+        test_keys = fold_keys[fold_idx]
+        train_keys = set()
+        for other_idx in range(n_folds):
+            if other_idx != fold_idx:
+                train_keys.update(fold_keys[other_idx])
+
+        train_key_df = pd.DataFrame(list(train_keys), columns=key_cols)
+        test_key_df = pd.DataFrame(list(test_keys), columns=key_cols)
+
+        def filter_by_keys(df: pd.DataFrame, key_df: pd.DataFrame) -> pd.DataFrame:
+            if df.empty:
+                return df
+            if key_df.empty:
+                return df.iloc[0:0].copy()
+            return df.merge(key_df, on=key_cols, how="inner")
+
+        dev_scored = filter_by_keys(scored_df, train_key_df)
+        dev_file = filter_by_keys(file_df, train_key_df)
+        test_scored = filter_by_keys(scored_df, test_key_df)
+        test_file = filter_by_keys(file_df, test_key_df)
+
+        # Compute category distribution for fold info
+        train_categories = {file_to_category.get(k, "CLEAN") for k in train_keys}
+        test_categories = {file_to_category.get(k, "CLEAN") for k in test_keys}
+
+        fold_info = {
+            "fold": fold_idx + 1,
+            "n_folds": n_folds,
+            "seed": seed,
+            "key_cols": key_cols,
+            "train_key_count": len(train_keys),
+            "test_key_count": len(test_keys),
+            "train_categories": len(train_categories),
+            "test_categories": len(test_categories),
+            "stratification": "category",
+        }
+
+        folds.append((dev_scored, dev_file, test_scored, test_file, fold_info))
+
+    return folds
 
 
 def semantic_best_match(
@@ -3036,11 +3140,14 @@ def generate_publication_report(
     noise_floor: float = NOISE_FLOOR_THRESHOLD,
     compliance_df: pd.DataFrame | None = None,
     calibration_info: dict[str, Any] | None = None,
+    cv_summary: dict[str, Any] | None = None,
+    fold_results: list[dict[str, Any]] | None = None,
 ) -> Path:
     """
     Generate publication-grade report for ITiCSE paper.
 
-    This is the definitive data document with all 12 figures integrated.
+    This is the definitive data document with all figures integrated.
+    Supports both single-split and k-fold CV modes.
     """
     gt_map = {gt["id"]: gt for gt in groundtruth}
     overall = compute_metrics(df)
@@ -3068,6 +3175,9 @@ def generate_publication_report(
         metrics_by_group(seeded, ["expected_id"]) if not seeded.empty else pd.DataFrame()
     )
 
+    # Determine if this is a CV run
+    is_cv_run = cv_summary is not None and fold_results is not None
+
     lines = [
         "# TRACER: LLM Cognitive Alignment Analysis",
         "",
@@ -3085,7 +3195,29 @@ def generate_publication_report(
         f"**Dataset:** {manifest.get('student_count', 'N/A')} students × 3 assignments × 4 strategies × 6 models",
         "",
     ]
-    if calibration_info:
+
+    # Add CV methodology summary if applicable
+    if is_cv_run:
+        n_folds = cv_summary.get("n_folds", 5)
+        cv_seed = cv_summary.get("cv_seed", 42)
+        lines.extend(
+            [
+                f"**Validation:** {n_folds}-fold stratified cross-validation by Notional Machine category (seed {cv_seed})",
+                "",
+                "### Cross-Validation Results",
+                "",
+                "| Metric | Mean | Std Dev | 95% CI (approx) |",
+                "|--------|------|---------|-----------------|",
+                f"| **Precision** | **{cv_summary['precision_mean']:.3f}** | ±{cv_summary['precision_std']:.3f} | [{cv_summary['precision_mean'] - 1.96 * cv_summary['precision_std']:.3f}, {cv_summary['precision_mean'] + 1.96 * cv_summary['precision_std']:.3f}] |",
+                f"| **Recall** | **{cv_summary['recall_mean']:.3f}** | ±{cv_summary['recall_std']:.3f} | [{cv_summary['recall_mean'] - 1.96 * cv_summary['recall_std']:.3f}, {cv_summary['recall_mean'] + 1.96 * cv_summary['recall_std']:.3f}] |",
+                f"| **F1 Score** | **{cv_summary['f1_mean']:.3f}** | ±{cv_summary['f1_std']:.3f} | [{cv_summary['f1_mean'] - 1.96 * cv_summary['f1_std']:.3f}, {cv_summary['f1_mean'] + 1.96 * cv_summary['f1_std']:.3f}] |",
+                "",
+                f"**Raw Counts (aggregated):** TP={overall['tp']:,} | FP={overall['fp']:,} | FN={overall['fn']:,}",
+                "",
+            ]
+        )
+    elif calibration_info:
+        # Legacy single-split mode
         key_cols = calibration_info.get("key_cols", [])
         key_cols_str = ", ".join(key_cols) if key_cols else "file keys"
         train_frac = calibration_info.get("train_frac", 0.0)
@@ -3101,20 +3233,35 @@ def generate_publication_report(
                 "",
             ]
         )
-    lines.extend(
-        [
-            "### Key Metrics",
-            "",
-            "| Metric | Value | 95% CI |",
-            "|--------|-------|--------|",
-            f"| **Precision** | **{overall_with_ci['precision']['estimate']:.3f}** | [{overall_with_ci['precision']['ci_lower']:.3f}, {overall_with_ci['precision']['ci_upper']:.3f}] |",
-            f"| **Recall** | **{overall_with_ci['recall']['estimate']:.3f}** | [{overall_with_ci['recall']['ci_lower']:.3f}, {overall_with_ci['recall']['ci_upper']:.3f}] |",
-            f"| **F1 Score** | **{overall_with_ci['f1']['estimate']:.3f}** | [{overall_with_ci['f1']['ci_lower']:.3f}, {overall_with_ci['f1']['ci_upper']:.3f}] |",
-            "",
-            f"**Raw Counts:** TP={overall['tp']:,} | FP={overall['fp']:,} | FN={overall['fn']:,}",
-            "",
-        ]
-    )
+        lines.extend(
+            [
+                "### Key Metrics",
+                "",
+                "| Metric | Value | 95% CI |",
+                "|--------|-------|--------|",
+                f"| **Precision** | **{overall_with_ci['precision']['estimate']:.3f}** | [{overall_with_ci['precision']['ci_lower']:.3f}, {overall_with_ci['precision']['ci_upper']:.3f}] |",
+                f"| **Recall** | **{overall_with_ci['recall']['estimate']:.3f}** | [{overall_with_ci['recall']['ci_lower']:.3f}, {overall_with_ci['recall']['ci_upper']:.3f}] |",
+                f"| **F1 Score** | **{overall_with_ci['f1']['estimate']:.3f}** | [{overall_with_ci['f1']['ci_lower']:.3f}, {overall_with_ci['f1']['ci_upper']:.3f}] |",
+                "",
+                f"**Raw Counts:** TP={overall['tp']:,} | FP={overall['fp']:,} | FN={overall['fn']:,}",
+                "",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "### Key Metrics",
+                "",
+                "| Metric | Value | 95% CI |",
+                "|--------|-------|--------|",
+                f"| **Precision** | **{overall_with_ci['precision']['estimate']:.3f}** | [{overall_with_ci['precision']['ci_lower']:.3f}, {overall_with_ci['precision']['ci_upper']:.3f}] |",
+                f"| **Recall** | **{overall_with_ci['recall']['estimate']:.3f}** | [{overall_with_ci['recall']['ci_lower']:.3f}, {overall_with_ci['recall']['ci_upper']:.3f}] |",
+                f"| **F1 Score** | **{overall_with_ci['f1']['estimate']:.3f}** | [{overall_with_ci['f1']['ci_lower']:.3f}, {overall_with_ci['f1']['ci_upper']:.3f}] |",
+                "",
+                f"**Raw Counts:** TP={overall['tp']:,} | FP={overall['fp']:,} | FN={overall['fn']:,}",
+                "",
+            ]
+        )
 
     # Key Findings Summary
     if ensemble_comparison:
@@ -3155,6 +3302,61 @@ def generate_publication_report(
             "",
         ]
     )
+
+    # 1.0 Cross-Validation Fold Breakdown (if CV run)
+    if is_cv_run and fold_results:
+        lines.extend(
+            [
+                "### 1.0 Cross-Validation Fold Breakdown",
+                "",
+                "> Each fold uses 80% of files for threshold calibration (dev) and 20% for evaluation (test).",
+                "> Stratification by Notional Machine category ensures balanced representation across folds.",
+                "",
+                "| Fold | Dev Files | Test Files | Sem. Thresh | Noise Floor | Dev F1 | Test F1 | Gap |",
+                "|------|-----------|------------|-------------|-------------|--------|---------|-----|",
+            ]
+        )
+        for fr in fold_results:
+            gap_indicator = "✓" if abs(fr["gap_f1"]) < 0.05 else "⚠"
+            lines.append(
+                f"| {fr['fold']} | {fr['dev_files']} | {fr['test_files']} | "
+                f"{fr['semantic_threshold']:.2f} | {fr['noise_floor']:.2f} | "
+                f"{fr['dev_f1']:.3f} | {fr['test_f1']:.3f} | {fr['gap_f1']:+.3f} {gap_indicator} |"
+            )
+        lines.append("")
+
+        # Add summary statistics
+        mean_gap = cv_summary.get("gap_f1_mean", 0)
+        std_gap = cv_summary.get("gap_f1_std", 0)
+        generalization_quality = (
+            "excellent"
+            if abs(mean_gap) < 0.02
+            else "good"
+            if abs(mean_gap) < 0.05
+            else "acceptable"
+            if abs(mean_gap) < 0.10
+            else "concerning"
+        )
+        lines.extend(
+            [
+                "**Generalization Analysis:**",
+                "",
+                f"- **Mean Dev-Test Gap:** {mean_gap:+.3f} ± {std_gap:.3f}",
+                f"- **Interpretation:** {generalization_quality.capitalize()} generalization "
+                f"({'thresholds transfer well' if abs(mean_gap) < 0.05 else 'potential overfitting to dev set'})",
+                f"- **Threshold Consistency:** "
+                + (
+                    "All folds selected same thresholds"
+                    if len(
+                        set((fr["semantic_threshold"], fr["noise_floor"]) for fr in fold_results)
+                    )
+                    == 1
+                    else f"Thresholds vary across folds (semantic: {set(fr['semantic_threshold'] for fr in fold_results)}, "
+                    f"noise: {set(fr['noise_floor'] for fr in fold_results)})"
+                ),
+                "",
+            ]
+        )
 
     # 1.1 Threshold Calibration
     if sensitivity_df is not None and optimal_config:
@@ -3695,26 +3897,27 @@ def analyze_publication(
     ),
     run_sensitivity: bool = typer.Option(
         True,
-        help="Run threshold sensitivity analysis (adds ~10 min)",
+        help="Run threshold sensitivity analysis per fold",
     ),
     include_label_text: bool = typer.Option(
         False,
         help="Include misconception names/categories in embedding text (for ablation; defaults to student-thinking-only)",
     ),
-    calibration_split: float = typer.Option(
-        0.8,
-        help="Fraction of files used for threshold calibration (dev); remainder is held-out test",
+    n_folds: int = typer.Option(
+        5,
+        help="Number of folds for stratified cross-validation",
     ),
-    calibration_seed: int = typer.Option(
+    cv_seed: int = typer.Option(
         42,
-        help="Random seed for calibration/test split",
+        help="Random seed for cross-validation fold assignment",
     ),
 ):
     """
     Run publication-grade multi-assignment analysis for ITiCSE paper.
 
-    Generates all 12 publication figures and comprehensive report.md.
-    This is the definitive analysis command for paper submission.
+    Uses stratified 5-fold cross-validation by Notional Machine category.
+    For each fold: calibrate thresholds on dev (80%), evaluate on test (20%).
+    Reports mean ± std across all folds for robust, generalizable results.
     """
     console.print(
         "[bold cyan]═══════════════════════════════════════════════════════════[/bold cyan]"
@@ -3726,16 +3929,13 @@ def analyze_publication(
         "[bold cyan]═══════════════════════════════════════════════════════════[/bold cyan]"
     )
     console.print(f"Run name: {run_name}")
-    console.print(f"Semantic threshold: {semantic_threshold}")
-    console.print(f"Noise floor: {noise_floor}")
-    console.print(f"Sensitivity analysis: {'Yes' if run_sensitivity else 'No'}")
+    console.print(f"Default semantic threshold: {semantic_threshold}")
+    console.print(f"Default noise floor: {noise_floor}")
+    console.print(f"Threshold calibration per fold: {'Yes' if run_sensitivity else 'No'}")
     console.print(
         f"Embedding labels: {'Yes (ablation)' if include_label_text else 'No (thinking-only)'}"
     )
-    console.print(
-        f"Calibration split: {calibration_split:.0%} dev / {1 - calibration_split:.0%} test "
-        f"(seed {calibration_seed})"
-    )
+    console.print(f"Cross-validation: {n_folds}-fold stratified by category (seed {cv_seed})")
     console.print("")
 
     ASSIGNMENTS = ["a1", "a2", "a3"]
@@ -3809,81 +4009,185 @@ def analyze_publication(
 
     # Create run directory early so we can persist split metadata
     run_id = run_name if run_name.startswith("run_") else f"run_{run_name}"
-    run_dir = Path("runs/multi") / run_id
+    run_dir = Path("runs/v2") / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    # Phase 2: Calibration/Test Split
-    console.print("\n[bold]Phase 2: Calibration/Test split...[/bold]")
-    (
-        dev_scored_df,
-        dev_file_df,
-        test_scored_df,
-        test_file_df,
-        split_info,
-    ) = split_by_file_keys(
+    # Phase 2: Stratified K-Fold Cross-Validation
+    console.print(f"\n[bold]Phase 2: {n_folds}-Fold Stratified Cross-Validation...[/bold]")
+    folds = stratified_kfold_by_category(
         combined_scored_df,
         combined_file_df,
-        train_frac=calibration_split,
-        seed=calibration_seed,
+        n_folds=n_folds,
+        seed=cv_seed,
     )
 
-    split_summary = {k: v for k, v in split_info.items() if k not in ("train_keys", "test_keys")}
-    (run_dir / "calibration_split.json").write_text(json.dumps(split_info, indent=2))
+    if not folds:
+        console.print("[red]Failed to create folds![/red]")
+        return
 
-    console.print(
-        f"  Dev files: {split_summary['train_key_count']:,} | "
-        f"Test files: {split_summary['test_key_count']:,}"
-    )
-    console.print(
-        f"  Dev detections: {len(dev_scored_df):,} | "
-        f"Test detections: {len(test_scored_df):,}"
-    )
-
-    # Phase 3: Threshold Sensitivity Analysis (calibration/dev only)
-    sensitivity_df = None
-    optimal_config = None
-
-    if run_sensitivity:
-        console.print("\n[bold]Phase 3: Threshold Sensitivity Analysis...[/bold]")
-        sensitivity_df, optimal_config = compute_threshold_sensitivity(
-            dev_scored_df,
-            dev_file_df,
+    console.print(f"  Created {len(folds)} stratified folds")
+    for fold_info in [f[4] for f in folds]:
+        console.print(
+            f"    Fold {fold_info['fold']}: dev={fold_info['train_key_count']} files, "
+            f"test={fold_info['test_key_count']} files"
         )
 
-    if run_sensitivity and optimal_config:
-        actual_semantic_threshold = optimal_config["semantic_threshold"]
-        actual_noise_floor = optimal_config["noise_floor"]
-        console.print(f"[green]Using optimal thresholds from grid search[/green]")
-    elif run_sensitivity:
-        actual_semantic_threshold = semantic_threshold
-        actual_noise_floor = noise_floor
-        console.print("[yellow]Warning: Optimal config not found, using CLI thresholds[/yellow]")
-    else:
-        actual_semantic_threshold = semantic_threshold
-        actual_noise_floor = noise_floor
+    # Phase 3: Per-Fold Training and Evaluation
+    console.print(f"\n[bold]Phase 3: Per-Fold Threshold Calibration & Evaluation...[/bold]")
+
+    fold_results: list[dict[str, Any]] = []
+    all_test_dfs: list[pd.DataFrame] = []
+    all_test_compliance_dfs: list[pd.DataFrame] = []
+    all_sensitivity_dfs: list[pd.DataFrame] = []
+
+    for dev_scored, dev_file, test_scored, test_file, fold_info in folds:
+        fold_num = fold_info["fold"]
+        console.print(f"\n[cyan]━━━ Fold {fold_num}/{n_folds} ━━━[/cyan]")
+
+        # Calibrate thresholds on dev set
+        fold_optimal_config = None
+        fold_sensitivity_df = None
+
+        if run_sensitivity:
+            console.print(f"  [dim]Calibrating thresholds on dev set...[/dim]")
+            fold_sensitivity_df, fold_optimal_config = compute_threshold_sensitivity(
+                dev_scored,
+                dev_file,
+            )
+            if fold_sensitivity_df is not None:
+                fold_sensitivity_df["fold"] = fold_num
+                all_sensitivity_dfs.append(fold_sensitivity_df)
+
+        # Determine thresholds for this fold
+        if fold_optimal_config:
+            fold_semantic = fold_optimal_config["semantic_threshold"]
+            fold_noise = fold_optimal_config["noise_floor"]
+        else:
+            fold_semantic = semantic_threshold
+            fold_noise = noise_floor
+
+        # Evaluate dev set at calibrated thresholds (for dev/test gap analysis)
+        dev_df, dev_compliance_df = classify_scored_df(
+            dev_scored,
+            dev_file,
+            semantic_threshold=fold_semantic,
+            noise_floor=fold_noise,
+        )
+        dev_metrics = compute_metrics(dev_df)
+
+        # Evaluate test set at calibrated thresholds
+        test_df, test_compliance_df = classify_scored_df(
+            test_scored,
+            test_file,
+            semantic_threshold=fold_semantic,
+            noise_floor=fold_noise,
+        )
+        test_df["fold"] = fold_num
+        test_compliance_df["fold"] = fold_num
+        all_test_dfs.append(test_df)
+        all_test_compliance_dfs.append(test_compliance_df)
+
+        test_metrics = compute_metrics(test_df)
+
+        # Compute dev-test gap
+        dev_test_gap = {
+            "precision": dev_metrics["precision"] - test_metrics["precision"],
+            "recall": dev_metrics["recall"] - test_metrics["recall"],
+            "f1": dev_metrics["f1"] - test_metrics["f1"],
+        }
+
+        fold_result = {
+            "fold": fold_num,
+            "dev_files": fold_info["train_key_count"],
+            "test_files": fold_info["test_key_count"],
+            "semantic_threshold": fold_semantic,
+            "noise_floor": fold_noise,
+            "dev_precision": dev_metrics["precision"],
+            "dev_recall": dev_metrics["recall"],
+            "dev_f1": dev_metrics["f1"],
+            "dev_tp": dev_metrics["tp"],
+            "dev_fp": dev_metrics["fp"],
+            "dev_fn": dev_metrics["fn"],
+            "test_precision": test_metrics["precision"],
+            "test_recall": test_metrics["recall"],
+            "test_f1": test_metrics["f1"],
+            "test_tp": test_metrics["tp"],
+            "test_fp": test_metrics["fp"],
+            "test_fn": test_metrics["fn"],
+            "gap_precision": dev_test_gap["precision"],
+            "gap_recall": dev_test_gap["recall"],
+            "gap_f1": dev_test_gap["f1"],
+        }
+        fold_results.append(fold_result)
+
+        console.print(
+            f"  Dev:  P={dev_metrics['precision']:.3f} R={dev_metrics['recall']:.3f} "
+            f"F1={dev_metrics['f1']:.3f}"
+        )
+        console.print(
+            f"  Test: P={test_metrics['precision']:.3f} R={test_metrics['recall']:.3f} "
+            f"F1={test_metrics['f1']:.3f}"
+        )
+        console.print(
+            f"  Gap:  ΔP={dev_test_gap['precision']:+.3f} ΔR={dev_test_gap['recall']:+.3f} "
+            f"ΔF1={dev_test_gap['f1']:+.3f}"
+        )
+
+    # Phase 4: Aggregate Cross-Validation Results
+    console.print(f"\n[bold]Phase 4: Aggregating {n_folds}-Fold Results...[/bold]")
+
+    fold_results_df = pd.DataFrame(fold_results)
+
+    # Compute mean ± std for test metrics
+    cv_summary = {
+        "n_folds": n_folds,
+        "cv_seed": cv_seed,
+        "precision_mean": fold_results_df["test_precision"].mean(),
+        "precision_std": fold_results_df["test_precision"].std(),
+        "recall_mean": fold_results_df["test_recall"].mean(),
+        "recall_std": fold_results_df["test_recall"].std(),
+        "f1_mean": fold_results_df["test_f1"].mean(),
+        "f1_std": fold_results_df["test_f1"].std(),
+        "dev_f1_mean": fold_results_df["dev_f1"].mean(),
+        "dev_f1_std": fold_results_df["dev_f1"].std(),
+        "gap_f1_mean": fold_results_df["gap_f1"].mean(),
+        "gap_f1_std": fold_results_df["gap_f1"].std(),
+        "semantic_threshold_mode": fold_results_df["semantic_threshold"].mode().iloc[0]
+        if not fold_results_df["semantic_threshold"].mode().empty
+        else semantic_threshold,
+        "noise_floor_mode": fold_results_df["noise_floor"].mode().iloc[0]
+        if not fold_results_df["noise_floor"].mode().empty
+        else noise_floor,
+    }
 
     console.print(
-        f"\n[cyan]Classifying held-out test set at semantic={actual_semantic_threshold}, "
-        f"noise={actual_noise_floor}...[/cyan]"
+        f"  Test Precision: {cv_summary['precision_mean']:.3f} ± {cv_summary['precision_std']:.3f}"
     )
-    test_df, test_compliance_df = classify_scored_df(
-        test_scored_df,
-        test_file_df,
-        semantic_threshold=actual_semantic_threshold,
-        noise_floor=actual_noise_floor,
-    )
-
-    # Phase 4: Compute metrics
-    console.print("\n[bold]Phase 4: Computing metrics...[/bold]")
-    overall = compute_metrics(test_df)
     console.print(
-        f"Overall: P={overall['precision']:.3f} R={overall['recall']:.3f} F1={overall['f1']:.3f}"
+        f"  Test Recall:    {cv_summary['recall_mean']:.3f} ± {cv_summary['recall_std']:.3f}"
+    )
+    console.print(f"  Test F1:        {cv_summary['f1_mean']:.3f} ± {cv_summary['f1_std']:.3f}")
+    console.print(
+        f"  Dev-Test Gap:   {cv_summary['gap_f1_mean']:+.3f} ± {cv_summary['gap_f1_std']:.3f}"
     )
 
-    # Phase 5: Ensemble comparison
+    # Combine all test fold results for aggregate analysis
+    combined_test_df = (
+        pd.concat(all_test_dfs, ignore_index=True) if all_test_dfs else pd.DataFrame()
+    )
+    combined_test_compliance_df = (
+        pd.concat(all_test_compliance_dfs, ignore_index=True)
+        if all_test_compliance_dfs
+        else pd.DataFrame()
+    )
+    combined_sensitivity_df = (
+        pd.concat(all_sensitivity_dfs, ignore_index=True) if all_sensitivity_dfs else None
+    )
+
+    # Phase 5: Ensemble comparison (on combined test data)
     console.print("\n[bold]Phase 5: Computing ensemble comparison...[/bold]")
     ensemble_comparison = compute_ensemble_comparison(
-        test_df, strategy_threshold=2, model_threshold=2
+        combined_test_df, strategy_threshold=2, model_threshold=2
     )
 
     # Phase 6: Generate figures
@@ -3891,15 +4195,27 @@ def analyze_publication(
     assets_dir = run_dir / "assets"
     assets_dir.mkdir(exist_ok=True)
 
+    # Use first fold's sensitivity data for threshold heatmap (representative)
+    first_fold_sensitivity = all_sensitivity_dfs[0] if all_sensitivity_dfs else None
+    first_fold_optimal = (
+        {
+            "semantic_threshold": fold_results[0]["semantic_threshold"],
+            "noise_floor": fold_results[0]["noise_floor"],
+            "f1": fold_results[0]["dev_f1"],
+        }
+        if fold_results
+        else None
+    )
+
     # Generate all publication charts
     charts = generate_publication_charts(
-        test_df,
+        combined_test_df,
         assets_dir,
         combined_groundtruth,
-        sensitivity_df=sensitivity_df,
-        optimal_config=optimal_config,
+        sensitivity_df=first_fold_sensitivity,
+        optimal_config=first_fold_optimal,
         ensemble_comparison=ensemble_comparison,
-        semantic_threshold=actual_semantic_threshold,
+        semantic_threshold=cv_summary["semantic_threshold_mode"],
     )
 
     # Filter to only the 6 selected publication figures for ITiCSE
@@ -3921,45 +4237,69 @@ def analyze_publication(
     }
 
     report_path = generate_publication_report(
-        test_df,
+        combined_test_df,
         combined_groundtruth,
         combined_manifest,
         run_dir,
         charts,
-        sensitivity_df=sensitivity_df,
-        optimal_config=optimal_config,
+        sensitivity_df=first_fold_sensitivity,
+        optimal_config=first_fold_optimal,
         ensemble_comparison=ensemble_comparison,
-        semantic_threshold=actual_semantic_threshold,
-        noise_floor=actual_noise_floor,
-        compliance_df=test_compliance_df,
-        calibration_info=split_summary,
+        semantic_threshold=cv_summary["semantic_threshold_mode"],
+        noise_floor=cv_summary["noise_floor_mode"],
+        compliance_df=combined_test_compliance_df,
+        cv_summary=cv_summary,
+        fold_results=fold_results,
     )
 
     # Phase 8: Save artifacts
     console.print("\n[bold]Phase 8: Saving artifacts...[/bold]")
-    test_df.to_csv(run_dir / "results.csv", index=False)
-    (run_dir / "metrics.json").write_text(json.dumps(overall, indent=2))
+    combined_test_df.to_csv(run_dir / "results.csv", index=False)
+    fold_results_df.to_csv(run_dir / "fold_results.csv", index=False)
 
-    if sensitivity_df is not None:
-        sensitivity_df.to_csv(run_dir / "sensitivity.csv", index=False)
+    overall_metrics = compute_metrics(combined_test_df)
+    (run_dir / "metrics.json").write_text(
+        json.dumps(
+            {
+                **overall_metrics,
+                "cv_precision_mean": cv_summary["precision_mean"],
+                "cv_precision_std": cv_summary["precision_std"],
+                "cv_recall_mean": cv_summary["recall_mean"],
+                "cv_recall_std": cv_summary["recall_std"],
+                "cv_f1_mean": cv_summary["f1_mean"],
+                "cv_f1_std": cv_summary["f1_std"],
+            },
+            indent=2,
+        )
+    )
 
-    if not test_compliance_df.empty:
-        test_compliance_df.to_csv(run_dir / "compliance.csv", index=False)
+    if combined_sensitivity_df is not None:
+        combined_sensitivity_df.to_csv(run_dir / "sensitivity.csv", index=False)
+
+    if not combined_test_compliance_df.empty:
+        combined_test_compliance_df.to_csv(run_dir / "compliance.csv", index=False)
+
+    # Save CV info
+    cv_info = {
+        "n_folds": n_folds,
+        "cv_seed": cv_seed,
+        "stratification": "category",
+        "fold_results": fold_results,
+        "cv_summary": cv_summary,
+    }
+    (run_dir / "cv_info.json").write_text(json.dumps(cv_info, indent=2))
 
     config = {
-        "mode": "publication",
-        "semantic_threshold": semantic_threshold,
-        "noise_floor": noise_floor,
-        "actual_semantic_threshold": actual_semantic_threshold,
-        "actual_noise_floor": actual_noise_floor,
+        "mode": "publication_cv",
+        "n_folds": n_folds,
+        "cv_seed": cv_seed,
+        "default_semantic_threshold": semantic_threshold,
+        "default_noise_floor": noise_floor,
+        "calibrated_semantic_threshold": cv_summary["semantic_threshold_mode"],
+        "calibrated_noise_floor": cv_summary["noise_floor_mode"],
         "run_sensitivity": run_sensitivity,
         "include_label_text": include_label_text,
-        "calibration_split": calibration_split,
-        "calibration_seed": calibration_seed,
-        "calibration_key_cols": split_summary.get("key_cols", []),
-        "dev_key_count": split_summary.get("train_key_count", 0),
-        "test_key_count": split_summary.get("test_key_count", 0),
-        "optimal_config": optimal_config,
+        "cv_summary": cv_summary,
         "total_students": total_students,
         "assignments": ASSIGNMENTS,
         "n_figures": len(charts),
@@ -3970,20 +4310,14 @@ def analyze_publication(
     console.print(
         "\n[bold cyan]═══════════════════════════════════════════════════════════[/bold cyan]"
     )
-    console.print("[bold green]✓ Publication Analysis Complete[/bold green]")
+    console.print("[bold green]✓ Publication Analysis Complete (5-Fold CV)[/bold green]")
     console.print(f"  Run directory: {run_dir}")
     console.print(f"  Report: {report_path}")
     console.print(f"  Figures generated: {len(charts)}")
-    console.print(f"  Overall F1: {overall['f1']:.3f}")
-    if optimal_config:
-        console.print(
-            f"  Optimal threshold: semantic={optimal_config.get('semantic_threshold')}, "
-            f"noise={optimal_config.get('noise_floor')}, F1={optimal_config.get('f1'):.3f}"
-        )
-        console.print(
-            f"  Actual thresholds used: semantic={actual_semantic_threshold}, "
-            f"noise={actual_noise_floor}"
-        )
+    console.print(
+        f"  Test F1: {cv_summary['f1_mean']:.3f} ± {cv_summary['f1_std']:.3f} (across {n_folds} folds)"
+    )
+    console.print(f"  Dev-Test Gap: {cv_summary['gap_f1_mean']:+.3f} (good if < 0.05)")
     console.print(
         "[bold cyan]═══════════════════════════════════════════════════════════[/bold cyan]"
     )
