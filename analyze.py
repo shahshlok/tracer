@@ -526,24 +526,26 @@ def classify_scored_df(
             key = tuple(getattr(row, col) for col in file_key_cols)
             if key in tp_keys:
                 continue
-            fn_rows.append(
-                {
-                    "strategy": getattr(row, "strategy"),
-                    "model": getattr(row, "model"),
-                    "student": getattr(row, "student"),
-                    "question": getattr(row, "question"),
-                    "expected_id": expected_id,
-                    "expected_category": getattr(row, "expected_category"),
-                    "is_clean": False,
-                    "detected_name": "",
-                    "detected_thinking": "",
-                    "matched_id": None,
-                    "semantic_score": 0.0,
-                    "match_method": "no_detection",
-                    "result": "FN",
-                    "confidence": None,
-                }
-            )
+            fn_row = {
+                "strategy": getattr(row, "strategy"),
+                "model": getattr(row, "model"),
+                "student": getattr(row, "student"),
+                "question": getattr(row, "question"),
+                "expected_id": expected_id,
+                "expected_category": getattr(row, "expected_category"),
+                "is_clean": False,
+                "detected_name": "",
+                "detected_thinking": "",
+                "matched_id": None,
+                "semantic_score": 0.0,
+                "match_method": "no_detection",
+                "result": "FN",
+                "confidence": None,
+            }
+            # Include assignment if present in file_df
+            if "assignment" in file_key_cols:
+                fn_row["assignment"] = getattr(row, "assignment")
+            fn_rows.append(fn_row)
 
     result_cols = file_key_cols + [
         "expected_id",
@@ -1288,7 +1290,6 @@ def generate_threshold_sensitivity_heatmap(
         cbar_kws={"label": "F1 Score"},
     )
 
-
     ax.set_xlabel("Semantic Similarity Threshold")
     ax.set_ylabel("Noise Floor Threshold")
     ax.set_title("Threshold Sensitivity Analysis: F1 Score")
@@ -1745,7 +1746,14 @@ def generate_model_dotplot(
         alpha=0.8,
     )
     ax.scatter(
-        by_model["f1"], y_pos, s=200, c="#d62728", marker="D", label="F1 Score", zorder=3, alpha=0.8  # tab10 red
+        by_model["f1"],
+        y_pos,
+        s=200,
+        c="#d62728",
+        marker="D",
+        label="F1 Score",
+        zorder=3,
+        alpha=0.8,  # tab10 red
     )
 
     # Connect dots with lines
@@ -2083,7 +2091,6 @@ def generate_structural_semantic_bars(
     ]
     ax.legend(handles=legend_elements, loc="lower right", fontsize=11)
 
-
     plt.tight_layout()
     path = assets_dir / "category_structural_vs_semantic.png"
     plt.savefig(path, dpi=300, bbox_inches="tight")
@@ -2260,7 +2267,6 @@ def generate_strategy_performance_chart(
     ax.set_yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
     ax.legend(loc="upper right", fontsize=11, framealpha=0.95)
     ax.grid(axis="y", alpha=0.3, linestyle="--", linewidth=0.8)
-
 
     plt.tight_layout()
     path = assets_dir / "strategy_comparison.png"
@@ -2654,10 +2660,12 @@ def generate_publication_charts(
         by_mis = metrics_by_group(seeded, ["expected_id"])
         # Get name without parenthetical content (no truncation)
         import re
+
         def clean_name(x):
             full_name = gt_map.get(x, {}).get("name", x)
             # Remove parenthetical content like "(Scope Error)" or "(Off-by-One)"
-            return re.sub(r'\s*\([^)]*\)', '', full_name).strip()
+            return re.sub(r"\s*\([^)]*\)", "", full_name).strip()
+
         by_mis["name"] = by_mis["expected_id"].apply(clean_name)
         by_mis = by_mis.sort_values("recall")
 
@@ -2676,7 +2684,6 @@ def generate_publication_charts(
         ax.set_xlabel("Recall", fontsize=12)
         ax.set_title("Per-Misconception Detection Recall", fontsize=14, fontweight="bold")
         ax.set_xlim(0, 1.15)
-
 
         for i, (_, row) in enumerate(by_mis.iterrows()):
             n = int(row["tp"] + row["fn"])
@@ -3581,7 +3588,9 @@ def analyze_publication(
     console.print(f"Semantic threshold: {semantic_threshold}")
     console.print(f"Noise floor: {noise_floor}")
     console.print(f"Sensitivity analysis: {'Yes' if run_sensitivity else 'No'}")
-    console.print(f"Embedding labels: {'Yes (ablation)' if include_label_text else 'No (thinking-only)'}")
+    console.print(
+        f"Embedding labels: {'Yes (ablation)' if include_label_text else 'No (thinking-only)'}"
+    )
     console.print("")
 
     ASSIGNMENTS = ["a1", "a2", "a3"]
