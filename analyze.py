@@ -795,7 +795,7 @@ def collapse_to_file_level(df: pd.DataFrame) -> pd.DataFrame:
     Collapse multiple detections per file into a single decision.
 
     Priority (seeded files): TP > FP_WRONG/FP_HALLUCINATION > FN
-    Priority (clean files): FP_CLEAN/FP_HALLUCINATION > drop (no detection)
+    Priority (clean files): FP_CLEAN/FP_HALLUCINATION > TN (no detection)
     """
     if df.empty:
         return df
@@ -835,7 +835,26 @@ def collapse_to_file_level(df: pd.DataFrame) -> pd.DataFrame:
             elif not fp_hall.empty:
                 chosen = pick_best(fp_hall)
             else:
-                # Clean file, no flagged misconceptions -> drop from metrics
+                # Clean file, no flagged misconceptions -> True Negative
+                tn_row = {col: row_base.get(col) for col in file_key_cols}
+                tn_row.update(
+                    {
+                        "expected_id": None,
+                        "expected_category": None,
+                        "is_clean": True,
+                        "detected_name": "",
+                        "detected_thinking": "",
+                        "matched_id": None,
+                        "semantic_score": 0.0,
+                        "match_method": "no_detection",
+                        "result": "TN",
+                        "confidence": None,
+                    }
+                )
+                # Include assignment if present
+                if "assignment" in file_key_cols:
+                    tn_row["assignment"] = row_base.get("assignment")
+                collapsed_rows.append(tn_row)
                 continue
 
         if chosen is None:
@@ -876,7 +895,7 @@ def apply_strategy_ensemble_filter(
     # Build agreement map: (student, question, matched_id) -> set of strategies
     agreement_map: dict[tuple, set[str]] = {}
     for _, row in df.iterrows():
-        if row["result"] == "FN":
+        if row["result"] in ("FN", "TN"):
             continue
         matched_id = row["matched_id"]
         if pd.isna(matched_id):
@@ -915,7 +934,7 @@ def apply_strategy_ensemble_filter(
         )
         result = row["result"]
 
-        if result == "FN":
+        if result in ("FN", "TN"):
             filtered_rows.append(dict(row))
         elif result == "TP":
             if key in validated:
@@ -963,7 +982,7 @@ def apply_model_ensemble_filter(
     # Build agreement map: (student, question, strategy, matched_id) -> set of models
     agreement_map: dict[tuple, set[str]] = {}
     for _, row in df.iterrows():
-        if row["result"] == "FN":
+        if row["result"] in ("FN", "TN"):
             continue
         matched_id = row["matched_id"]
         if pd.isna(matched_id):
@@ -1004,7 +1023,7 @@ def apply_model_ensemble_filter(
         )
         result = row["result"]
 
-        if result == "FN":
+        if result in ("FN", "TN"):
             filtered_rows.append(dict(row))
         elif result == "TP":
             if key in validated:
@@ -1208,18 +1227,25 @@ def compute_metrics(df: pd.DataFrame) -> dict[str, Any]:
     tp = (df["result"] == "TP").sum()
     fp = df["result"].isin(["FP_CLEAN", "FP_WRONG", "FP_HALLUCINATION"]).sum()
     fn = (df["result"] == "FN").sum()
+    tn = (df["result"] == "TN").sum()
+    fp_clean = (df["result"] == "FP_CLEAN").sum()
 
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+    # Specificity: TN / (TN + FP_CLEAN) - how often model correctly abstains on clean code
+    specificity = tn / (tn + fp_clean) if (tn + fp_clean) > 0 else 0.0
 
     return {
         "tp": int(tp),
         "fp": int(fp),
         "fn": int(fn),
+        "tn": int(tn),
+        "fp_clean": int(fp_clean),
         "precision": round(precision, 3),
         "recall": round(recall, 3),
         "f1": round(f1, 3),
+        "specificity": round(specificity, 3),
     }
 
 
@@ -4094,6 +4120,7 @@ def analyze_publication(
             "precision": dev_metrics["precision"] - test_metrics["precision"],
             "recall": dev_metrics["recall"] - test_metrics["recall"],
             "f1": dev_metrics["f1"] - test_metrics["f1"],
+            "specificity": dev_metrics["specificity"] - test_metrics["specificity"],
         }
 
         fold_result = {
@@ -4105,18 +4132,25 @@ def analyze_publication(
             "dev_precision": dev_metrics["precision"],
             "dev_recall": dev_metrics["recall"],
             "dev_f1": dev_metrics["f1"],
+            "dev_specificity": dev_metrics["specificity"],
             "dev_tp": dev_metrics["tp"],
             "dev_fp": dev_metrics["fp"],
             "dev_fn": dev_metrics["fn"],
+            "dev_tn": dev_metrics["tn"],
+            "dev_fp_clean": dev_metrics["fp_clean"],
             "test_precision": test_metrics["precision"],
             "test_recall": test_metrics["recall"],
             "test_f1": test_metrics["f1"],
+            "test_specificity": test_metrics["specificity"],
             "test_tp": test_metrics["tp"],
             "test_fp": test_metrics["fp"],
             "test_fn": test_metrics["fn"],
+            "test_tn": test_metrics["tn"],
+            "test_fp_clean": test_metrics["fp_clean"],
             "gap_precision": dev_test_gap["precision"],
             "gap_recall": dev_test_gap["recall"],
             "gap_f1": dev_test_gap["f1"],
+            "gap_specificity": dev_test_gap["specificity"],
         }
         fold_results.append(fold_result)
 
@@ -4148,10 +4182,14 @@ def analyze_publication(
         "recall_std": fold_results_df["test_recall"].std(),
         "f1_mean": fold_results_df["test_f1"].mean(),
         "f1_std": fold_results_df["test_f1"].std(),
+        "specificity_mean": fold_results_df["test_specificity"].mean(),
+        "specificity_std": fold_results_df["test_specificity"].std(),
         "dev_f1_mean": fold_results_df["dev_f1"].mean(),
         "dev_f1_std": fold_results_df["dev_f1"].std(),
         "gap_f1_mean": fold_results_df["gap_f1"].mean(),
         "gap_f1_std": fold_results_df["gap_f1"].std(),
+        "gap_specificity_mean": fold_results_df["gap_specificity"].mean(),
+        "gap_specificity_std": fold_results_df["gap_specificity"].std(),
         "semantic_threshold_mode": fold_results_df["semantic_threshold"].mode().iloc[0]
         if not fold_results_df["semantic_threshold"].mode().empty
         else semantic_threshold,
@@ -4167,6 +4205,9 @@ def analyze_publication(
         f"  Test Recall:    {cv_summary['recall_mean']:.3f} ± {cv_summary['recall_std']:.3f}"
     )
     console.print(f"  Test F1:        {cv_summary['f1_mean']:.3f} ± {cv_summary['f1_std']:.3f}")
+    console.print(
+        f"  Test Specificity: {cv_summary['specificity_mean']:.3f} ± {cv_summary['specificity_std']:.3f}"
+    )
     console.print(
         f"  Dev-Test Gap:   {cv_summary['gap_f1_mean']:+.3f} ± {cv_summary['gap_f1_std']:.3f}"
     )
@@ -4268,6 +4309,8 @@ def analyze_publication(
                 "cv_recall_std": cv_summary["recall_std"],
                 "cv_f1_mean": cv_summary["f1_mean"],
                 "cv_f1_std": cv_summary["f1_std"],
+                "cv_specificity_mean": cv_summary["specificity_mean"],
+                "cv_specificity_std": cv_summary["specificity_std"],
             },
             indent=2,
         )

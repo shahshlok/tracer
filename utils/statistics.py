@@ -22,7 +22,7 @@ from scipy import stats
 # ---------------------------------------------------------------------------
 def compute_bootstrap_ci(
     df: pd.DataFrame,
-    metric: Literal["precision", "recall", "f1"],
+    metric: Literal["precision", "recall", "f1", "specificity"],
     n_bootstrap: int = 1000,
     confidence_level: float = 0.95,
     random_state: int = 42,
@@ -32,7 +32,7 @@ def compute_bootstrap_ci(
     Compute bootstrap confidence interval for a classification metric.
 
     Args:
-        df: DataFrame with 'result' column containing TP, FP_*, FN values
+        df: DataFrame with 'result' column containing TP, FP_*, FN, TN values
         metric: Which metric to compute CI for
         n_bootstrap: Number of bootstrap samples
         confidence_level: Confidence level (e.g., 0.95 for 95% CI)
@@ -61,11 +61,16 @@ def compute_bootstrap_ci(
         tp = (sample_df["result"] == "TP").sum()
         fp = sample_df["result"].isin(["FP_CLEAN", "FP_WRONG", "FP_HALLUCINATION"]).sum()
         fn = (sample_df["result"] == "FN").sum()
+        tn = (sample_df["result"] == "TN").sum()
+        fp_clean = (sample_df["result"] == "FP_CLEAN").sum()
 
         if metric == "precision":
             return tp / (tp + fp) if (tp + fp) > 0 else 0.0
         elif metric == "recall":
             return tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        elif metric == "specificity":
+            # Specificity: TN / (TN + FP_CLEAN) - how often model abstains on clean code
+            return tn / (tn + fp_clean) if (tn + fp_clean) > 0 else 0.0
         else:  # f1
             precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
             recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
@@ -110,7 +115,7 @@ def compute_all_metrics_with_ci(
     cluster_cols: list[str] | None = None,
 ) -> dict[str, dict[str, float]]:
     """
-    Compute precision, recall, and F1 with bootstrap CIs.
+    Compute precision, recall, F1, and specificity with bootstrap CIs.
 
     Returns:
         Dict mapping metric name to CI dict
@@ -122,7 +127,12 @@ def compute_all_metrics_with_ci(
         "recall": compute_bootstrap_ci(
             df, "recall", n_bootstrap, confidence_level, cluster_cols=cluster_cols
         ),
-        "f1": compute_bootstrap_ci(df, "f1", n_bootstrap, confidence_level, cluster_cols=cluster_cols),
+        "f1": compute_bootstrap_ci(
+            df, "f1", n_bootstrap, confidence_level, cluster_cols=cluster_cols
+        ),
+        "specificity": compute_bootstrap_ci(
+            df, "specificity", n_bootstrap, confidence_level, cluster_cols=cluster_cols
+        ),
     }
 
 
