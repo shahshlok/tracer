@@ -53,7 +53,7 @@ The final dataset consists of 300 synthetic students (100 per assignment). We de
 
 Each student submitted 4 questions, resulting in 1,200 files. The generator *attempts* to seed exactly one file per student (25% seeded, 75% clean), but seeding can fail the compile/test guards and fall back to a clean submission. In the dataset used for the analyses in `runs/v2/`, 275 files contain a validated seeded misconception and 925 are clean controls to measure model over-diagnosis.
 
-**Seeding Failure Rates:** The 6-step validation pipeline rejected some seeding attempts when the generated buggy code failed to compile or did not exhibit behavioral divergence. Across the three assignments: A1 had 8 fallback students (8%), A2 had 0 (0%), and A3 had 17 (17%). These 25 students received only clean files, contributing to the control set. The higher failure rate in A3 reflects the greater syntactic complexity of array/string manipulation bugs.
+**Seeding Failure Rates:** The 6-step validation pipeline rejected some seeding attempts when the generated buggy code failed to compile or did not exhibit behavioral divergence. Across the three assignments: A1 had 8 fallback students (8%), A2 had 0 (0%), and A3 had 17 (17%). These 25 students received only clean files, contributing to the control set. 
 
 ```mermaid
 graph TD
@@ -107,6 +107,12 @@ In the label-blind "Main" analysis, the models achieved an aggregated **F1 score
 | **F1 Score** | **0.694** | ±0.024 | [0.646, 0.742] |
 
 **Table 2: Aggregated Cross-Validation Results (Label-Blind)**
+| Metric | Mean | Std Dev | 95% CI |
+| :--- | :--- | :--- | :--- |
+| **Precision** | **0.511** | ±0.026 | [0.460, 0.562] |
+| **Recall** | **0.982** | ±0.006 | [0.969, 0.995] |
+| **F1 Score** | **0.673** | ±0.024 | [0.626, 0.719] |
+
 
 #### 4.1.1 Label Leakage Ablation
 Comparing the label-blind performance to the label-aware ablation study validates our claim of narrative fidelity:
