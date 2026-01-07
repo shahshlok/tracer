@@ -34,6 +34,9 @@ We introduce a **Label-Blind Semantic Metric**. Standard string matching fails o
 ## 3. Results
 We report results from a 5-fold stratified cross-validation.
 
+![Strategy Comparison](figures/strategy_comparison.png)
+*Figure 1: Comparative performance of prompting strategies across all models.*
+
 ### 3.1 RQ1: Narrative Fidelity as a Calibration Mechanism
 Our comparison of the Main (Narrative) run and the Ablation (Label-Aware) run reveals a critical insight: asking "why" filters out noise.
 
@@ -45,6 +48,12 @@ Our comparison of the Main (Narrative) run and the Ablation (Label-Aware) run re
 
 In the Ablation study, where models could rely on label keywords, Recall was near-perfect (98.2%), but Precision collapsed to 0.511. The models became "trigger-happy," diagnosing misconceptions in clean code (Specificity drop to 77.4%). Requiring the model to articulate the *student's thinking* (Main) served as a functional constraint, reducing False Positives by ~33% (from 5,616 to 3,884) and improving the overall F1 score.
 
+![Sankey Diagram - Main](figures/sankey_main.png)
+*Figure 2a: Detection flow in the Main (Narrative) run showing balanced precision.*
+
+![Sankey Diagram - Ablation](figures/sankey_ablation.png)
+*Figure 2b: Detection flow in the Ablation (Label-Aware) run showing high False Positives.*
+
 ### 3.2 RQ2: The Visibility Gap
 Performance is not uniform. We observe a stark "Abstraction Gradient" where models struggle with misconceptions that lack syntactic markers.
 
@@ -55,6 +64,9 @@ Performance is not uniform. We observe a stark "Abstraction Gradient" where mode
 | **Semantic** | *Reactive State*, *Fluid Type* | **74.1%** | Hard |
 
 For example, *The Void Machine* (expecting a return value from a void function) is syntactically obvious and detected 99.4% of the time. In contrast, *The Reactive State Machine* (expecting a variable to auto-update like a spreadsheet cell) is syntactically valid but semantically flawed; detection dropped to 77.2%. This suggests LLMs are still primarily "super-linters" rather than deep cognitive modelers.
+
+![Visibility Gap](figures/visibility_gap.png)
+*Figure 3: Performance disparity between Structural and Semantic misconceptions.*
 
 ### 3.3 RQ3: Reliability via Ensembles
 Individual models are noisy. Ensembling offers a path to deployment-ready reliability.
