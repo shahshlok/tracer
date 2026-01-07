@@ -16,6 +16,12 @@ LLMs can fix code and generate explanations, but a stronger—and riskier—clai
 
 We present **TRACER**, a benchmark and evaluation framework for *diagnostic reasoning*, not grading. TRACER evaluates **Narrative Fidelity**: an LLM must describe the student’s belief that plausibly produced the code, and that belief is scored against a ground-truth misconception narrative *without using misconception labels*.
 
+### Research Questions
+We structure the study around three research questions:
+1. **RQ1 (Narrative Fidelity):** Can LLMs reconstruct a student-belief narrative that matches a ground-truth misconception narrative **without** relying on misconception labels?
+2. **RQ2 (Visibility Gap):** Does diagnostic performance degrade for misconceptions that are **logic/state-dependent** (semantic, “invisible”) compared to those that are **syntax-visible** (structural)?
+3. **RQ3 (Diagnostic Reliability):** Can simple ensemble methods improve reliability by reducing false positives on clean code while preserving recall?
+
 ### Contributions
 1. **A controlled, labeled-intent benchmark** of CS1 Java submissions with known misconception narratives (synthetic, intended as an upper bound on performance).
 2. **A label-blind narrative evaluation** using semantic embeddings of the model’s “student belief” text matched to ground truth misconception narratives.
