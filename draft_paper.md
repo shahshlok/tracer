@@ -1,314 +1,283 @@
-# Mind Over Syntax: Evaluating LLM Inference of Student Mental Models in CS1
+# Mind Over Syntax: Can LLMs Infer CS1 Student Mental Models From Code Alone?
+
+*Draft for internal review (Markdown; will be converted to ACM format). This draft reports results from `runs/v2/run_opus2_main` (label-blind “thinking-only”) and `runs/v2/run_opus2_ablation` (label-aware ablation).*
 
 ## Abstract
-Large Language Models (LLMs) are increasingly used in Computer Science Education for code generation and debugging. However, effective pedagogy requires more than correcting syntax; it requires diagnosing the *notional machine misconceptions*—the flawed mental models—that lead to errors. In this study, we evaluate the "Cognitive Alignment" of three LLM families (GPT-5.2, Claude-Haiku-4.5, Gemini-3-Flash) in diagnosing student thinking patterns across 18 misconceptions spanning 10 notional-machine categories. Using a controlled dataset of 1,200 synthetic Java files (300 synthetic students, 100 per assignment; 4 questions each), we measure whether models can reconstruct student thought processes without relying on explicit misconception labels. In a label-blind, embedding-based semantic evaluation of the *student-thought narrative*, models achieve F1=0.694 (5-fold stratified cross-validation). Performance exhibits a consistent abstraction gradient: arrays/strings are easiest (F1=0.804), while variable/math state reasoning is hardest (F1=0.610). Finally, an ensemble "consensus of intent" approach improves diagnostic reliability (F1=0.762), suggesting a path toward more pedagogically grounded AI tutors.
+LLMs are increasingly used in CS1 settings, but most evaluations target functional correctness (grading) rather than the pedagogical task of diagnosing *why* a novice wrote a program a certain way. We study whether LLMs can infer *student mental models*—specifically, notional-machine misconceptions—directly from code evidence. We introduce **TRACER** (Taxonomic Research of Aligned Cognitive Error Recognition), a controlled benchmark and evaluation pipeline that measures **Narrative Fidelity**: whether a model can produce a plausible “student belief” narrative that aligns with a ground-truth misconception narrative *without relying on misconception labels*.
+
+Because real student intent is rarely observable at scale, we construct a synthetic upper-bound benchmark of 1,200 Java CS1 submissions (300 simulated students, 3 assignments × 4 questions) with **18 misconception types seeded into 275 submissions** and **925 clean controls**. Detections are evaluated using a label-blind embedding match between the model’s “student belief” text and ground-truth misconception narratives, with thresholds calibrated via 5-fold stratified cross-validation. In the main (label-blind) evaluation, we obtain **F1=0.694** (precision 0.577, recall 0.872) and **specificity=0.848** on clean code. A label-aware ablation yields near-perfect recall (0.982) but lower precision (0.512) and specificity (0.774), suggesting that requiring narrative justification acts as a calibration constraint. Performance is substantially higher for syntax-visible misconceptions than for logic/state misconceptions, indicating a persistent “visibility gap.” We discuss implications for AI tutoring as hypothesis generation and outline steps needed to validate on authentic student data.
 
 ## 1. Introduction
-The integration of AI into introductory programming (CS1) courses has largely focused on code correctness: *Can the AI fix the bug?* (Kazemitabaar et al., 2023). While valuable, this functionalist view overlooks a core tenet of constructivist pedagogy: errors are not random failures, but often the result of consistent, albeit flawed, mental models of the computer, known as "Notional Machines" (Sorva, 2013).
+Introductory programming instruction is not just about getting programs to pass tests; it is about helping novices build an accurate mental model of program execution. The *notional machine* framing in computing education describes the explanatory model of how code maps to state changes (du Boulay, 1986; Sorva, 2013). Students’ recurring errors often reflect coherent but incorrect models (e.g., “variables update automatically like spreadsheet cells”).
 
-A student who writes `double a = 1/2;` expecting `0.5` is not just making a syntax error; they are operating under a "Fluid Type Machine" model where mathematical real numbers exist independently of hardware data types. For an AI tutor to provide effective scaffolding, it must diagnose this underlying belief, not just patch the code.
+LLMs can fix code and generate explanations, but a stronger—and riskier—claim is that they can infer what a student was thinking. Our goal is to evaluate this claim precisely and honestly:
 
-This paper presents **TRACER** (Taxonomic Research of Aligned Cognitive Error Recognition), a framework to evaluate whether LLMs can infer these invisible mental states. We posit that true "reasoning" in this context is defined by **Narrative Fidelity**: the ability of the model to articulate *why* a student wrote code a certain way, matching the ground-truth cognitive gap without being primed with the answer.
+> **Can LLMs infer a student’s underlying misconception (mental model) from a CS1 code submission, beyond identifying surface-level bugs?**
 
-We address three research questions:
-*   **RQ1 (Narrative Fidelity):** Can LLMs accurately reconstruct student mental models based solely on code evidence, independent of taxonomic labeling?
-*   **RQ2 (The Complexity Gradient):** Does diagnostic performance degrade as misconceptions shift from structural (syntax-visible) to semantic (logic-invisible) errors?
-*   **RQ3 (Diagnostic Reliability):** Can multi-model ensembles improve the reliability of mental model inference?
+We present **TRACER**, a benchmark and evaluation framework for *diagnostic reasoning*, not grading. TRACER evaluates **Narrative Fidelity**: an LLM must describe the student’s belief that plausibly produced the code, and that belief is scored against a ground-truth misconception narrative *without using misconception labels*.
+
+### Contributions
+1. **A controlled, labeled-intent benchmark** of CS1 Java submissions with known misconception narratives (synthetic, intended as an upper bound on performance).
+2. **A label-blind narrative evaluation** using semantic embeddings of the model’s “student belief” text matched to ground truth misconception narratives.
+3. **A rigorously validated thresholding procedure** (grid search + 5-fold stratified CV) with sensitivity analysis (heatmap) to avoid one-off tuning.
+4. Empirical findings on (a) **narrative requirements as a calibration constraint**, (b) a **visibility gap** between structural vs semantic misconceptions, and (c) **ensemble methods** for improved reliability.
 
 ## 2. Background and Related Work
-
 ### 2.1 Notional Machines and Misconceptions
-The concept of a "Notional Machine"—an abstract model of the computer used for teaching programming—was introduced by du Boulay (1986) to explain why novices struggle with program state and execution. Misconceptions occur when a student's mental model of this machine diverges from actual language semantics (Sorva, 2013). Research has shown that identifying these mental models is more pedagogically valuable than simple bug-fixing, as it allows for targeted conceptual interventions (Nelson et al., 2017).
+Notional machines are teaching abstractions of program execution that help novices reason about state, control flow, and data representation (du Boulay, 1986; Sorva, 2013). Misconceptions arise when a student’s implied notional machine diverges from language semantics, often producing systematic error patterns. Diagnosing these misconceptions is pedagogically valuable because interventions can target a specific mistaken belief rather than patching symptoms.
 
-### 2.2 LLMs in Computer Science Education
-The arrival of Large Language Models has transformed CS education research. Early studies focused on the performance of models like ChatGPT on CS1 exam questions (Finnie-Ansley et al., 2023) and their ability to generate helpful feedback (Kazemitabaar et al., 2023). A recent systematic review of 125 papers (SIGCSE TS, 2025) highlights a growing shift toward using LLMs for automated grading and explanation. However, most existing work evaluates LLMs on *functional correctness* rather than *cognitive diagnostic accuracy*.
+### 2.2 LLMs in CS Education: From Code Correctness to Diagnostic Feedback
+Recent work in CS education has studied LLM performance on CS1 tasks and their ability to provide feedback or explanations. However, most evaluations ultimately use correctness-oriented outcomes (test passing, rubric grading, or generic explanation helpfulness). The question we address is narrower but deeper: whether models can recover a student’s *reasoning* (as represented by a misconception narrative) from code evidence.
 
-### 2.3 The Gap: Narrative Fidelity vs. Label Matching
-Current automated diagnostic tools often rely on predefined taxonomies or label matching. Our work contributes a novel evaluation of **Narrative Fidelity**: the degree to which an LLM can reconstruct the semantic "story" of a student's misconception without being primed with taxonomic labels. By controlling for "label leakage," we measure whether LLMs are genuinely reasoning about student thinking or merely performing high-dimensional pattern matching.
+### 2.3 Why “Narrative Fidelity” Instead of Label Accuracy
+Misconception taxonomies use names that students and LLMs do not reliably reproduce. Label accuracy can therefore confound “understanding” with “terminology.” TRACER uses label-blind semantic matching: if a model describes the same belief in different words, it should still be credited; if it only guesses the right label without a coherent narrative, it should not.
 
-## 3. Methodology
+## 3. Benchmark Construction: A Controlled Upper Bound on “Student Thinking”
+### 3.1 Data Honesty and Motivation
+Ground-truth student intent is difficult to obtain: even expert annotators infer intent from artifacts and may disagree. To test capability under controlled conditions, we use a synthetic benchmark where the “student belief” narrative is known because it is explicitly injected during generation. This provides measurement validity at the expense of ecological validity: the benchmark estimates an **upper bound** on performance in realistic settings.
 
-### 3.1 Synthetic Dataset Generation
-To evaluate LLM diagnostic reasoning, we require a "gold standard" of student thinking—a ground truth often inaccessible in real-world educational data where student intent must be retroactively inferred by experts. We address this by utilizing a **Simulated Student Agent** pipeline to generate a controlled dataset of 1,200 unique Java submissions across three standard CS1 assignments.
+### 3.2 Dataset Overview
+We generate 1,200 CS1-style Java submissions:
+- **Students:** 300 simulated students (100 per assignment)
+- **Assignments:** 3 assignments (A1: variables/math; A2: control flow/loops; A3: arrays/strings)
+- **Questions:** 4 questions per assignment → 1,200 submission files
+- **Misconceptions:** 18 misconception definitions spanning 10 notional-machine categories
+- **Controls:** 925 clean submissions; **Seeded:** 275 submissions with a validated misconception (target was 25% seeded; some seeding attempts fail validation and fall back to clean)
 
-#### 3.1.1 The Persona Matrix
-To ensure stylistic and cognitive diversity, we modeled 12 distinct student personas using a 4$\times$3 matrix of coding styles and cognitive profiles:
-*   **Coding Styles:** *Minimal* (one-liners, single-letter variables), *Verbose* (descriptive names, heavy comments), *Textbook* (standard Java conventions), and *Messy* (inconsistent indentation, mixed cases).
-*   **Cognitive Profiles:** *Procedural* (linear, recipe-like logic), *Mathematical* (formula-centric), and *Cautious* (heavy edge-case checking).
+We record pipeline outcomes per assignment (`authentic_seeded/a{1,2,3}/pipeline_stats.json`). In the dataset used for the Opus2 runs, misconception injection fell back to clean submissions for 8 students in A1, 0 in A2, and 17 in A3 (25 total), yielding 275 seeded submissions rather than the intended 300.
 
-#### 3.1.2 The 6-Step Validation Pipeline
-Each student submission (comprising 4 questions) underwent a rigorous 6-step automated validation pipeline to ensure the "thinking" injected into the code manifested as a compilable but behaviorally incorrect program:
-1.  **Persona-Aware Generation:** A base model (GPT-5.1) generated correct code matching the student's assigned persona.
-2.  **Compilation Guard:** Code was validated using `javac`; failures triggered a 3-retry loop.
-3.  **Functional Correctness:** The "correct" version had to pass 100% of hidden test cases.
-4.  **Misconception Seeding:** We injected a specific notional machine misconception (e.g., *The Reactive State Machine*) using a prompt that provided the model with the student's "Internal Monologue" and a theoretical action plan for the error.
-5.  **Compilable Error Guard:** We enforced that seeded code must still compile (to avoid trivial syntax errors).
-6.  **Behavioral Divergence:** The final seeded code was required to fail at least one functional test case and differ syntactically from the correct version.
+### 3.3 The 6-Step Generation and Validation Pipeline
+We use a strict pipeline (see `docs/dataset-generation.md`) to ensure that (a) “clean” code is correct, and (b) “seeded” code is compilable but behaviorally incorrect in a way consistent with the injected belief.
 
-#### 3.1.3 Dataset Scale
-The final dataset consists of 300 synthetic students (100 per assignment). We designed the assignments to cover a range of CS1 conceptual domains:
-*   **Assignment 1 (a1):** Focuses on variable initialization, arithmetic expressions, and basic I/O (e.g., Acceleration, Road Trip Cost).
-*   **Assignment 2 (a2):** Focuses on boolean logic, loops, and control flow (e.g., Sum of Evens, Number Guessing Game).
-*   **Assignment 3 (a3):** Focuses on data structures, including parallel arrays and string manipulation (e.g., Student Leaderboard, Array Shifting).
+1. **Generate correct solution** (persona-aware) for a question.
+2. **Compilation guard**: `javac` must succeed (retries on failure).
+3. **Correctness guard**: hidden tests must pass (retries on failure).
+4. **Misconception injection**: rewrite the solution under a specific “student belief” with explicit action-plan instructions.
+5. **Compilable bug guard**: seeded code must compile.
+6. **Behavioral divergence guard**: seeded code must fail ≥1 test and differ syntactically from the correct solution; otherwise, retry injection or fall back to a clean submission.
 
-Each student submitted 4 questions, resulting in 1,200 files. The generator *attempts* to seed exactly one file per student (25% seeded, 75% clean), but seeding can fail the compile/test guards and fall back to a clean submission. In the dataset used for the analyses in `runs/v2/`, 275 files contain a validated seeded misconception and 925 are clean controls to measure model over-diagnosis.
+### 3.4 Persona Matrix to Avoid Style Overfitting
+To prevent detectors from keying on superficial style, we generate submissions across a 4×3 persona matrix:
+- **Coding styles:** minimal, verbose, textbook, messy
+- **Cognitive profiles:** procedural, mathematical, cautious
 
-**Seeding Failure Rates:** The 6-step validation pipeline rejected some seeding attempts when the generated buggy code failed to compile or did not exhibit behavioral divergence. Across the three assignments: A1 had 8 fallback students (8%), A2 had 0 (0%), and A3 had 17 (17%). These 25 students received only clean files, contributing to the control set. 
+This yields 12 personas per assignment and helps ensure that a misconception can appear in multiple surface forms.
 
-```mermaid
-graph TD
-    A["Persona Matrix (4x3)"] --> B["1. Persona-Aware Generation"]
-    B --> C["2. Compilation Guard"]
-    C --> D["3. Functional Correctness"]
-    D --> E["4. Misconception Seeding"]
-    E --> F["5. Compilable Error Guard"]
-    F --> G["6. Behavioral Divergence"]
-    G --> H["1,200 Student Submissions"]
-```
-**Figure 1: The 6-step automated validation pipeline for synthetic dataset generation.**
+## 4. TRACER Evaluation Framework
+### 4.1 Detection Task (What Models Must Output)
+For each submission, each model produces zero or more misconception hypotheses with a required *student-belief narrative* and supporting evidence. We evaluate 24 model–strategy combinations (6 model variants × 4 prompting strategies), yielding **28,800** file-level observations (1,200 submissions × 24).
 
-### 3.2 The TRACER Framework
-We evaluated three model families (OpenAI GPT-5.2, Anthropic Claude-Haiku, Google Gemini-3-Flash) using four prompting strategies:
-1.  **Baseline:** Standard error detection.
-2.  **Taxonomy:** Provided with definitions of notional machines.
-3.  **Chain-of-Thought (CoT):** Required step-by-step execution tracing.
-4.  **Socratic:** Asked to probe the student's mental model.
+Concretely, this corresponds to **6,600 seeded observations** (275 seeded files × 24) and **22,200 clean observations** (925 clean files × 24), allowing us to measure both misconception recall and over-diagnosis on correct code.
 
-### 3.3 Semantic Evaluation Metric
-Traditional exact-string matching fails for evaluating open-ended reasoning. We employed **Semantic Vector Alignment** using OpenAI's `text-embedding-3-large`. For each model output, we embed the generated `student_thought_process` narrative and match it to the closest ground truth misconception embedding (constructed from the ground truth `student_thinking` and `explanation`) via cosine similarity. A prediction is considered a match if the best similarity exceeds a calibrated semantic threshold; a calibrated *noise floor* filters low-similarity, non-substantive detections before evaluation.
+### 4.2 Prompting Strategies
+We compare four prompting styles (see `docs/prompts.md`):
+1. **Baseline:** “Find the misconception and explain the student belief.”
+2. **Taxonomy-guided:** provide notional-machine definitions to ground the space of misconceptions.
+3. **Chain-of-thought tracing:** require step-by-step execution reasoning (we do not evaluate chain-of-thought; we evaluate only the narrative field).
+4. **Socratic probing:** ask diagnostic questions and then infer the student belief.
 
-![Threshold Sensitivity Heatmap](runs/v2/run_opus2_main/assets/threshold_sensitivity_heatmap.png)
-**Figure 2: F1 score optimization across the semantic threshold and noise floor grid.**
+### 4.3 Label-Blind Semantic Matching (Narrative Fidelity Metric)
+Exact string matching is inappropriate for open-ended narratives. We use semantic embeddings to match each model’s narrative to the closest ground-truth misconception narrative.
 
-Crucially, the main evaluation is **label-blind**: we exclude misconception names/categories from the embedding text so that matching depends on the *story* of the misconception rather than label terms. We also run a label-aware ablation that includes these terms in embeddings to quantify how much performance can be attributed to label-like matching.
+**Text used for matching (label-blind main run):**
+- **Detection text:** only the model’s `student_belief` narrative (labels and category names excluded).
+- **Ground truth text:** only `explanation` + `student_thinking` (misconception name and category excluded).
 
-To avoid overfitting thresholds to a single dataset split, we use **5-fold stratified cross-validation by notional-machine category**. In each fold, thresholds are calibrated on a dev split (80%) via grid search and reported on a held-out test split (20%); we report means with bootstrap confidence intervals.
+Embeddings are computed with OpenAI `text-embedding-3-large`, and similarity is cosine distance. Each detection is matched to the ground truth misconception with the highest similarity score.
 
-## 4. Results
+### 4.4 Thresholding, Noise Filtering, and Null Detection
+TRACER includes three key controls to prevent inflated scores:
 
-### 4.1 RQ1: Narrative Fidelity
-Our analysis of 29,164 individual detections reveals that LLMs are highly capable of reconstructing student thinking. After filtering for low-confidence noise, we evaluated 11,711 substantive detections.
+1. **Null detection recognition (abstention):** models may return “no misconception detected.” We recognize this via a small set of null templates with a semantic similarity threshold (0.80) and treat these as abstentions rather than misconceptions.
+2. **Noise floor filtering:** detections with low semantic similarity are often “pedantic” feedback (style, resource closing) rather than misconception narratives. We filter detections with similarity below a calibrated noise floor.
+3. **Semantic match threshold:** for retained detections, we apply a calibrated similarity threshold to decide whether to count the best match as a valid prediction.
+
+### 4.5 Rigorous Threshold Calibration (Heatmap + Cross-Validation)
+We do not hand-pick thresholds. For each fold in a 5-fold stratified cross-validation (stratified by notional-machine category; seed=42), we:
+- Split files into **dev (80%)** and **test (20%)**.
+- Run a grid search over **30 configurations**:
+  - semantic threshold ∈ {0.55, 0.60, 0.65, 0.70, 0.75, 0.80}
+  - noise floor ∈ {0.40, 0.45, 0.50, 0.55, 0.60}
+- Select the configuration maximizing dev-set F1 and evaluate it on the held-out test split.
+
+![Threshold Sensitivity Heatmap (Opus2 Main)](runs/v2/run_opus2_main/assets/threshold_sensitivity_heatmap.png)
+*Figure 1: F1 across the (semantic threshold × noise floor) grid on the main (label-blind) run. The selected configuration is (0.55, 0.60), consistently chosen across folds.*
+
+Across folds, thresholds generalize with minimal dev–test gap:
+
+| Fold | Dev F1 | Test F1 | Dev Specificity | Test Specificity |
+| :---: | ---: | ---: | ---: | ---: |
+| 1 | 0.691 | 0.707 | 0.851 | 0.837 |
+| 2 | 0.691 | 0.708 | 0.851 | 0.840 |
+| 3 | 0.692 | 0.705 | 0.845 | 0.864 |
+| 4 | 0.705 | 0.651 | 0.850 | 0.842 |
+| 5 | 0.694 | 0.700 | 0.846 | 0.859 |
+
+Semantic similarity also meaningfully separates correct vs incorrect matches in the main run: mean similarity is 0.705 (TP) vs 0.648 (FP), with a large effect size (Cliff’s delta 0.616; `runs/v2/run_opus2_main/report.md`).
+
+We report means across folds and include bootstrap confidence intervals (1,000 resamples) as implemented in `utils/statistics.py`.
+
+### 4.6 Evaluation Unit and Confusion Accounting
+Each (submission, model, strategy) produces a file-level outcome after collapsing multiple detections to the single highest-confidence (highest similarity) detection:
+- Seeded submissions: **TP** (correct misconception), **FP_WRONG** (wrong misconception), or **FN** (no detection).
+- Clean submissions: **TN** (no detection) or **FP_CLEAN** (any misconception flagged).
+
+This yields standard precision/recall/F1 on seeded files, and **specificity** on clean files:
+\[
+\text{Specificity}=\frac{\text{TN}}{\text{TN}+\text{FP\_CLEAN}}
+\]
+
+## 5. Results
+We organize results around three questions.
+
+### RQ1: Can LLMs Reconstruct Student Thinking Without Label Matching?
+In the main (label-blind) evaluation (`run_opus2_main`), aggregated cross-validation performance is:
+
+| Metric (CV mean) | Value |
+| :--- | :--- |
+| Precision | 0.577 ± 0.029 |
+| Recall | 0.872 ± 0.016 |
+| F1 | **0.694 ± 0.024** |
+| Specificity | **0.848 ± 0.012** |
+
+At the observation level (28,800 file-level decisions): TP=5,305; FP=3,884; FN=775; TN=18,836 (`runs/v2/run_opus2_main/metrics.json`).
+
+Clean-code performance is computed over 22,200 clean observations: TN=18,836 and FP_CLEAN=3,364, yielding specificity 0.848.
+
+| False positive type (main run) | Count | % of FPs |
+| :--- | ---: | ---: |
+| FP_CLEAN (flagged clean code) | 3,364 | 86.6% |
+| FP_WRONG (wrong misconception) | 520 | 13.4% |
+| FP_HALLUCINATION (no match) | 0 | 0.0% |
+
+#### Detection Filtering Pipeline
+Raw model outputs often include multiple hypotheses per file. TRACER filters and evaluates only substantive narratives:
 
 | Stage | Count | % of Raw |
-| :--- | :--- | :--- |
-| Raw Detections | 29,164 | 100% |
-| Null-Template Filtered | 634 | 2.2% |
-| Noise Floor Filtered (<0.6) | 16,819 | 57.7% |
-| **Evaluated** | **11,711** | **40.2%** |
+| :--- | ---: | ---: |
+| Raw detections | 29,164 | 100.0% |
+| Null-template filtered | 634 | 2.2% |
+| Noise floor filtered (<0.60) | 16,819 | 57.7% |
+| **Evaluated detections** | **11,711** | **40.2%** |
 
-**Table 1: Detection Filtering Pipeline**
+### RQ1 Ablation: What Happens If We Allow Label Leakage?
+We run a label-aware ablation (`run_opus2_ablation`) where misconception labels/categories are included in both detection and ground-truth embedding text. This makes it easier to match by terminology, but it also encourages over-diagnosis on clean code.
 
-In the label-blind "Main" analysis, the models achieved an aggregated **F1 score of 0.694**.
+| Evaluation Mode | Precision | Recall | F1 | Specificity |
+| :--- | ---: | ---: | ---: | ---: |
+| **Main (label-blind narrative)** | **0.577** | 0.872 | **0.694** | **0.848** |
+| Ablation (label-aware matching) | 0.512 | **0.982** | 0.673 | 0.774 |
 
-| Metric | Mean | Std Dev | 95% CI |
-| :--- | :--- | :--- | :--- |
-| **Precision** | **0.577** | ±0.029 | [0.521, 0.633] |
-| **Recall** | **0.872** | ±0.016 | [0.841, 0.903] |
-| **F1 Score** | **0.694** | ±0.024 | [0.646, 0.742] |
+In ablation, recall increases sharply, but clean-code false alarms increase: FP_CLEAN rises from 3,364 → 5,014 (specificity drops by 7.4 points).
 
-**Table 2: Aggregated Cross-Validation Results (Label-Blind)**
+![Detection Flow (Opus2 Main)](runs/v2/run_opus2_main/assets/hallucinations_sankey.png)
+*Figure 2a: Main run outcome flow. Most false positives are “FP_CLEAN” (over-diagnosis on correct code), not out-of-taxonomy hallucinations.*
 
-#### 4.1.1 Label Leakage Ablation
-Comparing the label-blind performance to the label-aware ablation study validates our claim of narrative fidelity:
-*   **Thinking-Only (Main):** F1 = 0.694
-*   **Thinking+Labels (Ablation):** F1 = 0.673
+![Detection Flow (Opus2 Ablation)](runs/v2/run_opus2_ablation/assets/hallucinations_sankey.png)
+*Figure 2b: Ablation outcome flow. Label-aware matching increases detections on clean code (FP_CLEAN), reducing specificity.*
 
-| Evaluation Mode | Precision | Recall | F1 Score |
-| :--- | :--- | :--- | :--- |
-| **Thinking-Only (Main)** | **0.577** | 0.872 | **0.694** |
-| Thinking + Labels (Ablation) | 0.511 | **0.982** | 0.673 |
+**Interpretation:** Requiring a coherent student-belief narrative (and evaluating it label-blind) acts as a *calibration constraint*: models cannot simply “name a misconception”; they must describe a belief that aligns with a ground-truth misconception narrative.
 
-**Table 3: Narrative Fidelity vs. Label Matching (Ablation Study)**
+### RQ2: Is There a Visibility Gap Between Structural vs Semantic Misconceptions?
+We observe a consistent drop in performance for misconceptions that are not directly marked by surface syntax and require inference about program state or student intent.
 
-Surprisingly, performance *improved* when relying solely on narrative alignment. When label terms are included in embedding text, recall increases (models frequently produce some label-like guess), but precision drops (more false alarms), suggesting that label-like matching can incentivize overconfident categorization without improving the underlying narrative diagnosis.
+![Structural vs Semantic Misconceptions (Main)](runs/v2/run_opus2_main/assets/category_structural_vs_semantic.png)
+*Figure 3: Structural (syntax-visible) vs semantic (logic/state) performance gap in the main run.*
 
-### 4.2 RQ2: The Complexity Gradient
-We observed a distinct performance gap based on the conceptual depth of the misconception. We categorized errors into **Structural** (visible in surface syntax) and **Semantic** (visible only in logic/state).
-
-![Structural vs Semantic Recall](runs/v2/run_opus2_main/assets/category_structural_vs_semantic.png)
-**Figure 3: Performance gap between structural (syntax-visible) and semantic (logic-invisible) misconceptions.**
-
-At the assignment level, we also see a macro-level abstraction gradient consistent with CS1 theory: A3 (arrays/strings) is easiest and A1 (variables/math) is hardest.
+At the assignment level, performance also varies by conceptual domain:
 
 | Assignment | Focus | Precision | Recall | F1 |
-| :--- | :--- | :--- | :--- | :--- |
-| a1 | Variables/Math | 0.504 | 0.771 | 0.610 |
-| a2 | Loops/Control | 0.554 | 0.876 | 0.679 |
-| a3 | Arrays/Strings | 0.686 | 0.971 | 0.804 |
+| :--- | :--- | ---: | ---: | ---: |
+| a1 | variables/math | 0.504 | 0.771 | 0.610 |
+| a2 | loops/control | 0.554 | 0.876 | 0.679 |
+| a3 | arrays/strings | 0.686 | 0.971 | 0.804 |
 
-**Table 4: Performance by Assignment (Complexity Gradient)**
+Per-misconception recall highlights remaining “hard cases” in the label-blind evaluation:
 
-| Category | Type | Recall | N | Difficulty |
-| :--- | :--- | :--- | :--- | :--- |
-| The Void Machine | Structural | 0.994 | 168 | Easy |
-| The Human Index Machine | Structural | 0.975 | 592 | Easy |
-| The Mutable String Machine | Structural | 0.972 | 600 | Easy |
-| The Semantic Bond Machine | Structural | 0.967 | 768 | Easy |
-| The Anthropomorphic I/O Machine | Semantic | 0.950 | 440 | Easy |
-| The Teleological Control Machine | Structural | 0.895 | 1776 | Easy |
-| The Independent Switch | Semantic | 0.782 | 377 | Easy |
-| The Reactive State Machine | Semantic | 0.772 | 289 | Easy |
-| The Fluid Type Machine | Semantic | 0.707 | 675 | Easy |
-| The Algebraic Syntax Machine | Structural | 0.587 | 395 | Medium |
+![Per-Misconception Recall (Main)](runs/v2/run_opus2_main/assets/misconception_recall.png)
+*Figure 4: Recall by misconception in the main run. Several semantic/state misconceptions remain substantially below ceiling.*
 
-**Table 5: Recall by Notional Machine Category**
+### RQ3: How Reliable Are Diagnoses, and Can Ensembles Help?
+The primary practical risk is false alarms on clean code (precision 0.577). We therefore test simple ensemble voting that requires agreement across independent sources:
 
-While LLMs are nearly perfect at diagnosing structural misunderstandings, they struggle more with semantic misconceptions where the code is syntactically valid but teleologically flawed. *The Reactive State Machine*—where a student defines a formula early expecting it to auto-update—had a recall of only 77%, highlighting the challenge of diagnosing "invisible" mental models.
+| Method | Precision | Recall | F1 |
+| :--- | ---: | ---: | ---: |
+| Raw (no ensemble) | 0.577 | 0.873 | 0.695 |
+| Strategy ensemble (≥2/4) | 0.625 | 0.872 | 0.728 |
+| Model ensemble (≥2/6) | **0.682** | 0.864 | **0.762** |
 
-### 4.3 RQ3: Diagnostic Reliability via Ensembles
-Individual models frequently over-diagnose misconceptions in correct code (precision 0.577 implies ~42% of flagged misconceptions are false positives, dominated by `FP_CLEAN`). Enforcing a "Consensus of Intent" improves reliability by trading a small amount of recall for substantially higher precision.
+Ensembles substantially improve precision while preserving recall, making the system more viable as a tutoring assistant that proposes *hypotheses* rather than definitive labels.
 
-| Method | Precision | Recall | F1 | Precision Gain |
-| :--- | :--- | :--- | :--- | :--- |
-| Raw (No Ensemble) | 0.577 | 0.873 | 0.695 | — |
-| Strategy Ensemble ($\ge$2/4) | 0.625 | 0.872 | 0.728 | +0.048 |
-| Model Ensemble ($\ge$2/6) | 0.682 | 0.864 | **0.762** | +0.105 |
+## 6. Model and Strategy Comparisons (Main Run)
+### 6.1 Prompting Strategy Effects
 
-**Table 6: Ensemble Voting Effect**
+![Strategy Comparison (Main)](runs/v2/run_opus2_main/assets/strategy_comparison.png)
+*Figure 5: Strategy comparison across models. In this benchmark, simple baseline/taxonomy prompts outperform Socratic prompting in precision.*
 
-The model ensemble achieves the best balanced performance, suggesting that independent models converge on real student intent while diverging on hallucinations.
+| Strategy | Precision | Recall | F1 |
+| :--- | ---: | ---: | ---: |
+| baseline | 0.643 | 0.864 | 0.737 |
+| taxonomy | 0.630 | 0.885 | 0.736 |
+| chain-of-thought | 0.598 | 0.839 | 0.698 |
+| socratic | 0.474 | 0.903 | 0.622 |
 
-### 4.4 Strategy and Model Comparisons
+Across strategies, differences are statistically significant (Cochran’s Q=26.22, p=0.000009; pairwise McNemar tests in `runs/v2/run_opus2_main/report.md`).
 
-![Strategy Comparison](runs/v2/run_opus2_main/assets/strategy_comparison.png)
-**Figure 4: Comparative performance of the four prompting strategies.**
+### 6.2 Model Family Effects
 
-| Strategy | TP | FP | FN | Precision | Recall | F1 |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| baseline | 1327 | 736 | 209 | 0.643 | 0.864 | 0.737 |
-| taxonomy | 1352 | 794 | 176 | 0.630 | 0.885 | 0.736 |
-| cot | 1280 | 861 | 245 | 0.598 | 0.839 | 0.698 |
-| socratic | 1346 | 1493 | 145 | 0.474 | 0.903 | 0.622 |
+![Model Comparison (Main)](runs/v2/run_opus2_main/assets/model_comparison.png)
+*Figure 6: Model comparison. Reasoning-enabled variants improve precision and/or F1, particularly for semantic misconceptions.*
 
-**Table 7: Prompting Strategy Comparison**
+| Model | Precision | Recall | F1 |
+| :--- | ---: | ---: | ---: |
+| claude-haiku-4-5 (reasoning) | **0.776** | 0.880 | **0.825** |
+| claude-haiku-4-5 | 0.633 | 0.819 | 0.714 |
+| gpt-5.2 (reasoning) | 0.602 | 0.856 | 0.707 |
+| gpt-5.2 | 0.594 | 0.846 | 0.698 |
+| gemini-3-flash (reasoning) | 0.494 | **0.924** | 0.643 |
+| gemini-3-flash | 0.473 | 0.909 | 0.622 |
 
-![Model Comparison](runs/v2/run_opus2_main/assets/model_comparison.png)
-**Figure 5: Diagnostic performance across base and reasoning model variants.**
+## 7. Discussion
+### 7.1 What These Results Do (and Do Not) Mean
+In this controlled benchmark, LLMs can often produce a student-belief narrative that aligns with an injected misconception, even when label terms are removed. This supports a limited but important claim: **models can sometimes infer novice intent beyond grading, at least when the intent is singular, coherent, and expressed in code.**
 
-| Model | TP | FP | FN | Precision | Recall | F1 |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| claude-haiku-4-5 (reasoning) | 906 | 261 | 124 | 0.776 | 0.880 | 0.825 |
-| claude-haiku-4-5 | 837 | 486 | 185 | 0.633 | 0.819 | 0.714 |
-| gpt-5.2 (reasoning) | 853 | 565 | 143 | 0.602 | 0.856 | 0.707 |
-| gpt-5.2 | 842 | 575 | 153 | 0.594 | 0.846 | 0.698 |
-| gemini-3-flash (reasoning) | 943 | 967 | 78 | 0.494 | 0.924 | 0.643 |
-| gemini-3-flash | 924 | 1030 | 92 | 0.473 | 0.909 | 0.622 |
+However, the benchmark is synthetic and therefore optimistic: real students may hold multiple inconsistent misconceptions, may write partially correct code, and may not express intent as cleanly. We therefore interpret scores as an **upper bound** rather than field performance.
 
-**Table 8: Model Performance Comparison**
+### 7.2 The Visibility Gap Suggests “Syntax-Biased” Observation
+Performance is near ceiling for misconceptions that produce overt syntactic signatures (e.g., off-by-one, void returns), but drops for misconceptions that require reasoning about invisible state or intent. This suggests current LLM diagnostics behave more like “super-linters” than cognitive modelers for state-heavy misconceptions.
 
-### 4.5 Error Analysis, Specificity, and False Positives
-To understand the limitations of LLM reasoning, we analyzed both the failure modes and the models' behavior on clean code.
+### 7.3 False Positives as Pedagogical Over-Sensitivity
+Most false positives are **FP_CLEAN**: the model applies a valid misconception narrative to code that is correct. In tutoring, a mild version of this (“Are you sure you understand why this works?”) may still be useful, but in assessment settings it is problematic. Ensembles and conservative thresholds appear necessary for any deployment.
 
-#### 4.5.1 Specificity: Performance on Clean Code
-Beyond precision and recall on seeded misconceptions, we measured **specificity**—the rate at which models correctly abstain from diagnosis when code is correct. With 925 clean files evaluated across 24 model-strategy combinations (22,200 total observations), we computed:
+### 7.4 Practical Implication: Treat Diagnoses as Hypotheses
+Given current error patterns, the safest role for this approach is as a *hypothesis generator* for instructors or tutors:
+- Require a student-belief narrative (calibrates over-diagnosis).
+- Use ensembles to increase precision.
+- Present diagnoses with uncertainty and evidence, not as definitive labels.
 
-$$\text{Specificity} = \frac{\text{TN}}{\text{TN} + \text{FP\_CLEAN}} = \frac{18,836}{22,200} = 0.848$$
+## 8. Threats to Validity and Ethics
+### 8.1 Synthetic Circularity and Ecological Validity
+Both the “students” and the evaluators are LLMs (LLM-generated code and LLM diagnostic output). We mitigate this with compilation/testing guards and style diversity, but the setting may still overestimate performance relative to authentic student submissions.
 
-| Metric | Value |
-| :--- | :--- |
-| Total Clean Observations | 22,200 |
-| True Negatives (TN) | 18,836 |
-| False Positives on Clean (FP_CLEAN) | 3,364 |
-| **Specificity** | **84.8%** |
+### 8.2 Single-Misconception Assumption
+Seeded submissions contain at most one targeted misconception, whereas real code may contain multiple interacting misunderstandings. This simplifies the task.
 
-**Table 9a: Overall Specificity on Clean Code**
+### 8.3 Metric Dependence on Embeddings and Thresholds
+Semantic matching depends on the embedding model and calibrated thresholds. We reduce overfitting risk through 5-fold CV and report threshold sensitivity via a heatmap, but the evaluation is still mediated by embedding geometry.
 
-Specificity varies substantially by model and strategy:
+### 8.4 Ethics
+This study uses synthetic data and does not involve human participants. Names are generated and do not correspond to real individuals. The intended use is supportive tutoring and instructor assistance, not automated high-stakes grading.
 
-| Model | Specificity | Strategy | Specificity |
-| :--- | :--- | :--- | :--- |
-| claude-haiku-4-5:reasoning | 94.8% | baseline | 88.8% |
-| claude-haiku-4-5 | 89.0% | taxonomy | 87.9% |
-| gpt-5.2:reasoning | 87.5% | cot | 86.7% |
-| gpt-5.2 | 87.3% | socratic | 76.0% |
-| gemini-3-flash:reasoning | 76.0% | | |
-| gemini-3-flash | 74.4% | | |
+## 9. Conclusion and Next Steps
+TRACER provides a controlled way to test whether LLMs can infer CS1 student mental models from code evidence. In a label-blind evaluation, models achieve F1=0.694 with specificity 0.848, and ensembles improve reliability to F1=0.762. A label-aware ablation shows that label leakage inflates recall while worsening clean-code false alarms, supporting the idea that narrative requirements calibrate diagnostic behavior. The remaining performance gap on semantic/state misconceptions motivates future work incorporating authentic student data, multi-misconception settings, and richer evidence (e.g., execution traces) to better capture “what the student is thinking.”
 
-**Table 9b: Specificity by Model and Strategy**
+## References (placeholders; expand for submission)
+- du Boulay, B. (1986). Some difficulties of learning to program.
+- Sorva, J. (2013). Notional Machines and Introductory Programming Education.
+- Additional SIGCSE/ITiCSE/ICER work on LLM feedback and misconception diagnosis (to be added).
 
-The Claude reasoning variant achieves near-perfect specificity (94.8%), rarely flagging correct code. In contrast, Gemini models and the Socratic strategy exhibit lower specificity, over-diagnosing clean submissions. This suggests a precision-recall trade-off: aggressive strategies detect more misconceptions but also produce more false alarms.
+## Appendix A (Optional): Threshold Sensitivity in the Label-Aware Ablation
+The ablation uses the same threshold grid and selects the same optimal configuration, but the overall scoring landscape shifts because label terms make matching easier and increase over-diagnosis on clean code.
 
-#### 4.5.2 False Positive Characterization
-
-| FP Type | Count | % of FPs | Description |
-| :--- | :--- | :--- | :--- |
-| FP_CLEAN | 3,364 | 86.6% | Detected misconception in correct code |
-| FP_WRONG | 520 | 13.4% | Detected wrong misconception (misclassification) |
-| FP_HALLUCINATION | 0 | 0.0% | Invented non-existent misconception |
-
-**Table 9c: False Positive Breakdown**
-
-![FP Flow](runs/v2/run_opus2_main/assets/hallucinations_sankey.png)
-**Figure 6: Detection classification flow from raw output to final evaluated outcomes.**
-
-Critically, **zero** detections were hallucinations—invented misconceptions with no basis in the taxonomy. All FP_CLEAN cases matched *some* ground-truth misconception semantically; they were over-applications of valid diagnostic categories to correct code. This indicates that LLM reasoning is **grounded** rather than confabulatory: models apply the taught taxonomy rather than inventing novel diagnoses.
-
-The high FP_CLEAN rate reflects "pedagogical over-sensitivity"—LLMs interpret stylistic choices (verbose variable names, defensive checks, redundant casts) as potential conceptual errors. While technically false positives, these cases often identify code that *could* reflect a misconception, even when it happens to be correct. This conservatism may be appropriate for tutoring contexts where prompting reflection is preferable to missing a teachable moment.
-
-## 5. Discussion: Qualitative Reasoning Analysis
-To better understand the "reasoning" behind these metrics, we examined specific cases where the TRACER pipeline identified student intent.
-
-### 5.1 Case Study 1: High-Fidelity Reasoning (True Positive)
-**Student:** *Allen_John_185740* | **Assignment:** a1 (Acceleration) | **Ground Truth:** `NM_TYP_02` (Narrowing Cast in Division)
-*   **LLM Narrative:** "The student believes that casting the result of an arithmetic operation to double after the operation completes will preserve decimal precision. They think that `(v1-v0)/t` will be computed correctly..."
-*   **Ground Truth Thinking:** "I'll compute the formula first, then cast it to double so I don't lose the decimals. The computer will remember the decimals if I cast it at the end."
-*   **Analysis:** The model accurately identified not just the location of the error, but the student's *justification* for why the code was written that way.
-
-### 5.2 Case Study 2: Pedagogical Over-Sensitivity (False Positive)
-**Student:** *Alexander_Katrina_262508* | **Assignment:** a3 (Strings) | **Code Status:** Clean
-*   **LLM Narrative:** "The student believes that the result of `String.toUpperCase()` might be null, and therefore a null check is necessary... This suggests a lack of trust in standard library guarantees."
-*   **Analysis:** This is a classic `FP_CLEAN` case. The code is correct, but the LLM interpreted a defensive programming practice (unnecessary null check) as a mental model flaw. While technically a "False Positive," it reveals the LLM's capacity for deep, if sometimes overly critical, reasoning.
-
-### 5.3 Case Study 3: The Diagnostic Ceiling (False Negative)
-**Student:** *Cameron_Adam_366016* | **Assignment:** a1 (Triangle Area) | **Ground Truth:** `NM_SYN_02` (Precedence Blindness)
-*   **Result:** No detection.
-*   **Analysis:** Many models failed to detect precedence errors (e.g., `s-a*s-b*s-c` instead of `(s-a)*(s-b)*(s-c)`). This suggests that LLMs sometimes default to "reading what they expect to see" when scanning dense mathematical formulas, mirroring human grader fatigue.
-
-## 6. Threats to Validity and Ethics
-### 6.1 Synthetic vs. Ecological Validity
-The primary limitation of this study is the use of synthetic data. Our dataset measures LLM *capability*—performance when student intent is unambiguous and singular—rather than *generalizability* to naturalistic student populations. Real student behavior may be noisier, involve multiple simultaneous misconceptions, or express intent inconsistently across code artifacts.
-
-We frame synthetic data as establishing an upper bound: if models cannot diagnose controlled misconceptions, they cannot be expected to handle messier real-world cases. The strong performance observed (F1=0.694, specificity=0.848) demonstrates that the task is tractable. Future work should validate these findings against human-annotated student corpora, accepting that ground-truth quality will be noisier but more ecologically valid.
-
-### 6.2 Ablation: The Calibrating Effect of Narrative Requirements
-Our label-aware ablation study (Section 4.1.1) revealed a surprising finding: requiring models to articulate student *thinking* narratives acts as a calibration constraint. Comparing the main run (thinking labels required) to the ablation (label terms included in embeddings):
-
-| Condition | Precision | Recall | F1 | Specificity |
-| :--- | :--- | :--- | :--- | :--- |
-| **Main (Thinking-Only)** | 0.577 | 0.873 | 0.694 | **0.848** |
-| Ablation (Thinking+Labels) | 0.512 | **0.982** | 0.673 | 0.774 |
-| **Delta** | +6.5% | -10.9% | +2.1% | **+7.4%** |
-
-**Table 10: Effect of Narrative Requirement on Specificity**
-
-Without the narrative fidelity constraint, models achieve near-perfect recall (98.2%) but at a substantial cost to specificity (77.4%). They over-diagnose clean code (+49% more FP_CLEAN), effectively becoming "trigger-happy" pattern matchers. The thinking requirement forces models to justify their detection with cognitive reasoning, filtering out spurious matches. This supports our claim that narrative fidelity is not just an evaluation metric but a functional constraint that improves diagnostic reliability.
-
-### 6.3 Embedding Assumptions
-Our evaluation depends on the semantic quality of OpenAI's `text-embedding-3-large`. While we mitigated this with a label-blind ablation study, the metric assumes that semantic proximity in vector space corresponds to pedagogical alignment.
-
-### 6.4 Ethics Statement
-This study utilizes synthetic data generated by Large Language Models and does not involve human participants. All synthetic student names are generated using the `Faker` library and do not correspond to real individuals. The research aims to improve the diagnostic accuracy of AI in educational settings, with the long-term goal of supporting human educators and enhancing student learning outcomes.
-
-## 7. Implications for CS1 Practice
-The narrative fidelity observed in this study suggests that LLMs can support—but not replace—human educators in diagnostic tutoring. By using an **ensemble of intent**, educators can build tools that provide feedback like: *"It looks like you're expecting the formula to update automatically like a spreadsheet,"* which addresses the root cause of the error rather than just providing the solution.
-
-**Deployment Recommendations:** For production use, we recommend:
-1. **Model selection:** Claude-Haiku-4.5 with reasoning enabled achieves the best balance (F1=0.825, specificity=94.8%).
-2. **Strategy selection:** Baseline or taxonomy prompting; avoid Socratic for automated systems due to lower specificity.
-3. **Ensemble voting:** Require agreement from at least 2 of 4 strategies before surfacing a diagnosis to students.
-4. **Human oversight:** Present LLM diagnoses as hypotheses for instructor review, not definitive judgments.
-
-The high specificity of the best configurations (>95%) indicates that false alarms can be minimized, but the ~15% FP_CLEAN rate in aggregate suggests that fully autonomous deployment remains premature. LLM-generated diagnostics are best positioned as a first-pass filter that surfaces likely misconceptions for human educators to confirm.
-
-## 8. Conclusion
-We presented TRACER, a framework for evaluating the cognitive alignment of LLMs in CS education. We demonstrated that state-of-the-art models can effectively reconstruct student cognitive intent with high narrative fidelity (F1=0.694, specificity=0.848), independent of taxonomic labels. Reasoning-enabled models outperform standard variants, and requiring narrative justification acts as a calibration constraint that improves specificity by 7.4%.
-
-While challenges remain in diagnosing deep semantic errors, the ability to reconstruct mental models from code evidence—achieving 82.5% F1 and 94.8% specificity in the best configuration (Claude-Haiku with reasoning)—marks a significant step toward AI tutors that can support pedagogically grounded interventions. Future work should validate these findings on naturalistic student corpora and explore how diagnostic accuracy translates to learning outcomes.
-
-## References
-*   du Boulay, B. (1986). Some difficulties of learning to program. *Journal of Educational Computing Research*.
-*   Finnie-Ansley, J., et al. (2023). My AI is a CS1 Student: Using ChatGPT to Pass Exams. *SIGCSE 2023*.
-*   Kazemitabaar, M., et al. (2023). Studying the effect of AI-generated explanations on novice programmers. *SIGCSE 2023*.
-*   Nelson, G. L., et al. (2017). Comprehension of Notional Machines. *ICER 2017*.
-*   Sorva, J. (2013). Notional Machines and Introductory Programming Education. *ACM TOCE*.
-*   SIGCSE TS. (2025). Large Language Models in Computer Science Education: A Systematic Literature Review.
+![Threshold Sensitivity Heatmap (Opus2 Ablation)](runs/v2/run_opus2_ablation/assets/threshold_sensitivity_heatmap.png)
+*Figure A1: F1 across the threshold grid in the label-aware ablation (`run_opus2_ablation`).*
