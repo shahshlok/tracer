@@ -724,7 +724,9 @@ def classify_scored_df(
     file_key_cols = get_file_key_cols(scored_df, file_df)
 
     # Add FN rows for expected misconceptions that were not detected
+    # Add TN rows for clean files with no detections at all
     fn_rows: list[dict[str, Any]] = []
+    tn_rows: list[dict[str, Any]] = []
     if not file_df.empty:
         tp_keys = set(
             tuple(row)
@@ -732,34 +734,68 @@ def classify_scored_df(
                 index=False, name=None
             )
         )
+        # Keys for all files that have ANY detection in filtered (for TN logic)
+        detected_keys = (
+            set(tuple(row) for row in filtered[file_key_cols].itertuples(index=False, name=None))
+            if not filtered.empty
+            else set()
+        )
+
         for row in file_df.itertuples(index=False):
             expected_id = getattr(row, "expected_id")
             is_clean = getattr(row, "is_clean")
-            if is_clean or not expected_id:
-                continue
             key = tuple(getattr(row, col) for col in file_key_cols)
-            if key in tp_keys:
-                continue
-            fn_row = {
-                "strategy": getattr(row, "strategy"),
-                "model": getattr(row, "model"),
-                "student": getattr(row, "student"),
-                "question": getattr(row, "question"),
-                "expected_id": expected_id,
-                "expected_category": getattr(row, "expected_category"),
-                "is_clean": False,
-                "detected_name": "",
-                "detected_thinking": "",
-                "matched_id": None,
-                "semantic_score": 0.0,
-                "match_method": "no_detection",
-                "result": "FN",
-                "confidence": None,
-            }
-            # Include assignment if present in file_df
-            if "assignment" in file_key_cols:
-                fn_row["assignment"] = getattr(row, "assignment")
-            fn_rows.append(fn_row)
+
+            if is_clean:
+                # Clean file: check if it has any detections
+                # If no detections at all, this is a True Negative
+                if key not in detected_keys:
+                    tn_row = {
+                        "strategy": getattr(row, "strategy"),
+                        "model": getattr(row, "model"),
+                        "student": getattr(row, "student"),
+                        "question": getattr(row, "question"),
+                        "expected_id": None,
+                        "expected_category": None,
+                        "is_clean": True,
+                        "detected_name": "",
+                        "detected_thinking": "",
+                        "matched_id": None,
+                        "semantic_score": 0.0,
+                        "match_method": "no_detection",
+                        "result": "TN",
+                        "confidence": None,
+                    }
+                    if "assignment" in file_key_cols:
+                        tn_row["assignment"] = getattr(row, "assignment")
+                    tn_rows.append(tn_row)
+                # If clean file HAS detections, those will be FP_CLEAN (handled by filtered df)
+            else:
+                # Seeded file: check for FN (no TP)
+                if not expected_id:
+                    continue
+                if key in tp_keys:
+                    continue
+                fn_row = {
+                    "strategy": getattr(row, "strategy"),
+                    "model": getattr(row, "model"),
+                    "student": getattr(row, "student"),
+                    "question": getattr(row, "question"),
+                    "expected_id": expected_id,
+                    "expected_category": getattr(row, "expected_category"),
+                    "is_clean": False,
+                    "detected_name": "",
+                    "detected_thinking": "",
+                    "matched_id": None,
+                    "semantic_score": 0.0,
+                    "match_method": "no_detection",
+                    "result": "FN",
+                    "confidence": None,
+                }
+                # Include assignment if present in file_df
+                if "assignment" in file_key_cols:
+                    fn_row["assignment"] = getattr(row, "assignment")
+                fn_rows.append(fn_row)
 
     result_cols = file_key_cols + [
         "expected_id",
@@ -780,6 +816,8 @@ def classify_scored_df(
         result_rows.append(filtered[result_cols])
     if fn_rows:
         result_rows.append(pd.DataFrame(fn_rows)[result_cols])
+    if tn_rows:
+        result_rows.append(pd.DataFrame(tn_rows)[result_cols])
 
     results_df = (
         pd.concat(result_rows, ignore_index=True)
