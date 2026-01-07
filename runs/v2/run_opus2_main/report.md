@@ -2,7 +2,7 @@
 
 ## Taxonomic Research of Aligned Cognitive Error Recognition
 
-_Generated: 2026-01-07T14:20:06.472986+00:00_
+_Generated: 2026-01-07T11:17:54.913383+00:00_
 
 ---
 
@@ -19,16 +19,16 @@ whether models can identify *student mental models* (Notional Machines), not jus
 
 | Metric | Mean | Std Dev | 95% CI (approx) |
 |--------|------|---------|-----------------|
-| **Precision** | **0.511** | ±0.026 | [0.460, 0.562] |
-| **Recall** | **0.982** | ±0.006 | [0.969, 0.995] |
-| **F1 Score** | **0.673** | ±0.024 | [0.626, 0.719] |
+| **Precision** | **0.577** | ±0.029 | [0.521, 0.633] |
+| **Recall** | **0.872** | ±0.016 | [0.841, 0.903] |
+| **F1 Score** | **0.694** | ±0.024 | [0.646, 0.742] |
 
-**Raw Counts (aggregated):** TP=5,891 | FP=5,616 | FN=107
+**Raw Counts (aggregated):** TP=5,305 | FP=3,884 | FN=775
 
 ### Key Findings
 
-1. **Ensemble Voting** improves F1 by +0.063 through precision gains
-2. **Detection Gap:** 'The Independent Switch' (96%) vs 'The Void Machine' (99%)
+1. **Ensemble Voting** improves F1 by +0.067 through precision gains
+2. **Detection Gap:** 'The Algebraic Syntax Machine' (59%) vs 'The Void Machine' (99%)
 3. **Semantic Matching** effectively separates TPs from FPs (large effect size)
 
 ---
@@ -42,11 +42,11 @@ whether models can identify *student mental models* (Notional Machines), not jus
 
 | Fold | Dev Files | Test Files | Sem. Thresh | Noise Floor | Dev F1 | Test F1 | Gap |
 |------|-----------|------------|-------------|-------------|--------|---------|-----|
-| 1 | 957 | 243 | 0.55 | 0.60 | 0.668 | 0.691 | -0.023 ✓ |
-| 2 | 958 | 242 | 0.55 | 0.60 | 0.671 | 0.682 | -0.011 ✓ |
-| 3 | 960 | 240 | 0.55 | 0.60 | 0.670 | 0.686 | -0.016 ✓ |
-| 4 | 962 | 238 | 0.55 | 0.60 | 0.683 | 0.632 | +0.051 ⚠ |
-| 5 | 963 | 237 | 0.55 | 0.60 | 0.673 | 0.672 | +0.001 ✓ |
+| 1 | 957 | 243 | 0.55 | 0.60 | 0.691 | 0.707 | -0.016 ✓ |
+| 2 | 958 | 242 | 0.55 | 0.60 | 0.691 | 0.708 | -0.017 ✓ |
+| 3 | 960 | 240 | 0.55 | 0.60 | 0.692 | 0.705 | -0.013 ✓ |
+| 4 | 962 | 238 | 0.55 | 0.60 | 0.705 | 0.651 | +0.054 ⚠ |
+| 5 | 963 | 237 | 0.55 | 0.60 | 0.694 | 0.700 | -0.006 ✓ |
 
 **Generalization Analysis:**
 
@@ -72,7 +72,7 @@ For each configuration, we computed full precision, recall, and F1 scores across
 |-----------|-------|-----------|
 | Semantic Threshold | **0.55** | Maximizes true positives while minimizing false positives |
 | Noise Floor | **0.6** | Filters pedantic detections without losing valid signals |
-| Achieved F1 | **0.668** | Best balanced performance across the entire grid |
+| Achieved F1 | **0.691** | Best balanced performance across the entire grid |
 
 All metrics reported in this analysis use these calibrated thresholds.
 
@@ -86,11 +86,11 @@ All metrics reported in this analysis use these calibrated thresholds.
 
 | Metric | True Positives | False Positives |
 |--------|----------------|-----------------|
-| Count | 5,891 | 5,616 |
-| Mean Score | 0.749 | 0.674 |
-| Std Dev | 0.058 | 0.051 |
+| Count | 5,305 | 3,884 |
+| Mean Score | 0.705 | 0.648 |
+| Std Dev | 0.053 | 0.037 |
 
-**Effect Size (Cliff's Delta):** 0.663 (Large)
+**Effect Size (Cliff's Delta):** 0.616 (Large)
 
 ---
 
@@ -104,15 +104,15 @@ All metrics reported in this analysis use these calibrated thresholds.
 
 | Category | Type | Recall | N | Difficulty |
 |----------|------|--------|---|------------|
-| The Independent Switch | Semantic | 0.955 | 374 | Easy |
-| The Fluid Type Machine | Semantic | 0.977 | 525 | Easy |
-| The Anthropomorphic I/O Machine | Semantic | 0.978 | 447 | Easy |
-| The Algebraic Syntax Machine | Structural | 0.979 | 432 | Easy |
-| The Reactive State Machine | Semantic | 0.979 | 287 | Easy |
-| The Teleological Control Machine | Structural | 0.985 | 1789 | Easy |
-| The Semantic Bond Machine | Structural | 0.986 | 768 | Easy |
-| The Human Index Machine | Structural | 0.988 | 608 | Easy |
-| The Mutable String Machine | Structural | 0.988 | 600 | Easy |
+| The Algebraic Syntax Machine | Structural | 0.587 | 395 | Medium |
+| The Fluid Type Machine | Semantic | 0.707 | 675 | Easy |
+| The Reactive State Machine | Semantic | 0.772 | 289 | Easy |
+| The Independent Switch | Semantic | 0.782 | 377 | Easy |
+| The Teleological Control Machine | Structural | 0.895 | 1776 | Easy |
+| The Anthropomorphic I/O Machine | Semantic | 0.950 | 440 | Easy |
+| The Semantic Bond Machine | Structural | 0.967 | 768 | Easy |
+| The Mutable String Machine | Structural | 0.972 | 600 | Easy |
+| The Human Index Machine | Structural | 0.975 | 592 | Easy |
 | The Void Machine | Structural | 0.994 | 168 | Easy |
 
 ### 2.2 Per-Misconception Analysis
@@ -123,11 +123,11 @@ All metrics reported in this analysis use these calibrated thresholds.
 
 | ID | Name | Category | Recall | N |
 |----|------|----------|--------|---|
-| NM_LOGIC_02 | Dangling Else (Indentation Trap) | The Independent Switch | 0.77 | 62 |
-| NM_IO_01 | Prompt-Logic Mismatch | The Anthropomorphic I/O M | 0.90 | 60 |
-| NM_SYN_02 | Precedence Blindness | The Algebraic Syntax Mach | 0.97 | 312 |
-| NM_FLOW_03 | Infinite Loop (State Stagnation) | The Teleological Control  | 0.97 | 550 |
-| NM_TYP_01 | Integer Division Blindness | The Fluid Type Machine | 0.97 | 355 |
+| NM_SYN_02 | Precedence Blindness | The Algebraic Syntax Mach | 0.42 | 277 |
+| NM_LOGIC_02 | Dangling Else (Indentation Trap) | The Independent Switch | 0.52 | 68 |
+| NM_TYP_01 | Integer Division Blindness | The Fluid Type Machine | 0.69 | 325 |
+| NM_TYP_02 | Narrowing Cast in Division | The Fluid Type Machine | 0.72 | 350 |
+| NM_STATE_01 | Spreadsheet View (Early Calculation | The Reactive State Machin | 0.77 | 289 |
 
 ![Misconception Recall](assets/misconception_recall.png)
 
@@ -137,11 +137,11 @@ All metrics reported in this analysis use these calibrated thresholds.
 
 | Method | Precision | Recall | F1 | Precision Gain |
 |--------|-----------|--------|-----|----------------|
-| Raw (No Ensemble) | 0.512 | 0.982 | 0.673 | — |
-| Strategy Ensemble (≥2/4) | 0.548 | 0.982 | 0.703 | +0.036 |
-| Model Ensemble (≥2/6) | 0.591 | 0.976 | 0.736 | +0.079 |
+| Raw (No Ensemble) | 0.577 | 0.873 | 0.695 | — |
+| Strategy Ensemble (≥2/4) | 0.625 | 0.872 | 0.728 | +0.048 |
+| Model Ensemble (≥2/6) | 0.682 | 0.864 | 0.762 | +0.105 |
 
-**Best Method:** Model Ensemble (F1 = 0.736, +0.063 over raw)
+**Best Method:** Model Ensemble (F1 = 0.762, +0.067 over raw)
 
 ---
 
@@ -151,10 +151,10 @@ All metrics reported in this analysis use these calibrated thresholds.
 
 | Strategy | TP | FP | FN | Precision | Recall | F1 |
 |----------|----|----|----|-----------| -------|-----|
-| baseline | 1473 | 1108 | 13 | 0.571 | 0.991 | 0.724 |
-| cot | 1424 | 1199 | 75 | 0.543 | 0.950 | 0.691 |
-| socratic | 1491 | 2131 | 11 | 0.412 | 0.993 | 0.582 |
-| taxonomy | 1503 | 1178 | 8 | 0.561 | 0.995 | 0.717 |
+| baseline | 1327 | 736 | 209 | 0.643 | 0.864 | 0.737 |
+| cot | 1280 | 861 | 245 | 0.598 | 0.839 | 0.698 |
+| socratic | 1346 | 1493 | 145 | 0.474 | 0.903 | 0.622 |
+| taxonomy | 1352 | 794 | 176 | 0.630 | 0.885 | 0.736 |
 
 ![Strategy Performance Comparison](assets/strategy_comparison.png)
 
@@ -164,29 +164,29 @@ All metrics reported in this analysis use these calibrated thresholds.
 
 | Comparison | χ² | p-value | Significant? |
 |------------|-----|---------|--------------|
-| baseline vs cot | 15.67 | 0.0001 | Yes |
-| baseline vs socratic | 2.58 | 0.1082 | No |
-| baseline vs taxonomy | 7.25 | 0.0071 | Yes |
-| cot vs socratic | 26.40 | 0.0000 | Yes |
-| cot vs taxonomy | 37.33 | 0.0000 | Yes |
-| socratic vs taxonomy | 1.10 | 0.2943 | No |
+| baseline vs cot | 9.00 | 0.0027 | Yes |
+| baseline vs socratic | 1.52 | 0.2174 | No |
+| baseline vs taxonomy | 2.41 | 0.1206 | No |
+| cot vs socratic | 15.88 | 0.0001 | Yes |
+| cot vs taxonomy | 18.81 | 0.0000 | Yes |
+| socratic vs taxonomy | 0.10 | 0.7469 | No |
 
 #### Omnibus Test (Cochran's Q)
 
-- **Q Statistic:** 53.50
-- **p-value:** 0.000000
+- **Q Statistic:** 26.22
+- **p-value:** 0.000009
 - **Conclusion:** Significant differences exist
 
 ### 3.2 Model Comparison
 
 | Model | TP | FP | FN | Precision | Recall | F1 |
 |-------|----|----|----|-----------|--------|-----|
-| claude-haiku-4-5-20251001:reasoning | 967 | 459 | 15 | 0.678 | 0.985 | 0.803 |
-| gpt-5.2-2025-12-11:reasoning | 1009 | 831 | 3 | 0.548 | 0.997 | 0.708 |
-| gpt-5.2-2025-12-11 | 994 | 838 | 5 | 0.543 | 0.995 | 0.702 |
-| claude-haiku-4-5-20251001 | 919 | 719 | 73 | 0.561 | 0.926 | 0.699 |
-| gemini-3-flash-preview:reasoning | 1000 | 1330 | 7 | 0.429 | 0.993 | 0.599 |
-| gemini-3-flash-preview | 1002 | 1439 | 4 | 0.410 | 0.996 | 0.581 |
+| claude-haiku-4-5-20251001:reasoning | 906 | 261 | 124 | 0.776 | 0.880 | 0.825 |
+| claude-haiku-4-5-20251001 | 837 | 486 | 185 | 0.633 | 0.819 | 0.714 |
+| gpt-5.2-2025-12-11:reasoning | 853 | 565 | 143 | 0.602 | 0.856 | 0.707 |
+| gpt-5.2-2025-12-11 | 842 | 575 | 153 | 0.594 | 0.846 | 0.698 |
+| gemini-3-flash-preview:reasoning | 943 | 967 | 78 | 0.494 | 0.924 | 0.643 |
+| gemini-3-flash-preview | 924 | 1030 | 92 | 0.473 | 0.909 | 0.622 |
 
 ![Model Comparison](assets/model_comparison.png)
 
@@ -198,9 +198,9 @@ All metrics reported in this analysis use these calibrated thresholds.
 
 | Assignment | Focus | TP | FP | FN | Precision | Recall | F1 |
 |------------|-------|----|----|----|-----------|--------|-----|
-| a1 | Variables/Math | 1821 | 2382 | 38 | 0.433 | 0.980 | 0.601 |
-| a2 | Loops/Control | 2119 | 1997 | 44 | 0.515 | 0.980 | 0.675 |
-| a3 | Arrays/Strings | 1951 | 1237 | 25 | 0.612 | 0.987 | 0.756 |
+| a1 | Variables/Math | 1517 | 1493 | 450 | 0.504 | 0.771 | 0.610 |
+| a2 | Loops/Control | 1885 | 1518 | 268 | 0.554 | 0.876 | 0.679 |
+| a3 | Arrays/Strings | 1903 | 873 | 57 | 0.686 | 0.971 | 0.804 |
 
 ---
 
@@ -210,8 +210,8 @@ All metrics reported in this analysis use these calibrated thresholds.
 
 | FP Type | Count | % of FPs | Description |
 |---------|-------|----------|-------------|
-| FP_CLEAN | 5,014 | 89.3% | Detected misconception in correct code |
-| FP_WRONG | 602 | 10.7% | Detected wrong misconception (misclassification) |
+| FP_CLEAN | 3,364 | 86.6% | Detected misconception in correct code |
+| FP_WRONG | 520 | 13.4% | Detected wrong misconception (misclassification) |
 | FP_HALLUCINATION | 0 | 0.0% | Invented non-existent misconception |
 
 ![Detection Classification Flow](assets/hallucinations_sankey.png)
@@ -224,8 +224,8 @@ All metrics reported in this analysis use these calibrated thresholds.
 |-------|-------|----------|
 | Raw Detections | 29,164 | 100% |
 | Null-Template Filtered | 634 | 2.2% |
-| Noise Floor Filtered (<0.6) | 12,441 | 42.7% |
-| **Evaluated** | **16,089** | **55.2%** |
+| Noise Floor Filtered (<0.6) | 16,819 | 57.7% |
+| **Evaluated** | **11,711** | **40.2%** |
 
 ---
 
@@ -255,21 +255,21 @@ All metrics reported in this analysis use these calibrated thresholds.
 
 | ID | Name | Category | TP | FN | Recall |
 |----|------|----------|----|----|--------|
-| NM_LOGIC_02 | Dangling Else (Indentation Trap) | The Independent Switch | 48 | 14 | 0.774 |
-| NM_IO_01 | Prompt-Logic Mismatch | The Anthropomorphic I/O Machin | 54 | 6 | 0.900 |
-| NM_SYN_02 | Precedence Blindness | The Algebraic Syntax Machine | 304 | 8 | 0.974 |
-| NM_FLOW_03 | Infinite Loop (State Stagnation) | The Teleological Control Machi | 536 | 14 | 0.975 |
-| NM_TYP_01 | Integer Division Blindness | The Fluid Type Machine | 346 | 9 | 0.975 |
-| NM_STATE_01 | Spreadsheet View (Early Calculation) | The Reactive State Machine | 281 | 6 | 0.979 |
-| NM_MEM_05 | Lossy Swap (Data Destruction) | The Semantic Bond Machine | 235 | 5 | 0.979 |
-| NM_TYP_02 | Narrowing Cast in Division | The Fluid Type Machine | 167 | 3 | 0.982 |
-| NM_FLOW_02 | The Intent Loop (Off-by-One) | The Teleological Control Machi | 663 | 9 | 0.987 |
-| NM_MEM_03 | String Identity Trap (Immutability) | The Mutable String Machine | 593 | 7 | 0.988 |
-| NM_MEM_04 | The 1-Based Offset (OOB) | The Human Index Machine | 601 | 7 | 0.988 |
-| NM_MEM_01 | Parallel Array Desync | The Semantic Bond Machine | 522 | 6 | 0.989 |
-| NM_FLOW_04 | Sabotaging the Future (Inner Loop Mod) | The Teleological Control Machi | 277 | 3 | 0.989 |
-| NM_IO_02 | The Ghost Read | The Anthropomorphic I/O Machin | 383 | 4 | 0.990 |
-| NM_LOGIC_01 | Mutually Exclusive Fallacy | The Independent Switch | 309 | 3 | 0.990 |
-| NM_SYN_01 | XOR as Power | The Algebraic Syntax Machine | 119 | 1 | 0.992 |
+| NM_SYN_02 | Precedence Blindness | The Algebraic Syntax Machine | 117 | 160 | 0.422 |
+| NM_LOGIC_02 | Dangling Else (Indentation Trap) | The Independent Switch | 35 | 33 | 0.515 |
+| NM_TYP_01 | Integer Division Blindness | The Fluid Type Machine | 224 | 101 | 0.689 |
+| NM_TYP_02 | Narrowing Cast in Division | The Fluid Type Machine | 253 | 97 | 0.723 |
+| NM_STATE_01 | Spreadsheet View (Early Calculation) | The Reactive State Machine | 223 | 66 | 0.772 |
+| NM_FLOW_02 | The Intent Loop (Off-by-One) | The Teleological Control Machi | 534 | 116 | 0.822 |
+| NM_IO_01 | Prompt-Logic Mismatch | The Anthropomorphic I/O Machin | 53 | 11 | 0.828 |
+| NM_LOGIC_01 | Mutually Exclusive Fallacy | The Independent Switch | 260 | 49 | 0.841 |
+| NM_FLOW_04 | Sabotaging the Future (Inner Loop Mod) | The Teleological Control Machi | 254 | 34 | 0.882 |
+| NM_MEM_05 | Lossy Swap (Data Destruction) | The Semantic Bond Machine | 223 | 17 | 0.929 |
+| NM_FLOW_03 | Infinite Loop (State Stagnation) | The Teleological Control Machi | 523 | 28 | 0.949 |
+| NM_IO_02 | The Ghost Read | The Anthropomorphic I/O Machin | 365 | 11 | 0.971 |
+| NM_MEM_03 | String Identity Trap (Immutability) | The Mutable String Machine | 583 | 17 | 0.972 |
+| NM_FLOW_01 | Accumulator Amnesia (Scope Error) | The Teleological Control Machi | 279 | 8 | 0.972 |
+| NM_MEM_04 | The 1-Based Offset (OOB) | The Human Index Machine | 577 | 15 | 0.975 |
+| NM_SYN_01 | XOR as Power | The Algebraic Syntax Machine | 115 | 3 | 0.975 |
+| NM_MEM_01 | Parallel Array Desync | The Semantic Bond Machine | 520 | 8 | 0.985 |
 | NM_API_01 | The Void Assumption | The Void Machine | 167 | 1 | 0.994 |
-| NM_FLOW_01 | Accumulator Amnesia (Scope Error) | The Teleological Control Machi | 286 | 1 | 0.997 |
