@@ -22,7 +22,6 @@ import matplotlib
 
 matplotlib.use("Agg")  # Headless
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -742,8 +741,8 @@ def classify_scored_df(
         )
 
         for row in file_df.itertuples(index=False):
-            expected_id = getattr(row, "expected_id")
-            is_clean = getattr(row, "is_clean")
+            expected_id = row.expected_id
+            is_clean = row.is_clean
             key = tuple(getattr(row, col) for col in file_key_cols)
 
             if is_clean:
@@ -751,10 +750,10 @@ def classify_scored_df(
                 # If no detections at all, this is a True Negative
                 if key not in detected_keys:
                     tn_row = {
-                        "strategy": getattr(row, "strategy"),
-                        "model": getattr(row, "model"),
-                        "student": getattr(row, "student"),
-                        "question": getattr(row, "question"),
+                        "strategy": row.strategy,
+                        "model": row.model,
+                        "student": row.student,
+                        "question": row.question,
                         "expected_id": None,
                         "expected_category": None,
                         "is_clean": True,
@@ -767,7 +766,7 @@ def classify_scored_df(
                         "confidence": None,
                     }
                     if "assignment" in file_key_cols:
-                        tn_row["assignment"] = getattr(row, "assignment")
+                        tn_row["assignment"] = row.assignment
                     tn_rows.append(tn_row)
                 # If clean file HAS detections, those will be FP_CLEAN (handled by filtered df)
             else:
@@ -777,12 +776,12 @@ def classify_scored_df(
                 if key in tp_keys:
                     continue
                 fn_row = {
-                    "strategy": getattr(row, "strategy"),
-                    "model": getattr(row, "model"),
-                    "student": getattr(row, "student"),
-                    "question": getattr(row, "question"),
+                    "strategy": row.strategy,
+                    "model": row.model,
+                    "student": row.student,
+                    "question": row.question,
                     "expected_id": expected_id,
-                    "expected_category": getattr(row, "expected_category"),
+                    "expected_category": row.expected_category,
                     "is_clean": False,
                     "detected_name": "",
                     "detected_thinking": "",
@@ -794,7 +793,7 @@ def classify_scored_df(
                 }
                 # Include assignment if present in file_df
                 if "assignment" in file_key_cols:
-                    fn_row["assignment"] = getattr(row, "assignment")
+                    fn_row["assignment"] = row.assignment
                 fn_rows.append(fn_row)
 
     result_cols = file_key_cols + [
@@ -2601,10 +2600,10 @@ def generate_sankey_fp_flow(
 
     # Link colors (match target nodes with transparency)
     link_colors = [
-        f"rgba(2, 158, 115, 0.4)",  # TP - cyan
-        f"rgba(1, 115, 178, 0.4)",  # FP_CLEAN - blue
-        f"rgba(222, 143, 5, 0.4)",  # FP_WRONG - orange
-        f"rgba(204, 120, 188, 0.4)",  # FN - magenta
+        "rgba(2, 158, 115, 0.4)",  # TP - cyan
+        "rgba(1, 115, 178, 0.4)",  # FP_CLEAN - blue
+        "rgba(222, 143, 5, 0.4)",  # FP_WRONG - orange
+        "rgba(204, 120, 188, 0.4)",  # FN - magenta
     ]
 
     # Create Sankey diagram
@@ -2950,8 +2949,8 @@ def generate_publication_charts(
         fig, ax = plt.subplots(figsize=(14, 10))  # Wider figure for longer names
 
         # Use simple RdYlGn gradient (not colorblind-friendly)
-        from matplotlib import cm
         import matplotlib.colors as mcolors
+        from matplotlib import cm
 
         # Create color gradient from RdYlGn colormap
         cmap = cm.get_cmap("RdYlGn")
@@ -2974,7 +2973,7 @@ def generate_publication_charts(
         plt.savefig(path, dpi=300, bbox_inches="tight")
         plt.close()
         charts.append("misconception_recall.png")
-        console.print(f"  [green]✓[/green] misconception_recall.png")
+        console.print("  [green]✓[/green] misconception_recall.png")
 
     # 6. FP Crisis: Hallucinations Sankey Flow
     chart = generate_sankey_fp_flow(df, assets_dir)
@@ -3408,7 +3407,7 @@ def generate_publication_report(
                 f"- **Mean Dev-Test Gap:** {mean_gap:+.3f} ± {std_gap:.3f}",
                 f"- **Interpretation:** {generalization_quality.capitalize()} generalization "
                 f"({'thresholds transfer well' if abs(mean_gap) < 0.05 else 'potential overfitting to dev set'})",
-                f"- **Threshold Consistency:** "
+                "- **Threshold Consistency:** "
                 + (
                     "All folds selected same thresholds"
                     if len(
@@ -3450,8 +3449,8 @@ def generate_publication_report(
                 "",
                 "**Optimal Configuration Found:**",
                 "",
-                f"| Parameter | Value | Rationale |",
-                f"|-----------|-------|-----------|",
+                "| Parameter | Value | Rationale |",
+                "|-----------|-------|-----------|",
                 f"| Semantic Threshold | **{optimal_config.get('semantic_threshold', 'N/A')}** | Maximizes true positives while minimizing false positives |",
                 f"| Noise Floor | **{optimal_config.get('noise_floor', 'N/A')}** | Filters pedantic detections without losing valid signals |",
                 f"| Achieved F1 | **{optimal_config.get('f1', 0):.3f}** | Best balanced performance across the entire grid |",
@@ -3892,10 +3891,10 @@ def generate_publication_report(
             "## 6. Methodology Notes",
             "",
             "### 6.1 Semantic Matching",
-            f"- **Embedding Model:** OpenAI `text-embedding-3-large`",
+            "- **Embedding Model:** OpenAI `text-embedding-3-large`",
             f"- **Match Threshold:** Cosine similarity ≥ {semantic_threshold:.2f} (calibrated via grid search)",
             f"- **Noise Floor:** Detections < {noise_floor:.2f} filtered as pedantic (calibrated via grid search)",
-            f"- **Calibration:** Thresholds selected by optimizing F1 score across 30 (6×5) configurations",
+            "- **Calibration:** Thresholds selected by optimizing F1 score across 30 (6×5) configurations",
             "",
             "### 6.2 Statistical Tests",
             "- **Bootstrap CI:** 1000 resamples with replacement",
@@ -4065,7 +4064,7 @@ def analyze_publication(
         pd.concat(all_file_dfs, ignore_index=True) if all_file_dfs else pd.DataFrame()
     )
 
-    console.print(f"\n[bold]Combined dataset:[/bold]")
+    console.print("\n[bold]Combined dataset:[/bold]")
     console.print(f"  Total students: {total_students}")
     console.print(f"  Total files: {len(combined_file_df):,}")
     console.print(f"  Total scored detections: {len(combined_scored_df):,}")
@@ -4097,7 +4096,7 @@ def analyze_publication(
         )
 
     # Phase 3: Per-Fold Training and Evaluation
-    console.print(f"\n[bold]Phase 3: Per-Fold Threshold Calibration & Evaluation...[/bold]")
+    console.print("\n[bold]Phase 3: Per-Fold Threshold Calibration & Evaluation...[/bold]")
 
     fold_results: list[dict[str, Any]] = []
     all_test_dfs: list[pd.DataFrame] = []
@@ -4113,7 +4112,7 @@ def analyze_publication(
         fold_sensitivity_df = None
 
         if run_sensitivity:
-            console.print(f"  [dim]Calibrating thresholds on dev set...[/dim]")
+            console.print("  [dim]Calibrating thresholds on dev set...[/dim]")
             fold_sensitivity_df, fold_optimal_config = compute_threshold_sensitivity(
                 dev_scored,
                 dev_file,
