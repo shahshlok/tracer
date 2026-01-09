@@ -22,8 +22,9 @@ whether models can identify *student mental models* (Notional Machines), not jus
 | **Precision** | **0.511** | ±0.026 | [0.460, 0.562] |
 | **Recall** | **0.982** | ±0.006 | [0.969, 0.995] |
 | **F1 Score** | **0.673** | ±0.024 | [0.626, 0.719] |
+| **Specificity** | **0.774** | ±0.012 | [0.751, 0.798] |
 
-**Raw Counts (aggregated):** TP=5,891 | FP=5,616 | FN=107
+**Raw Counts (aggregated):** TP=5,891 | FP=5,616 | FN=107 | TN=17,186
 
 ### Key Findings
 
@@ -40,17 +41,18 @@ whether models can identify *student mental models* (Notional Machines), not jus
 > Each fold uses 80% of files for threshold calibration (dev) and 20% for evaluation (test).
 > Stratification by Notional Machine category ensures balanced representation across folds.
 
-| Fold | Dev Files | Test Files | Sem. Thresh | Noise Floor | Dev F1 | Test F1 | Gap |
-|------|-----------|------------|-------------|-------------|--------|---------|-----|
-| 1 | 957 | 243 | 0.55 | 0.60 | 0.668 | 0.691 | -0.023 ✓ |
-| 2 | 958 | 242 | 0.55 | 0.60 | 0.671 | 0.682 | -0.011 ✓ |
-| 3 | 960 | 240 | 0.55 | 0.60 | 0.670 | 0.686 | -0.016 ✓ |
-| 4 | 962 | 238 | 0.55 | 0.60 | 0.683 | 0.632 | +0.051 ⚠ |
-| 5 | 963 | 237 | 0.55 | 0.60 | 0.673 | 0.672 | +0.001 ✓ |
+| Fold | Dev Files | Test Files | Sem. Thresh | Noise Floor | Dev F1 | Test F1 | Test Spec | Gap F1 |
+|------|-----------|------------|-------------|-------------|--------|---------|-----------|--------|
+| 1 | 957 | 243 | 0.55 | 0.60 | 0.668 | 0.691 | 0.762 | -0.023 ✓ |
+| 2 | 958 | 242 | 0.55 | 0.60 | 0.671 | 0.682 | 0.763 | -0.011 ✓ |
+| 3 | 960 | 240 | 0.55 | 0.60 | 0.670 | 0.686 | 0.785 | -0.016 ✓ |
+| 4 | 962 | 238 | 0.55 | 0.60 | 0.683 | 0.632 | 0.773 | +0.051 ⚠ |
+| 5 | 963 | 237 | 0.55 | 0.60 | 0.673 | 0.672 | 0.788 | +0.001 ✓ |
 
 **Generalization Analysis:**
 
 - **Mean Dev-Test Gap:** +0.000 ± 0.030
+- **Mean Dev-Test Specificity Gap:** +0.000 ± 0.015
 - **Interpretation:** Excellent generalization (thresholds transfer well)
 - **Threshold Consistency:** All folds selected same thresholds
 
