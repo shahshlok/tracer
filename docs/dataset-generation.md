@@ -95,6 +95,8 @@ The trade-off: synthetic bugs may not perfectly match real student error pattern
 | 5. Compile Seeded | Java source | `javac` succeeds | Retry step 4 |
 | 6. Test Seeded | Compiled class | ≥1 test fails AND differs from correct | Retry step 4, fallback to clean |
 
+**Note on testing:** TRACER’s generator uses a lightweight **black-box I/O harness**: it compiles each submission and executes `main` on fixed stdin test cases, then checks stdout for expected output patterns (plus optional forbidden patterns).
+
 ---
 
 ## The Persona Matrix
@@ -244,6 +246,8 @@ cat authentic_seeded/a3/pipeline_stats.json
 ---
 
 ## Limitations
+
+(See also `docs/synthetic-validation-audit.md` for an audit of validation behavior verified during development.)
 
 ### 1. LLM-Injected Bugs May Not Match Reality
 
