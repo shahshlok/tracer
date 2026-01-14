@@ -86,7 +86,7 @@ To support the position with empirical evidence, we summarize results from TRACE
 
 ### 4.1 Benchmark construction (synthetic, labeled, behavior-validated)
 
-TRACER uses **synthetic** student submissions to obtain known misconception labels (a common strategy when ground-truth beliefs are otherwise unobservable at scale) [9]. Submissions are generated and validated as compiled Java programs:
+TRACER uses **synthetic** student submissions to obtain known misconception labels (a common strategy when ground-truth beliefs are otherwise unobservable at scale) [9]. Critically, this provides what classroom data cannot: observable ground truth. In real classrooms, a student's belief state is latent and unknowable; human annotators can only infer it. By determining the belief *ex ante* via generation, TRACER allows us to measure "belief recovery" with an internal validity impossible in the wild. Submissions are generated and validated as compiled Java programs:
 
 - **Clean programs**: compile and pass TRACER’s black-box I/O tests (compile with `javac`, execute `main` on multiple stdin cases, and check stdout).
 - **Seeded programs**: compile, differ from the clean solution, and fail at least one TRACER black-box test.
@@ -127,7 +127,7 @@ The key trade-off is visible in the main-vs-ablation contrast: allowing label-in
 Two findings matter for the position paper:
 
 1. **LLMs can recover many injected misconceptions** (high recall), supporting their use as instructor-facing hypothesis generators.
-2. **False positives concentrate on clean programs**, the failure mode with the highest pedagogical risk: 86.6% of false positives in the main run are diagnoses made on programs that are clean under TRACER’s behavioral tests.
+2. **False positives concentrate on clean programs**, the failure mode with the highest pedagogical risk: 86.6% of false positives in the main run are diagnoses made on programs that are clean under TRACER’s behavioral tests. While the benchmark included diverse personas (e.g., messy, verbose) to test robustness, this high false positive rate suggests that over-diagnosis is a fundamental property of current instruction-tuned models, rather than an artifact of specific coding styles.
 
 TRACER also indicates a **structural vs. semantic gap**: misconceptions with strong surface signatures are easier to detect than those requiring deeper semantic inference. This gap motivates an instructor-in-the-loop design even when aggregate metrics look strong.
 
@@ -142,8 +142,8 @@ A practical workflow is:
 1. **Ingest** submissions for an activity or assignment.
 2. **Generate hypotheses** (misconception candidates) with evidence traces.
 3. **Filter for safety** (prioritize specificity; suppress low-evidence or historically high-FP patterns).
-4. **Cluster by belief** (aggregate likely misconceptions across students).
-5. **Verify and act** (instructors inspect representative examples, then intervene via lecture, targeted messaging, or tracing exercises).
+4. **Cluster by belief** (aggregate likely misconceptions across students). Given the high false positive rate, this step is crucial for instructor sanity: systems should flag *patterns* (e.g., "15 students show signs of the Fluid Type Machine"), not just individual students.
+5. **Verify and act** (instructors inspect representative examples from a cluster, then intervene via lecture, targeted messaging, or tracing exercises). This cohort-level verification allows instructors to dismiss a hallucinated cluster with a single check, mitigating the cognitive load of the model's low specificity.
 
 This shifts the LLM from an oracle that tells students what they believe to a triage assistant that helps instructors decide where to look.
 
