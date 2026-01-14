@@ -34,6 +34,8 @@ To make this position concrete, we frame three questions for the community:
 2. **Safety / trigger-happiness:** How often does the LLM “over-diagnose” by attributing a misconception when the program is clean (no targeted misconception present)? What false-positive burden does this create, and why does that make instructor-facing use (plus humility/filters) necessary?
 3. **Coverage limits / blind spots:** Which misconception families are reliably diagnosable vs systematically hard—i.e., where is the structural vs semantic detection gap—and what does that imply for how instructors should interpret LLM hypotheses and how the community should evaluate these tools?
 
+Our contribution is a position and a set of evaluation/design implications for the community: treat belief attribution as instructor-facing, reward abstention and specificity, and evaluate “plausible hypotheses” in two stages (proxy-alignment on controlled probes, then instructor-judged plausibility/usefulness).
+
 ## 2. Notional Machines and Misconceptions
 
 A notional machine is the simplified explanatory “machine” implied by a language and used for teaching. It is a pedagogical device that makes execution intelligible by hiding irrelevant physical detail and emphasizing relevant state changes (variables, control flow, references, etc.) [1, 2].
@@ -88,31 +90,15 @@ A system asked to “diagnose the misconception” is incentivized to commit to 
 
 ### 3.3 Risk-asymmetric diagnosis and diagnostic humility
 
-Belief attribution is risk-asymmetric: false positives (misdiagnosing a misconception) can confuse students, erode trust, and misdirect instruction, while false negatives mostly represent missed opportunities for targeted support. Because LLMs are optimized to be helpful and coherent, they are prone to committing to a single story when multiple beliefs could explain the same code.
+Belief attribution is risk-asymmetric: false positives (misdiagnosing a misconception) can confuse students, erode trust, and misdirect instruction, while false negatives mostly represent missed opportunities for targeted support. In CS1, students often cannot adjudicate competing explanations; a confident but wrong diagnosis can prompt unproductive rewrites or false doubt about correct reasoning.
 
-Therefore, the safe stance for LLMs in this role is **diagnostic humility**: treat outputs as hypotheses, show evidence, and support abstention (“bug observed; belief ambiguous”). This is a core reason to keep belief attribution instructor-facing rather than student-facing.
+Because LLMs are optimized to be helpful and coherent, they are prone to committing to a single story when multiple beliefs could explain the same code. Therefore, the safe stance for LLMs in this role is **diagnostic humility**: treat outputs as hypotheses, show evidence, and support abstention (“bug observed; belief ambiguous”). This is a core reason to keep belief attribution instructor-facing rather than student-facing.
 
-## 4. Evidence from TRACER
+## 4. Evidence from TRACER (a controlled probe)
 
-To support the position with empirical evidence, we briefly summarize results from TRACER(Taxonomic Research of Aligned Cognitive Error Recognition): a controlled benchmark for notional-machine misconception detection in CS1 Java.
+We use TRACER (Taxonomic Research of Aligned Cognitive Error Recognition) as a controlled probe to ground this position with concrete evidence, not as a claim of classroom-ready student modeling. TRACER consists of 1,200 synthetic CS1 Java submissions across three assignments (A1–A3) and 18 misconception labels. Each synthetic student has one behaviorally failing submission with an injected misconception and three behaviorally correct submissions; generation uses a 4×3 persona matrix (coding style × cognitive profile) to reduce near-duplicate canonical forms.
 
-### 4.1 Benchmark construction (synthetic, labeled, behavior-validated)
-
-TRACER uses **synthetic** CS1 submissions with injected misconception labels, enabling controlled measurement of “belief recovery” under known ground truth. Submissions are compiled Java programs validated by black-box I/O tests: clean programs pass all tests; seeded programs differ from the clean solution and fail at least one test.
-
-The benchmark contains 1,200 submissions: 100 synthetic students per assignment (A1–A3), with four files each (one seeded, three clean). To reduce near-duplicate canonical solutions and introduce surface-level variability, TRACER uses a 4×3 persona matrix (coding style × cognitive profile) while keeping the injected misconception fixed.
-
-### 4.2 Misconception labels
-
-Across assignments A1–A3, TRACER includes **18 unique misconception IDs** grounded in notional-machine theory. These are organized into notional-machine categories (e.g., reactive state, anthropomorphic I/O, fluid types, algebraic syntax, “void” assumptions, control-flow misconceptions, array/reference misconceptions). The set is illustrative rather than exhaustive.
-
-### 4.3 Detection and matching
-
-TRACER evaluates multiple models and prompting strategies. Models output structured JSON describing detected misconceptions and an evidence trace (line numbers/snippets). Model outputs are mapped to ground truth via semantic similarity matching, with thresholds calibrated by 5-fold stratified cross-validation. In the main run, matching compares the model’s hypothesized “student thinking” to the injected ground-truth “student thinking”; we do not score whether the cited evidence spans *entail* the hypothesis.
-
-A key evaluation choice is whether to allow label leakage (including misconception names/categories in the embedding match). TRACER’s default matching excludes label text and relies primarily on the “student thinking” narrative to better reflect belief alignment rather than name matching. The label-inclusive variant includes label text in the match and serves as an ablation of this design choice.
-
-### 4.4 Results and what they imply
+TRACER evaluates whether an LLM can generate a *hypothesis* about student thinking that aligns with the injected ground truth. In the main condition, matching compares the model’s hypothesized “student thinking” to the injected “student thinking” while excluding label text; an ablation includes label text to illustrate how label leakage can inflate apparent capability at the expense of safety.
 
 **Table 1: TRACER summary metrics (5-fold CV)**
 
@@ -153,7 +139,11 @@ A practical workflow is:
 
 This shifts the LLM from an oracle that tells students what they believe to a triage assistant that helps instructors decide where to look.
 
-### 5.2 Design requirements for diagnostic humility
+### 5.2 Success indicators (what “working” looks like)
+
+Because belief attribution is probabilistic, success is not “the model is always right.” In an instructor-facing setting, success indicators include: (i) low false-positive burden on clean code, (ii) high instructor agreement on representative samples from flagged clusters, and (iii) low verification cost (an instructor can dismiss a spurious cluster quickly).
+
+### 5.3 Design requirements for diagnostic humility
 
 Instructor-facing systems should:
 
@@ -162,7 +152,7 @@ Instructor-facing systems should:
 - Support **abstention** as a first-class output (e.g., “bug observed, belief ambiguous”).
 - Prefer precision-oriented aggregation (e.g., ensemble agreement across prompts/models) over single-shot diagnosis.
 
-## 6. Implications for ITiCSE 2026 and Beyond
+## 6. Implications for the Computing Education Community
 
 The position articulated here has broader implications for the computing education research (CER) community and for how we should evaluate and deploy LLM-supported feedback.
 
@@ -180,7 +170,7 @@ We recommend the following minimum reporting standards:
 - Benchmark with **abstention**: evaluate models that can say “uncertain” rather than forcing a diagnosis.
 - Treat plausibility as two-stage: probe proxy-alignment (e.g., injected belief recovery) and validate instructor-judged plausibility/usefulness.
 
-### 6.2 A renaissance of notional machines
+### 6.2 Re-centering notional machines
 
 The rise of LLM-mediated programming support necessitates a renewed focus on notional machines as an explicit instructional target [1, 2]. Beyond refining existing taxonomies, we need new models that account for the “AI-augmented learner.”
 
@@ -204,11 +194,11 @@ A key future direction is modeling the “AI-augmented learner,” including not
 
 ## 8. Conclusion
 
-The integration of LLMs into CS1 is fast becoming commonplace, but its form is not predetermined. We stand at a crossroads between an **auto-fixer** that optimizes for surface correctness and an **AI-augmented instructor** that optimizes for insight and learning.
+As LLMs become commonplace in CS1, we can deploy them primarily as **auto-fixers** that optimize for surface correctness, or as instructor-facing assistants that help instructors reason about students’ notional machines.
 
-The evidence from TRACER makes the trade-off concrete. Belief attribution is risk-asymmetric: false positives carry disproportionate harm, and TRACER shows they frequently arise from over-diagnosis on programs that are clean under behavioral tests. This demands **epistemic restraint** and evaluation standards that reward specificity rather than coverage.
+Belief attribution is risk-asymmetric: false positives carry disproportionate pedagogical harm. This makes **diagnostic humility** (evidence, abstention, and specificity-first evaluation) a first-class requirement. Our controlled probe (TRACER) illustrates a key failure mode in current models: over-diagnosing misconceptions on behaviorally correct programs.
 
-LLMs are powerful engines of hypothesis generation: they can scan large volumes of code and surface plausible misconception candidates with supporting evidence traces. But they should not be treated as final judges of student belief. By keeping belief attribution instructor-facing, we unlock the benefits of scale while protecting learners from the costs of confident misattribution.
+LLMs are powerful engines of hypothesis generation: they can scan large volumes of code and surface plausible misconception candidates with supporting evidence traces. But they should not be treated as final judges of student belief. By keeping belief attribution instructor-facing, we can gain scale while protecting learners from the costs of confident misattribution.
 
 In short: LLMs can help instructors recover the “true labor” of tutoring—understanding *why*—while restoring the notional machine to the center of CS1 pedagogy.
 
