@@ -82,7 +82,7 @@ A system asked to “diagnose the misconception” is incentivized to commit to 
 
 ## 4. Evidence from TRACER
 
-To support the position with empirical evidence, we summarize results from TRACER: a controlled benchmark for notional-machine misconception detection in CS1 Java.
+To support the position with empirical evidence, we summarize results from TRACER(Taxonomic Research of Aligned Cognitive Error Recognition): a controlled benchmark for notional-machine misconception detection in CS1 Java.
 
 ### 4.1 Benchmark construction (synthetic, labeled, behavior-validated)
 
@@ -111,13 +111,23 @@ A key evaluation choice is whether to allow label leakage (including misconcepti
 
 | Condition | Precision | Recall | Specificity |
 |---|---:|---:|---:|
-| Standard matching | 0.58 | 0.87 | 0.85 |
-| Label-inclusive matching | 0.51 | 0.98 | 0.77 |
+| Standard matching (main run) | 0.577 | 0.872 | 0.848 |
+| Label-inclusive matching (ablation) | 0.511 | 0.982 | 0.774 |
+
+The key trade-off is visible in the main-vs-ablation contrast: allowing label-inclusive matching increases recall, but it worsens specificity substantially—exactly the failure mode that most directly creates false accusations in clean code.
+
+**Figure 1: Structural vs. semantic misconception gap (TRACER main run).**
+
+![TRACER structural vs semantic gap](runs/run_final_main/assets/category_structural_vs_semantic.png)
+
+**Figure 2: False positives are dominated by clean-code over-diagnosis.**
+
+![TRACER false-positive flow](runs/run_final_main/assets/hallucinations_sankey.png)
 
 Two findings matter for the position paper:
 
 1. **LLMs can recover many injected misconceptions** (high recall), supporting their use as instructor-facing hypothesis generators.
-2. **False positives concentrate on clean programs**, the failure mode with the highest pedagogical risk. In TRACER’s final analysis, the majority of false positives come from diagnosing misconceptions in programs that are “clean” under TRACER’s behavioral tests.
+2. **False positives concentrate on clean programs**, the failure mode with the highest pedagogical risk: 86.6% of false positives in the main run are diagnoses made on programs that are clean under TRACER’s behavioral tests.
 
 TRACER also indicates a **structural vs. semantic gap**: misconceptions with strong surface signatures are easier to detect than those requiring deeper semantic inference. This gap motivates an instructor-in-the-loop design even when aggregate metrics look strong.
 
