@@ -28,6 +28,12 @@ This shift changes the diagnostic task from **error detection** (properties of t
 
 We therefore advocate **instructor-facing LLMs**: systems that propose plausible misconception hypotheses, grounded in specific code evidence, for human verification. This is not a claim that LLMs can recover “true beliefs.” Rather, the claim is that LLMs can generate useful, inspectable hypotheses and clusters at scale—while interfaces and evaluation must explicitly reward restraint.
 
+To make this position concrete, we frame three questions for the community:
+
+1. **Feasibility / capability:** Can an LLM, given only a CS1 submission, generate plausible hypotheses about the student’s latent notional machine (i.e., the belief that produced the code), not just point out surface bugs?
+2. **Safety / trigger-happiness:** How often does the LLM “over-diagnose” by attributing a misconception when the program is clean (no targeted misconception present)? What false-positive burden does this create, and why does that make instructor-facing use (plus humility/filters) necessary?
+3. **Coverage limits / blind spots:** Which misconception families are reliably diagnosable vs systematically hard—i.e., where is the structural vs semantic detection gap—and what does that imply for how instructors should interpret LLM hypotheses and how the community should evaluate these tools?
+
 ## 2. Notional Machines and Misconceptions
 
 A notional machine is the simplified explanatory “machine” implied by a language and used for teaching. It is a pedagogical device that makes execution intelligible by hiding irrelevant physical detail and emphasizing relevant state changes (variables, control flow, references, etc.) [1, 2].
@@ -80,20 +86,21 @@ The behavior is wrong, but the cause is ambiguous:
 
 A system asked to “diagnose the misconception” is incentivized to commit to the most coherent hypothesis. If delivered directly to students, this commitment is the primary safety risk.
 
+### 3.3 Risk-asymmetric diagnosis and diagnostic humility
+
+Belief attribution is risk-asymmetric: false positives (misdiagnosing a misconception) can confuse students, erode trust, and misdirect instruction, while false negatives mostly represent missed opportunities for targeted support. Because LLMs are optimized to be helpful and coherent, they are prone to committing to a single story when multiple beliefs could explain the same code.
+
+Therefore, the safe stance for LLMs in this role is **diagnostic humility**: treat outputs as hypotheses, show evidence, and support abstention (“bug observed; belief ambiguous”). This is a core reason to keep belief attribution instructor-facing rather than student-facing.
+
 ## 4. Evidence from TRACER
 
-To support the position with empirical evidence, we summarize results from TRACER(Taxonomic Research of Aligned Cognitive Error Recognition): a controlled benchmark for notional-machine misconception detection in CS1 Java.
+To support the position with empirical evidence, we briefly summarize results from TRACER(Taxonomic Research of Aligned Cognitive Error Recognition): a controlled benchmark for notional-machine misconception detection in CS1 Java.
 
 ### 4.1 Benchmark construction (synthetic, labeled, behavior-validated)
 
-TRACER uses **synthetic** student submissions to obtain known misconception labels (a common strategy when ground-truth beliefs are otherwise unobservable at scale) [9]. Critically, this provides what classroom data cannot: observable ground truth. In real classrooms, a student's belief state is latent and unknowable; human annotators can only infer it. By determining the belief *ex ante* via generation, TRACER allows us to measure "belief recovery" with an internal validity impossible in the wild. Submissions are generated and validated as compiled Java programs:
+TRACER uses **synthetic** CS1 submissions with injected misconception labels, enabling controlled measurement of “belief recovery” under known ground truth. Submissions are compiled Java programs validated by black-box I/O tests: clean programs pass all tests; seeded programs differ from the clean solution and fail at least one test.
 
-- **Clean programs**: compile and pass TRACER’s black-box I/O tests (compile with `javac`, execute `main` on multiple stdin cases, and check stdout).
-- **Seeded programs**: compile, differ from the clean solution, and fail at least one TRACER black-box test.
-
-The benchmark contains 1,200 submissions: 100 synthetic students per assignment (A1–A3), with four files each (one seeded, three clean).
-
-To reduce near-duplicate “canonical” solutions and introduce surface-level variability, TRACER uses a 4×3 persona matrix during generation (coding style × cognitive profile). These personas vary presentation and problem-solving style (naming, indentation, verbosity, cautious checks, procedural vs mathematical structuring) while keeping the injected misconception fixed.
+The benchmark contains 1,200 submissions: 100 synthetic students per assignment (A1–A3), with four files each (one seeded, three clean). To reduce near-duplicate canonical solutions and introduce surface-level variability, TRACER uses a 4×3 persona matrix (coding style × cognitive profile) while keeping the injected misconception fixed.
 
 ### 4.2 Misconception labels
 
@@ -124,12 +131,11 @@ The key trade-off is visible in the main-vs-ablation contrast: allowing label-in
 
 ![TRACER false-positive flow](runs/run_final_main/assets/hallucinations_sankey.png)
 
-Two findings matter for the position paper:
+Three takeaways map to the questions above:
 
-1. **LLMs can recover many injected misconceptions** (high recall), supporting their use as instructor-facing hypothesis generators.
-2. **False positives concentrate on clean programs**, the failure mode with the highest pedagogical risk: 86.6% of false positives in the main run are diagnoses made on programs that are clean under TRACER’s behavioral tests. Even under surface-level variation from the persona matrix, over-diagnosis on clean code remains substantial—reinforcing the need for instructor-facing use, abstention, and filtering.
-
-TRACER also indicates a **structural vs. semantic gap**: misconceptions with strong surface signatures are easier to detect than those requiring deeper semantic inference. This gap motivates an instructor-in-the-loop design even when aggregate metrics look strong.
+1. **Feasibility (Q1):** LLMs can often recover injected misconceptions (high recall), supporting their use as instructor-facing hypothesis generators.
+2. **Safety (Q2):** False positives concentrate on clean programs (86.6% of false positives in the main run), reinforcing the need for instructor-facing use, abstention, and filtering.
+3. **Blind spots (Q3):** TRACER shows a **structural vs. semantic gap**: misconceptions with strong surface signatures are easier to detect than those requiring deeper semantic inference, motivating instructor-in-the-loop interpretation even when aggregate metrics look strong.
 
 ## 5. Position: Instructor-Facing LLMs for Belief Attribution
 
