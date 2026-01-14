@@ -93,7 +93,7 @@ TRACER uses **synthetic** student submissions to obtain known misconception labe
 
 The benchmark contains 1,200 submissions: 100 synthetic students per assignment (A1–A3), with four files each (one seeded, three clean).
 
-To introduce realistic surface variability, TRACER uses a persona matrix during generation (coding style × cognitive profile). The personas are designed to vary presentation (naming, indentation, verbosity, cautious checks) rather than the target misconception.
+To reduce near-duplicate “canonical” solutions and introduce surface-level variability, TRACER uses a 4×3 persona matrix during generation (coding style × cognitive profile). These personas vary presentation and problem-solving style (naming, indentation, verbosity, cautious checks, procedural vs mathematical structuring) while keeping the injected misconception fixed.
 
 ### 4.2 Misconception labels
 
@@ -101,7 +101,7 @@ Across assignments A1–A3, TRACER includes **18 unique misconception IDs** grou
 
 ### 4.3 Detection and matching
 
-TRACER evaluates multiple models and prompting strategies. Models output structured JSON describing detected misconceptions and an evidence trace (line numbers/snippets). Free-form model outputs are mapped to ground truth via semantic similarity matching, with thresholds calibrated by 5-fold stratified cross-validation.
+TRACER evaluates multiple models and prompting strategies. Models output structured JSON describing detected misconceptions and an evidence trace (line numbers/snippets). Model outputs are mapped to ground truth via semantic similarity matching, with thresholds calibrated by 5-fold stratified cross-validation. In the main run, matching compares the model’s hypothesized “student thinking” to the injected ground-truth “student thinking”; we do not score whether the cited evidence spans *entail* the hypothesis.
 
 A key evaluation choice is whether to allow label leakage (including misconception names/categories in the embedding match). TRACER’s default matching excludes label text and relies primarily on the “student thinking” narrative to better reflect belief alignment rather than name matching. The label-inclusive variant includes label text in the match and serves as an ablation of this design choice.
 
@@ -127,7 +127,7 @@ The key trade-off is visible in the main-vs-ablation contrast: allowing label-in
 Two findings matter for the position paper:
 
 1. **LLMs can recover many injected misconceptions** (high recall), supporting their use as instructor-facing hypothesis generators.
-2. **False positives concentrate on clean programs**, the failure mode with the highest pedagogical risk: 86.6% of false positives in the main run are diagnoses made on programs that are clean under TRACER’s behavioral tests. While the benchmark included diverse personas (e.g., messy, verbose) to test robustness, this high false positive rate suggests that over-diagnosis is a fundamental property of current instruction-tuned models, rather than an artifact of specific coding styles.
+2. **False positives concentrate on clean programs**, the failure mode with the highest pedagogical risk: 86.6% of false positives in the main run are diagnoses made on programs that are clean under TRACER’s behavioral tests. Even under surface-level variation from the persona matrix, over-diagnosis on clean code remains substantial—reinforcing the need for instructor-facing use, abstention, and filtering.
 
 TRACER also indicates a **structural vs. semantic gap**: misconceptions with strong surface signatures are easier to detect than those requiring deeper semantic inference. This gap motivates an instructor-in-the-loop design even when aggregate metrics look strong.
 
@@ -172,6 +172,7 @@ We recommend the following minimum reporting standards:
 - Avoid **label-inclusive matching/scoring** unless additional labels are explicitly treated as errors.
 - Separate surface-style variation from misconception content (e.g., personas) and report sensitivity to presentation.
 - Benchmark with **abstention**: evaluate models that can say “uncertain” rather than forcing a diagnosis.
+- Treat plausibility as two-stage: probe proxy-alignment (e.g., injected belief recovery) and validate instructor-judged plausibility/usefulness.
 
 ### 6.2 A renaissance of notional machines
 
