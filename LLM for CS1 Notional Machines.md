@@ -156,14 +156,34 @@ Instructor-facing systems should:
 - Support **abstention** as a first-class output (e.g., “bug observed, belief ambiguous”).
 - Prefer precision-oriented aggregation (e.g., ensemble agreement across prompts/models) over single-shot diagnosis.
 
-## 6. Recommendations for ITiCSE and the CER community
+## 6. Implications for ITiCSE 2026 and Beyond
 
-We recommend that research and tools in this space adopt the following standards:
+The position articulated here has broader implications for the computing education research (CER) community and for how we should evaluate and deploy LLM-supported feedback.
 
-- **Report specificity and clean-code false positives** as primary safety metrics, not only recall/F1.
-- **Avoid label-inclusive matching/scoring** for belief attribution unless additional labels are explicitly treated as errors.
-- **Separate surface-style variation from misconception content** (e.g., personas) and report sensitivity to presentation.
-- **Benchmark with abstention**: evaluate models that can say “uncertain” rather than forcing a diagnosis.
+### 6.1 Reframing evaluation standards
+
+CER should move beyond single headline metrics (e.g., accuracy or F1) when evaluating belief-attribution tools. For diagnosis, **specificity** and **false positive rate** must be treated as primary safety metrics, alongside recall.
+
+A paper claiming “high accuracy” without reporting clean-code false positives can hide the central harm mechanism: over-diagnosis that produces plausible-sounding but incorrect attributions. The label-inclusive matching ablation in TRACER is a concrete example: it inflates recall while degrading specificity.
+
+We recommend the following minimum reporting standards:
+
+- Report **specificity** and **false positives on clean programs** explicitly.
+- Avoid **label-inclusive matching/scoring** unless additional labels are explicitly treated as errors.
+- Separate surface-style variation from misconception content (e.g., personas) and report sensitivity to presentation.
+- Benchmark with **abstention**: evaluate models that can say “uncertain” rather than forcing a diagnosis.
+
+### 6.2 A renaissance of notional machines
+
+The rise of LLM-mediated programming support necessitates a renewed focus on notional machines as an explicit instructional target [1, 2]. Beyond refining existing taxonomies, we need new models that account for the “AI-augmented learner.”
+
+What is the notional machine of a student who writes code by prompting a chatbot? Their mental model may not primarily be of the programming language semantics, but of the *LLM* (e.g., “if I ask it the right way, it will fix the bug”). Diagnosing these meta-cognitive misconceptions is a likely next frontier.
+
+### 6.3 Epistemic rights of learners
+
+Finally, belief attribution raises a normative question: what do students have a right to expect from automated feedback?
+
+We argue students have an epistemic right not to be casually misdiagnosed, labeled, or confused by systems that speak with unwarranted authority. Restricting belief attribution to the instructor-facing layer provides a practical safeguard: the heavy weight of “diagnosing the mind” remains a human responsibility, supported—but not usurped—by the machine.
 
 ## 7. Limitations and future work
 
@@ -173,13 +193,17 @@ TRACER is a controlled probe, not a deployment-ready student model.
 - **Partial coverage**: 18 misconception labels cover a slice of CS1; they are not exhaustive.
 - **Belief uncertainty**: even in real classrooms, beliefs are not directly observable; instructor verification remains essential.
 
-A key future direction is modeling the “AI-augmented learner”: students may develop notional machines not only about the programming language, but about the LLM itself (e.g., beliefs about what kinds of prompts produce correct fixes).
+A key future direction is modeling the “AI-augmented learner,” including notional machines about the LLM itself (e.g., beliefs about what kinds of prompts produce correct fixes), and then validating whether instructor-facing belief attribution transfers from controlled benchmarks to real classrooms.
 
 ## 8. Conclusion
 
-Belief attribution is central to CS1 instruction, but it is fundamentally uncertain and risk-asymmetric. TRACER provides early evidence that LLMs can detect many misconception patterns, but it also highlights a safety-critical failure mode: over-diagnosis on clean programs, especially under evaluation shortcuts that reward shotgun labeling.
+The integration of LLMs into CS1 is fast becoming commonplace, but its form is not predetermined. We stand at a crossroads between an **auto-fixer** that optimizes for surface correctness and an **AI-augmented instructor** that optimizes for insight and learning.
 
-We therefore argue for instructor-facing LLMs designed for diagnostic humility: systems that generate inspectable hypotheses, prioritize specificity, support abstention, and keep the final attribution decision with the instructor.
+The evidence from TRACER makes the trade-off concrete. Belief attribution is risk-asymmetric: false positives carry disproportionate harm, and TRACER shows they frequently arise from over-diagnosis on programs that are clean under behavioral tests. This demands **epistemic restraint** and evaluation standards that reward specificity rather than coverage.
+
+LLMs are powerful engines of hypothesis generation: they can scan large volumes of code and surface plausible misconception candidates with supporting evidence traces. But they should not be treated as final judges of student belief. By keeping belief attribution instructor-facing, we unlock the benefits of scale while protecting learners from the costs of confident misattribution.
+
+In short: LLMs can help instructors recover the “true labor” of tutoring—understanding *why*—while restoring the notional machine to the center of CS1 pedagogy.
 
 ## References
 
