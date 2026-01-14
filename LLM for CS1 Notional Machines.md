@@ -1,131 +1,109 @@
 # **Notional Machines, Not Just Errors: Towards Belief Attribution with Instructor-Facing LLMs**
 
-## **1\. Introduction: The Epistemic Crisis in CS1 Feedback**
+## **1\. Introduction: Belief Attribution, Not Just Bug Fixing**
 
-The landscape of Introductory Computer Science (CS1) education is undergoing a seismic shift, precipitated by the integration of Large Language Models (LLMs) into the pedagogical loop. For decades, the "holy grail" of computing education research (CER) has been the scaling of personalized feedback—providing every novice programmer with the kind of tailored, insight-rich guidance that a human tutor offers during a one-on-one session. The advent of generative AI, capable of synthesizing code and explanations with near-human fluency, appears at first glance to solve this scalability crisis. Tools driven by models such as GPT-4 and Claude are now routinely deployed to generate automated hints, explain error messages, and even repair buggy code in real-time.1
+Large language models (LLMs) are rapidly becoming part of the CS1 feedback loop: they explain errors and bugs, propose fixes, and generate working code.1 This creates a plausible path to scale tutoring-like support.
 
-However, this technological affordance has brought with it a subtle but profound pedagogical risk. The prevailing paradigm of "AI-as-Tutor" has largely focused on **correction**: identifying a syntax error or logical bug and prescribing a fix. This approach treats the symptom—the incorrect code—while often ignoring the underlying etiology: the student's flawed mental model of computation.3 In the rush to automate debugging, we risk automating the bypass of learning. When an LLM fixes a student's code, it resolves the immediate friction of the task, but it does not necessarily resolve the **misconception** that generated the error in the first place.2
+Our position is that much of the current “AI-as-tutor” narrative targets the wrong pedagogical object. In CS1, the most instructionally valuable signal is often not surface correctness, but what a submission suggests about the student’s *notional machine* (NM): the learner’s internal model of how programs execute.4,5 Fixing code can remove friction without repairing the misconception that produced it.
 
-The central thesis of this report, supporting the position paper for ITiCSE 2026, is that the true labor of tutoring lies not in explaining the bug, but in attributing the **belief** that caused it. We posit that the most valuable instructional signal in CS1 is not surface correctness, but the student's **Notional Machine (NM)**—their internalized, often idiosyncratic model of how the computer executes their program.4 Understanding this model requires a shift from "error detection" (a binary, objective task) to "belief attribution" (an inferential, probabilistic task).
+This shifts the diagnostic task from **error detection** (properties of code) to **belief attribution** (hypotheses about the agent who wrote the code). That shift matters because belief attribution is inherently uncertain and **risk-asymmetric**: falsely attributing a misconception can be more harmful than abstaining.
 
-This shift introduces a new class of challenges rooted in **epistemic uncertainty**. Unlike a compiler, which can definitively state that a semicolon is missing, an AI attempting to diagnose a student's intent is engaging in **Theory of Mind (ToM)**—a cognitive process fraught with ambiguity.6 When an LLM asserts that a student "believes variables hold history," it is generating a hypothesis, not observing a fact. The reliability of this hypothesis is critical because belief attribution is **risk-asymmetric**. Falsely diagnosing a misconception (a false positive) can be significantly more harmful than failing to diagnose one (a false negative), leading to confusion, reduced self-efficacy, and the erosion of trust in the educational environment.8
+We argue for a different deployment pattern: **instructor-facing LLMs** that generate *plausible misconception hypotheses* for human verification, rather than delivering confident diagnoses directly to students. This is not a claim that LLMs can reveal “true beliefs”; it is a claim that they can produce useful, inspectable hypotheses at scale.
 
-This report provides a comprehensive evidentiary basis for an alternative architecture: **Instructor-Facing LLMs**. Rather than acting as autonomous correctors, LLMs should serve as hypothesis generators for instructors, processing vast amounts of student code to surface plausible beliefs and misconceptions for human verification. To validate this position, we analyze data from **TRACER**, a controlled testbed designed to evaluate the specificity and recall of LLM-based belief attribution. The analysis reveals a critical trade-off: while current models can achieve high recall (0.87), their specificity (0.85) is vulnerable to "over-diagnosis," particularly on correct or unidiomatic programs.10 This finding underscores the necessity of **diagnostic humility**—an epistemic standard where AI systems prioritize safety and specificity over broad, aggressive diagnosis.
-
-The following sections will rigorously deconstruct the theoretical underpinnings of the Notional Machine, the cognitive science of belief attribution, the ethical implications of risk asymmetry, and the empirical reality of AI performance in this domain.
+To ground the position empirically, we draw on TRACER, a controlled benchmark for belief attribution in CS1 Java. TRACER uses a synthetic dataset of 1,200 compiled Java submissions with known injected misconception labels and “clean” controls. “Clean” here means: the program compiles and **passes TRACER’s black-box I/O tests** (compile with `javac`, execute `main` on multiple stdin cases, and check stdout). In 5-fold cross-validation, models reach recall ≈ 0.87 and specificity ≈ 0.85, but false positives are driven primarily by **over-diagnosis on clean programs**. Under a label-inclusive scoring variant, recall saturates (≈ 0.98) while specificity degrades (≈ 0.77). These results support the central safety claim: belief-oriented LLM support is promising, but only if we adopt evaluation and interface standards that reward **diagnostic humility** over aggressive coverage.
 
 ## ---
 
-**2\. Theoretical Framework: The Notional Machine as the Pedagogical Target**
+**2\. Theoretical Framework: Notional Machines as the Pedagogical Target**
 
-To argue for belief attribution, we must first define the object of that attribution. In the context of CS1, the target mental state is the student's understanding of the **Notional Machine**. This concept serves as the foundational bridge between the abstract semantics of a programming language and the concrete mental models constructed by learners.
+### **2.1 Notional Machines and Mental Models**
 
-### **2.1 Defining the Notional Machine**
+Du Boulay introduced the *notional machine* as the simplified, pedagogically useful “machine” implied by a programming language—an explanatory device that makes execution intelligible to novices.4 Sorva later sharpened the learner-facing implication: understanding computing often entails being able to mentally simulate such a machine with enough fidelity to predict state changes step-by-step.5
 
-The term "Notional Machine" was coined by Benedict du Boulay in the early 1980s to describe the idealized computer implied by a programming language.4 Du Boulay famously described the Notional Machine as "the best lie we tell students" about how the computer works.12 It is a necessary pedagogical simplification that hides the overwhelming complexity of the physical machine (registers, transistors, cache coherence) to focus attention on the constructs relevant to the learner's current level of abstraction.11
+In practice, instruction aims to align a student’s *mental model* (their internal simulation) with an expert-endorsed notional machine for the language subset being taught.4,14 Misconceptions are not merely random mistakes; they are structured divergences in the learner’s execution model.
 
-A Notional Machine is not the computer itself, nor is it the programming language specification. It is an **explanatory device**—a "glass box" that makes the hidden behavior of the system visible and intelligible.4 For example, when teaching variable assignment in Python, the Notional Machine might represent variables as "names bound to objects" rather than "memory addresses storing values" (the C-style Notional Machine). This distinction is crucial because different languages imply different Notional Machines, and novices often struggle because they apply the rules of one NM (e.g., human conversation or high-school algebra) to the context of another (e.g., imperative programming).12
+### **2.2 Why NMs are a Natural Target for LLM Support**
 
-Juha Sorva, a leading scholar in this domain, expanded the definition to emphasize the relationship between the NM and the learner. Sorva posits that "to understand computing is to have a robust mental model of a notional machine".5 This definition shifts the focus from the artifact (the code) to the cognition (the model). A student has mastered a concept not when they can copy-paste correct syntax, but when they can accurately simulate the Notional Machine in their head—predicting how the machine’s state changes step-by-step in response to instructions.5
+Notional-machine misconceptions are a good fit for instructor-facing tooling because:
 
-### **2.2 The Notional Machine vs. The Mental Model**
+- They are often **latent**: the same surface error can arise from different underlying beliefs.
+- They are **clusterable**: many students can share the same divergence pattern, making cohort-level intervention valuable.
+- They are **actionable**: instructors can design explanations, tracing activities, or examples that directly target the flawed execution model.
 
-It is imperative to distinguish between the **Notional Machine** (the target instructional model) and the student's **Mental Model** (the internal cognitive representation).
-
-* **The Notional Machine** is an external, expert-defined construct. It is consistent, complete relative to the language subset, and technically valid.4  
-* **The Mental Model** is the student’s internal simulation. It is often incomplete, unstable, and rife with misconceptions.14
-
-Pedagogy in CS1 is essentially the process of aligning the student's mental model with the target Notional Machine.14 Misconceptions arise when the student's mental model diverges from the NM in structured ways. For instance, a common misconception is that a while loop continuously monitors a state change (like a thermostat) rather than checking a condition only at the beginning of each iteration.5 This is not a random error; it is a logical consequence of a flawed Notional Machine (perhaps one borrowed from a "reactive" or "natural language" context).15
-
-The "education of attention" is a critical function of the Notional Machine.4 A well-defined NM directs the student's gaze to the relevant aspects of execution—highlighting that x \= x \+ 1 is a temporal update of state, not a mathematical assertion of equality.5 When instruction fails to make the NM explicit, students construct their own "spontaneous" NMs, which are often riddled with "superbug" misconceptions.12
-
-### **2.3 Taxonomies of Notional Machines**
-
-Research has identified that a single course may involve multiple, layered Notional Machines. As students progress from simple imperative commands to object-oriented structures, the NM must evolve.13
-
-* **The Expression Machine:** Focuses on the evaluation of mathematical and boolean expressions. The "machine" here is a calculator that reduces complex trees to single values.16  
-* **The State Machine:** Introduces variables and memory. The machine is a set of "boxes" or "named slots" that change over time.12  
-* **The Object Machine:** Introduces references, the heap, and message passing. The machine becomes a graph of interconnected entities.5
-
-A "bug" in student code often represents a collision between these layers—for example, treating an object reference (Object Machine) as a primitive value (State Machine). Diagnosing this requires the instructor to identify which NM the student is operating within and where their specific model has deviated.4 This diagnostic process is what we term **Belief Attribution**.
+TRACER operationalizes this idea with 18 labeled misconception patterns (ground-truth IDs) grounded in notional-machine categories (e.g., reactive state, anthropomorphic I/O, type fluidity, algebraic syntax, “void” assumptions). This set is not meant to be exhaustive; it is a controlled probe for whether LLMs can support belief attribution at all.
 
 ## ---
 
-**3\. The Diagnostic Challenge: From Syntax to Belief Attribution**
+**3\. The Diagnostic Challenge: Belief Attribution as an Inverse Problem**
 
-If the pedagogical goal is to correct the student's mental model, then the diagnostic task is to infer that model from the available evidence (the code). This is an **inverse problem** of significant complexity, requiring the observer to reconstruct the hidden cause (intent/belief) from the visible effect (code).
+Belief attribution from code is an inverse problem: a latent belief state produces an observable artifact, and we attempt to infer the latent cause.
 
-### **3.1 Theory of Mind (ToM) in Educational Contexts**
+A minimal framing is:
 
-In cognitive science, **Theory of Mind** refers to the ability to attribute mental states—beliefs, intents, desires, knowledge—to oneself and others, and to understand that others have beliefs that are different from one's own.6 In the context of tutoring, ToM is the engine of diagnosis. A human tutor looks at a piece of code where a student has written if (x \= 5\) and thinks: *"The student likely believes that a single equals sign checks for equality, or perhaps they are confusing assignment with comparison."* This is a mental simulation of the student's thought process.6
+- Latent student belief (notional machine) `b`
+- Task/context `t` (problem statement, constraints)
+- Surface style `s` (naming/formatting/persona)
+- Observed code `c`
 
-For an AI system, performing this attribution is fundamentally different from identifying a syntax error. A syntax error is a violation of formal grammar; it is a property of the text. A misconception is a property of the *agent* who produced the text.17 While recent advances in LLMs suggest emergent abilities that mimic ToM—such as predicting the actions of characters in false-belief tasks—these capabilities are statistical simulacra.7 The model predicts the most likely sequence of tokens that follows a "diagnosis" prompt, based on correlations in its training data (which includes thousands of discussions about programming errors).18
+The forward process is `p(c | b, t, s)`. Diagnosis is the posterior `p(b | c, t, s)`. This posterior is generally **multi-modal**: multiple beliefs can explain the same code.
 
-However, the "mind" of the novice programmer is notoriously difficult to model because it is inconsistent. Unlike the "rational agent" often assumed in economic or game-theoretic models, a novice programmer is often "pre-rational" regarding the domain—they may hold contradictory beliefs simultaneously (e.g., believing variables are dynamic in one line but static in another).20 This inconsistency makes **intent recognition**—the prerequisite for belief attribution—exceptionally noisy.21
+### **3.1 Theory of Mind (ToM) as a Tutoring Analogy**
 
-### **3.2 The Complexity of Intent Recognition in Code**
+Human tutors routinely perform Theory-of-Mind-like inference: they see a student write `if (x = 5)` and infer a plausible confusion (assignment vs equality), not merely a syntax mistake.6 In this paper we use ToM as an analogy for the *type of inference* involved in belief attribution—not as a claim that LLMs possess human-like mental-state understanding.17,18
 
-Intent recognition in programming has a long history, dating back to symbolic AI and **plan recognition** systems like PROUST and the Lisp Tutor.23 These systems relied on libraries of "plans" (correct ways to solve a problem) and "buggy rules" (common deviations). If a student's code matched a buggy rule, the system could infer the specific misconception.25
+LLMs can appear ToM-capable because they are strong at producing coherent explanations conditioned on code and context. But those explanations remain hypotheses; the system does not observe beliefs.
 
-While these systems were precise, they were brittle. They could only recognize intents that had been pre-programmed into their libraries.23 If a student used a creative but incorrect approach, or a novel variable naming scheme, the system failed.27
+### **3.2 Robust Intent Recognition and Over-Interpretation**
 
-LLMs have transcended this brittleness. They can recognize intent in "unparsable" code, inferring that a variable named accumulator is intended to sum values even if the logic is flawed.22 This capability, often termed "robust intent recognition," allows LLMs to function in the messy reality of CS1, where code is rarely syntactically perfect.29 However, this robustness comes with a cost: **over-interpretation**.
+Compared to earlier student-modeling systems (e.g., plan recognition and buggy-rule approaches), LLMs are robust to messy code and can often infer what the student *meant* even when the submission is unconventional.23 This robustness is valuable in realistic CS1 settings, but it also creates a predictable failure mode: **over-interpretation**—attributing a deep misconception where there may only be a slip, an incomplete implementation, or stylistic variance.
 
-### **3.3 The "Inverse Problem" and Hallucinated Intent**
+### **3.3 Example: One Bug, Many Plausible Beliefs (Java)**
 
-The core difficulty of belief attribution via LLM is that it is an ill-posed inverse problem: Multiple mental models can produce the same code artifact.  
-Consider a student who writes:
+Consider a student trying to sum an array:
 
-Python
+```java
+int sum = 0;
+for (int i = 0; i < nums.length; i++) {
+    sum += i; // uses index, not value
+}
+```
 
-for i in range(len(mylist)):  
-    print(i)
+The behavior is wrong, but the underlying belief is ambiguous:
 
-When the output is 0 1 2... instead of the list items, the student is confused. But *why*?
+- **Hypothesis A (index–value confusion):** the student believes `i` *is* the array element.
+- **Hypothesis B (attention slip):** the student intended `nums[i]` and simply omitted it.
+- **Hypothesis C (template transfer):** the student copied a loop skeleton without integrating the meaning of `i`.
 
-* **Hypothesis A:** The student believes i in a for-loop iterates over elements, not indices (a misconception about range).  
-* **Hypothesis B:** The student knows i is an index but forgot to write mylist\[i\] (a slip/lapse of attention).  
-* **Hypothesis C:** The student copied this pattern from a different context where indices were required (bricolage without understanding).
-
-An LLM, trained on vast corpora of "explain this bug" prompts, will strongly gravitate toward the most statistically probable explanation (likely Hypothesis A).19 It creates a coherent narrative of the student's belief. If the student actually committed a slip (Hypothesis B), the LLM's diagnosis is a **hallucination of misconception**.19 It attributes a deep epistemic deficit where there was only a momentary performance error.
-
-This is not merely a technical error; it is a pedagogical hazard. "McMining" studies—automated discovery of misconceptions—have shown that while LLMs are effective at identifying genuine misconceptions, they also frequently flag "inefficient" or "unidiomatic" code as evidence of conceptual misunderstanding.31 The model conflates *style* with *belief*, diagnosing a student who writes manual loops instead of list comprehensions as "misunderstanding iteration," rather than simply being a novice who hasn't learned the syntactic sugar.31
+A model prompted to “explain the misconception” will tend to commit to the most narratively coherent hypothesis. That commitment is exactly what creates pedagogical risk if delivered directly to students.
 
 ## ---
 
-**4\. The Ethics of Diagnosis: Risk Asymmetry and Epistemic Harm**
+**4\. The Ethics of Diagnosis: Risk Asymmetry and Diagnostic Humility**
 
-The transition from human to AI-driven belief attribution necessitates a rigorous ethical framework. In high-stakes domains like medicine or criminal justice, we evaluate diagnostic tools not just on accuracy, but on their **risk profile**—the relative cost of different types of errors. We argue that education demands a similar rigor, specifically acknowledging the **risk asymmetry** of belief attribution.
+### **4.1 Why False Positives Matter More Than False Negatives**
 
-### **4.1 False Positives vs. False Negatives in Pedagogy**
+In misconception diagnosis:
 
-In the context of diagnosing student misconceptions:
+- **False negatives** miss an opportunity for targeted support.
+- **False positives** assert a misconception where none exists.
 
-* **A False Negative (FN)** occurs when the system fails to identify a misconception that exists. The student continues to hold the incorrect belief.  
-* **A False Positive (FP)** occurs when the system attributes a misconception to a student who does not hold it (e.g., diagnosing a slip as a misconception, or flagging correct but creative code as flawed).
+For student-facing tools, false positives are often more harmful: they can waste time on “fixing” non-problems, misdirect attention, and erode trust in automated feedback systems.41 A belief diagnosis is not a neutral suggestion; it functions as an attribution about a learner.
 
-Conventional wisdom might suggest that False Negatives are the greater evil—we don't want students "slipping through the cracks." However, in the context of automated feedback, the **False Positive is significantly more harmful**.8
+TRACER’s results make this concrete: even with strong recall, a non-trivial fraction of clean programs are flagged as having misconceptions. That is exactly the setting where diagnostic humility is required.
 
-#### **The Harm of False Positives**
+### **4.2 Epistemic Restraint as a Design Requirement**
 
-1. **Interference and Unlearning:** When a student with a correct mental model is told they are wrong, it induces "epistemic doubt".33 They may abandon their correct understanding in favor of the AI's confused suggestion. Research in "retroactive interference" suggests that perceiving false information (even if later corrected) can impair the retention of correct knowledge, although the magnitude of this effect varies.9 In the immediate term, it causes frustration and wasted cognitive load as the student tries to "fix" code that wasn't broken.35  
-2. **Labeling and Self-Efficacy:** Diagnosing a student with a "misconception" is a form of **labeling**. Labeling theory in psychology warns that assigning a deficit label (even a mild one like "confused") can create self-fulfilling prophecies.36 For novice programmers, who often suffer from Imposter Syndrome, being told by an "authoritative" AI that their thinking is flawed can be devastating to self-efficacy.38 This is particularly acute for marginalized groups in CS, where "stereotype threat" creates a vulnerability to negative feedback.39  
-3. **Trust Erosion:** The "Boy Who Cried Wolf" effect is powerful in educational technology. If an AI tool flags correct code as erroneous ("false positive"), students (and instructors) rapidly lose trust in the system.41 Once trust is eroded, even valid feedback is ignored.42 A system with low specificity effectively destroys its own utility.
+Belief attribution requires systems that can *abstain* when evidence is insufficient. Practically, this means:
 
-### **4.2 Epistemic Restraint: The Imperative of Humility**
+- The default interface language should be probabilistic (“this code suggests…”) rather than assertive.
+- The system should surface **evidence** (code spans) alongside hypotheses.
+- Evaluation should reward **specificity** and penalize over-diagnosis, not just maximize recall.
 
-Given the high cost of false positives, the ethical imperative for AI in education is **Epistemic Restraint**. This concept, borrowed from philosophy and robust AI design, dictates that an agent should abstain from making a claim when its confidence is low or when the evidence is ambiguous.43
+### **4.3 The Evaluation Trap: “Label-Inclusive” Success**
 
-Current LLMs generally lack this restraint. They are designed to be helpful and conversational, which manifests as a tendency to answer *every* prompt, even if the answer is a fabrication.45 In a diagnostic context, this "bias toward action" is dangerous. A responsible pedagogical agent must be capable of **aleatoric and epistemic uncertainty quantification**.47
+A common evaluation shortcut is to score a prediction as correct if it includes the true label anywhere among multiple predicted labels. This inflates apparent capability by tolerating “shotgun” diagnosis: the system can list many misconceptions and still be counted correct.
 
-* *Aleatoric Uncertainty:* "The code is messy; I can't parse it."  
-* *Epistemic Uncertainty:* "The code is clear, but I don't know *why* the student wrote it. It could be a typo or a misconception."
-
-**Diagnostic Humility**—a virtue emphasized in medical education—requires acknowledging the limits of one's knowledge.48 Just as a doctor should not guess a diagnosis to appear competent, an educational AI should not guess a misconception to appear helpful.50 The system must be designed to prioritize **Specificity** (avoiding false alarms) over Recall. It is better to remain silent than to misdiagnose.8
-
-### **4.3 The "Label-Inclusive" Trap**
-
-The abstract mentions a "label-inclusive matching strategy" that saturates recall at the expense of specificity. This refers to a common evaluation shortcut where any overlap between the predicted diagnosis and the ground truth is counted as a success \[Abstract\]. For example, if the ground truth is "Loop Misconception" and the AI predicts "Loop Misconception AND Variable Misconception," a label-inclusive metric counts this as a hit. However, in the classroom, this result involves a False Positive ("Variable Misconception") that could confuse the student. This "shotgun approach" to diagnosis inflates the perceived capability of the AI while masking the safety risks.10
+For belief attribution, this shortcut is unsafe: extra labels are not free—they are potential false positives. TRACER’s label-inclusive ablation illustrates the problem: recall increases sharply while specificity degrades. A position-paper takeaway is that belief-oriented LLM support must be evaluated with scoring rules that reflect the classroom cost of false accusations.
 
 ## ---
 
