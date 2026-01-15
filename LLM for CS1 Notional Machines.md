@@ -27,8 +27,6 @@ This is not an argument against “AI-as-tutor.” Automated explanations and re
 
 Belief attribution is intrinsically uncertain and risk-asymmetric: a false-positive diagnosis (“this student believes X”) can be more harmful than abstaining. Novices often cannot reliably adjudicate between competing explanations, and a confident but wrong story can induce confusion, mistrust, and wasted effort.
 
-**Thesis.** LLMs should be designed and evaluated primarily as instructor-facing hypothesis generators for students’ notional machines, not as student-facing arbiters of what students “believe.”
-
 To make this position concrete, we pose three questions that a serious instructor-facing system must answer:
 
 1. **Feasibility / capability:** Given only a CS1 submission (and its task context), can an LLM generate plausible hypotheses about the student’s latent notional machine—beyond surface bug descriptions?
@@ -142,7 +140,7 @@ Not all misconceptions are equally observable from code. Some produce strong sur
 
 ## 5. Evidence: TRACER as a Controlled Probe
 
-TRACER is used here as supporting evidence, not as a claim of classroom-ready student modeling. It consists of 1,200 synthetic CS1 Java submissions across three assignments and 18 misconception labels. The benchmark is designed so each synthetic student contributes one behaviorally failing submission with an injected misconception and three behaviorally correct submissions; generation uses a 4×3 persona matrix (coding style × cognitive profile) to reduce near-duplicate canonical forms.
+TRACER (Taxonomic Research of Aligned Cognitive Error Recognition) is used here as supporting evidence, not as a claim of classroom-ready student modeling. It consists of 1,200 synthetic CS1 Java submissions across three assignments and 18 misconception labels. The benchmark is designed so each synthetic student contributes one behaviorally failing submission with an injected misconception and three behaviorally correct submissions; generation uses a 4×3 persona matrix (coding style × cognitive profile) to reduce near-duplicate canonical forms.
 
 TRACER evaluates whether an LLM can generate a hypothesis about student thinking aligned with the injected ground truth. In the main condition, matching compares hypothesized “student thinking” to injected “student thinking” while excluding label text. An ablation includes label text to illustrate how evaluation shortcuts can inflate apparent capability while worsening safety. The matching does not score whether cited evidence spans entail the hypothesis.
 
