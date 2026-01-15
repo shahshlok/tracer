@@ -21,7 +21,7 @@ CS1; notional machines; misconceptions; student modeling; instructor-facing tool
 
 Large language models (LLMs) have become central to CS1 feedback workflows as tools for student-centered learning: they serve as on-demand tutors that help students learn from their mistakes by interpreting error messages, providing pedagogical guidance, and offering just-in-time assistance at scale. By helping students understand and resolve their mistakes in real-time, these systems reduce friction and expand access to personalized support.
 
-This paper takes a position on a distinct, instructor-centered opportunity that is currently under-developed: using LLMs to help instructors reason about what student code suggests about students’ notional machines—students’ mental models of how programs execute (du Boulay, 1986). Instructors often care less about whether a single submission is correct than about what patterns of errors reveal about how students think, because that is what determines what to teach next.
+This paper takes a position on a distinct, instructor-centered opportunity that is currently under-developed: using LLMs to help instructors reason about what student code suggests about students’ mental models of the notional machine (du Boulay, 1986). Instructors often care less about whether a single submission is correct than about what patterns of errors reveal about how students think, because that is what determines what to teach next.
 
 This is not an argument against student-facing “AI-as-tutor” tools—those systems offer genuine value for practice and accessibility. Rather, it is an argument for broadening the scope of LLMs in CS education to include a complementary direction: instructor-facing belief attribution. Bug fixing is about the program. Belief attribution is about the person who wrote it.
 
@@ -37,7 +37,7 @@ We propose treating LLMs as instructor-facing hypothesis generators: tools that 
 
 To make the position concrete, we pose three questions that an instructor-facing belief attribution direction must answer:
 
-1. **Feasibility / capability:** Given a CS1 submission (and task context), can an LLM generate plausible hypotheses about the student’s latent notional machine beyond surface bug descriptions?
+1. **Feasibility / capability:** Given a CS1 submission (and task context), can an LLM generate plausible hypotheses about the student’s latent mental model beyond surface bug descriptions?
 2. **Safety / trigger-happiness:** How often does the model over-diagnose—attributing a misconception when the program is clean or the evidence is ambiguous—and what false-positive burden does that impose?
 3. **Coverage limits / blind spots:** Which misconception families are reliably diagnosable versus systematically hard, and what does that imply for how instructors should interpret hypotheses?
 
@@ -89,7 +89,7 @@ We use:
 - **Mental model** to mean a student’s internal approximation of that machine.
 - **Misconception** to mean a systematic divergence: a coherent but incorrect rule the student may be using.
 
-A single incorrect submission can arise from many latent causes: a misconception, a partial understanding, or a one-off slip. Therefore, inferring a student's notional machine from code is an inverse problem with a multi-modal posterior.
+A single incorrect submission can arise from many latent causes: a misconception, a partial understanding, or a one-off slip. Therefore, inferring a student's mental model from code is an inverse problem with a multi-modal posterior.
 
 This diagnostic task is a form of Theory of Mind (ToM): attributing mental states—beliefs, intents, knowledge—to another agent based on observable behavior (Premack & Woodruff, 1978). When an instructor looks at buggy code and infers "this student believes assignment works like algebraic equality," they are simulating the student's reasoning process. For an LLM to perform this attribution, it must go beyond pattern-matching surface errors to generating hypotheses about the cognitive state that produced them. Unlike syntax checking, which identifies properties of the text, belief attribution infers properties of the agent who wrote it—a fundamentally more uncertain task.
 
@@ -97,8 +97,8 @@ This diagnostic task is a form of Theory of Mind (ToM): attributing mental state
 
 We define a misconception as:
 
-- **Structural** if the evidence for it is primarily *surface-observable in the artifact* (e.g., a missing assignment of a return value, an out-of-bounds index expression, or a visibly wrong operator). Structural misconceptions tend to have stable, local signatures in code.
-- **Semantic** if correct diagnosis requires inferring the student’s *intended meaning* or expected execution behavior beyond surface form (e.g., assumptions about evaluation order, reactive recomputation, or indentation-as-block structure). Semantic misconceptions are less directly observable and therefore more uncertainty-prone.
+- **Structural** if it manifests as a distinct surface signature, often identifiable via static analysis or API misuse. Examples in our taxonomy include the *Void Machine* (ignoring return values, e.g., `Math.sqrt(x)`) and *Human Indexing* (using 1-based array access).
+- **Semantic** if it involves an invisible mental model of execution state that requires inferring intent beyond surface form. Examples include the *Reactive State Machine* (believing variables auto-update like spreadsheet cells) and the *Independent Switch* (misunderstanding conditional mutual exclusivity).
 
 This is a binary operationalization for reporting and evaluation, not a claim that misconception observability is inherently binary.
 
@@ -196,7 +196,7 @@ Importantly, current matching does not verify that the model’s cited evidence 
 
 **Feasibility:** Recall is high in both settings, suggesting models can often produce belief hypotheses aligned with injected misconceptions.
 
-**Safety:** False positives concentrate on clean programs. In the main run, 3,364 of 3,884 false positives (86.6%) occur on behaviorally correct submissions, indicating a trigger-happy tendency that is harmful if surfaced directly to students.
+**Safety:** False positives concentrate on clean programs (Figure 2). In the main run, 3,364 of 3,884 false positives (86.6%) occur on behaviorally correct submissions, indicating a trigger-happy tendency that is harmful if surfaced directly to students.
 
 **Blind spots:** Figure 1 summarizes a structural vs. semantic gap, consistent with the idea that some misconception families are less observable from code alone.
 
