@@ -73,7 +73,7 @@ Large-scale telemetry and data mining enable measurement of novice error pattern
 
 ### 2.4 LLM-based feedback in programming education
 
-Recent work evaluates LLMs’ ability to generate feedback for programming exercises and observes reliability issues such as inconsistent or incorrect advice (Azaiz et al., 2024). The broader education community also highlights opportunities and risks of LLMs, including over-trust in fluent outputs and the need for careful pedagogical integration (Kasneci et al., 2023).
+Recent work evaluates LLMs’ ability to generate feedback for programming exercises and observes reliability issues such as inconsistent or incorrect advice (Azaiz et al., 2024). Other recent computing education work compares how LLM-generated code differs from student code and bug distributions (MacNeil et al., 2024), explores LLM-based classification of novice logical errors (Lee et al., 2024), and proposes using LLMs as cognitive models of students with misconceptions (Sonkar et al., 2024). Work on misconception mining also suggests that LLMs may articulate misconception hypotheses from code at scale (Al-Hossami & Bunescu, 2025). The broader education community highlights opportunities and risks of LLMs, including over-trust in fluent outputs and the need for careful pedagogical integration (Kasneci et al., 2023).
 
 ### 2.5 Reliability and “hallucination” as a design constraint
 
@@ -168,8 +168,7 @@ TRACER (Taxonomic Research of Aligned Cognitive Error Recognition) is used here 
 TRACER is a controlled probe designed to test whether LLM outputs about “student thinking” can align with operationalized ground truth misconceptions.
 
 - Dataset: 1,200 synthetic CS1 Java submissions from 300 synthetic “students” across three assignments.
-- Each student produces 4 submissions; the intended design is 3 behaviorally correct + 1 misconception-seeded.
-- In the current dataset manifests, 275/1200 files are seeded and 925/1200 are clean (seeding sometimes falls back to clean when constraints cannot be satisfied).
+- Each student produces 4 submissions; by design, each contributes 1 misconception-seeded submission and 3 behaviorally correct submissions.
 
 Generation uses a 4×3 persona matrix (coding style × cognitive profile) to reduce near-duplicate canonical forms and create surface-level variation.
 
@@ -227,23 +226,30 @@ One practical implication of TRACER’s clean-code false positives is that instr
 
 ## 6. Discussion & Implications
 
+Clean-code false positives are uniquely harmful in CS1 belief attribution: when a program is correct, there may be no misconception to remediate, and a speculative diagnosis can teach a wrong rule. For novice learners, the LLM’s fluency can be mistaken for authority, making “helpful” over-diagnosis a direct risk to concept formation.
+
 ### 6.1 Implications for tool builders
 
 - Prefer evidence-first interfaces: show behavior and code spans before any misconception label.
 - Treat “no diagnosis” and “multiple plausible hypotheses” as normal outputs.
-- Provide cohort-level clustering so instructors verify patterns, not individual students.
-- Make uncertainty legible: avoid confident narrative explanations when evidence is weak.
+- Implement abstention explicitly: require minimum evidence strength (e.g., calibrated thresholds or cross-model agreement) before surfacing a hypothesis.
+- Separate *structural evidence* from *semantic inference* in the UI so instructors can see what is directly supported vs. conjectured.
+- Support instructor verification loops (e.g., inspect a few representative submissions per cluster before acting).
+- Avoid student-facing authoritative labels; keep hypotheses instructor-facing by default.
 
 ### 6.2 Implications for computing education research
 
 - Benchmarks should explicitly include clean submissions to measure over-diagnosis.
 - Reporting should include specificity/false positives, not only recall/accuracy.
 - Structural vs. semantic performance should be reported separately because observability differs.
-- “Evidence-grounded” claims require additional evaluation beyond label alignment.
+- “Evidence-grounded” claims require evaluation beyond label alignment (e.g., entailment/justification quality audits).
+- Synthetic probes should be paired with follow-on studies that check transfer to authentic student work before making classroom-impact claims.
 
 ### 6.3 Implications for classroom practice
 
-Instructor-facing hypothesis generators can help instructors regain a key part of teaching at scale: noticing patterns in student thinking. Used as hypotheses (not judgments), these systems can support faster, more targeted interventions without exposing students to confident misattribution.
+- Use hypothesis clusters to guide instructional action (e.g., add tracing exercises, revise examples, or target short interventions).
+- Treat diagnoses as leads for investigation, not as student labels; verify with representative code and, when possible, student explanations.
+- Prefer conservative rollouts: start with cohort-level analytics rather than per-student misconception claims.
 
 ## 7. Limitations
 
@@ -259,6 +265,7 @@ Because belief attribution is uncertain and risk-asymmetric, the path forward re
 
 ## References (working list)
 
+- Al-Hossami, E., & Bunescu, R. (2025). McMining: Automated Discovery of Misconceptions in Student Code. arXiv.
 - Anderson, J. R., Conrad, F. G., & Corbett, A. T. (1989). Skill Acquisition and the LISP Tutor. Cognitive Science.
 - Azaiz, I., Kiesler, N., & Strickroth, S. (2024). Feedback-Generation for Programming Exercises With GPT-4. ITiCSE.
 - Bender, E. M., Gebru, T., McMillan-Major, A., & Shmitchell, S. (2021). On the Dangers of Stochastic Parrots. FAccT.
@@ -267,10 +274,13 @@ Because belief attribution is uncertain and risk-asymmetric, the path forward re
 - du Boulay, B. (1986). Some Difficulties of Learning to Program. Journal of Educational Computing Research.
 - Ji, Z., et al. (2023). Survey of Hallucination in Natural Language Generation. ACM Computing Surveys.
 - Johnson, W. L., & Soloway, E. (1985). PROUST: Knowledge-Based Program Understanding. IEEE Transactions on Software Engineering.
+- Lee, Y., Jeong, S., & Kim, J. (2024). Improving LLM Classification of Logical Errors by Integrating Error Relationship into Prompts. (Preprint).
+- MacNeil, S., et al. (2024). Synthetic Students: A Comparative Study of Bug Distribution Between Large Language Models and Computing Students. (ACM).
 - Kaczmarczyk, L. C., Petrick, E. R., East, J. P., & Herman, G. L. (2010). Identifying student misconceptions of programming. SIGCSE.
 - Kasneci, E., et al. (2023). ChatGPT for good? On opportunities and challenges of large language models for education. Learning and Individual Differences.
 - Pea, R. D. (1986). Language-Independent Conceptual “Bugs” in Novice Programming. Journal of Educational Computing Research.
 - Qian, Y., & Lehman, J. (2017). Students’ Misconceptions and Other Difficulties in Introductory Programming: A Literature Review. ACM TOCE.
 - Shi, Y., et al. (2021). Toward Semi-Automatic Misconception Discovery Using Code Embeddings. LAK.
 - Sirkiä, T., & Sorva, J. (2012). Exploring programming misconceptions: an analysis of student mistakes in visual program simulation exercises. Koli Calling.
+- Sonkar, S., et al. (2024). LLM-based Cognitive Models of Students with Misconceptions. (Preprint).
 - Spohrer, J. C., & Soloway, E. (1986). Novice Mistakes: Are the Folk Wisdoms Correct? Communications of the ACM.
