@@ -19,11 +19,11 @@ CS1; notional machines; misconceptions; student modeling; instructor-facing tool
 
 ## 1. Introduction
 
-Large language models are increasingly present in CS1 feedback workflows: they explain compiler errors, propose patches, and generate hints at scale. Used well, these systems can reduce friction and expand access to help.
+Large language models (LLMs) have become central to CS1 feedback workflows as tools for student-centered learning: they serve as on-demand tutors that help students learn from their mistakes by interpreting error messages, providing pedagogical guidance, and offering just-in-time assistance at scale. By helping students understand and resolve their mistakes in real-time, these systems reduce friction and expand access to personalized support.
 
 This paper takes a position on a distinct, instructor-centered opportunity that is currently under-developed: using LLMs to help instructors reason about what student code suggests about students’ notional machines—students’ mental models of how programs execute (du Boulay, 1986). Instructors often care less about whether a single submission is correct than about what patterns of errors reveal about how students think, because that is what determines what to teach next.
 
-This is not an argument against student-facing “AI-as-tutor” tools. Rather, it is an argument about what the field should treat as the primary pedagogical object and safety target when LLMs infer beliefs. Bug fixing is about the program. Belief attribution is about the person who wrote it.
+This is not an argument against student-facing “AI-as-tutor” tools—those systems offer genuine value for practice and accessibility. Rather, it is an argument for broadening the scope of LLMs in CS education to include a complementary direction: instructor-facing belief attribution. Bug fixing is about the program. Belief attribution is about the person who wrote it.
 
 ### 1.1 Gaps in current approaches
 
@@ -79,7 +79,7 @@ Recent work evaluates LLMs’ ability to generate feedback for programming exerc
 
 In natural language generation, hallucination and overconfident errors are well-studied failure modes (Ji et al., 2023). For belief attribution, these failures are not merely inconvenient; they are pedagogically harmful because they can mislabel students’ thinking. This motivates explicit “diagnostic humility”: abstention, calibrated uncertainty, and workflows that keep hypotheses instructor-facing rather than student-authoritative.
 
-## 3. Notional Machines and Belief Attribution as an Inverse Problem
+## 3. Notional Machines and Belief Attribution: An Inverse Problem
 
 ### 3.1 Terms: notional machine, mental model, misconception
 
@@ -89,7 +89,9 @@ We use:
 - **Mental model** to mean a student’s internal approximation of that machine.
 - **Misconception** to mean a systematic divergence: a coherent but incorrect rule the student may be using.
 
-A single incorrect submission can arise from many latent causes: a misconception, a partial understanding, or a one-off slip. Therefore, inferring a student’s notional machine from code is an inverse problem with a multi-modal posterior.
+A single incorrect submission can arise from many latent causes: a misconception, a partial understanding, or a one-off slip. Therefore, inferring a student's notional machine from code is an inverse problem with a multi-modal posterior.
+
+This diagnostic task is a form of Theory of Mind (ToM): attributing mental states—beliefs, intents, knowledge—to another agent based on observable behavior (Premack & Woodruff, 1978). When an instructor looks at buggy code and infers "this student believes assignment works like algebraic equality," they are simulating the student's reasoning process. For an LLM to perform this attribution, it must go beyond pattern-matching surface errors to generating hypotheses about the cognitive state that produced them. Unlike syntax checking, which identifies properties of the text, belief attribution infers properties of the agent who wrote it—a fundamentally more uncertain task.
 
 ### 3.2 Structural vs. semantic misconceptions (definition)
 
@@ -100,13 +102,12 @@ We define a misconception as:
 
 This is a binary operationalization for reporting and evaluation, not a claim that misconception observability is inherently binary.
 
-### 3.3 Worked example (TRACER NM_STATE_01: “Spreadsheet View / Early Calculation”)
+### 3.3 Worked example: Spreadsheet View 
 
 The following TRACER submission exemplifies a semantic misconception: the student computes a formula early, apparently expecting the variable to later “update” when inputs are read.
 
 ```java
-// authentic_seeded/a1/Miller_Bryan_335743/Q2.java
-// NM_STATE_01: Spreadsheet View (Early Calculation)
+// Spreadsheet View (Early Calculation)
 
 double y=0;
 double n=0;
@@ -134,7 +135,7 @@ An instructor-facing belief attribution system should:
 - Express uncertainty and support abstention when evidence is ambiguous.
 - Aggregate across submissions to surface cohort-level patterns rather than making isolated claims about individuals.
 
-The unit of value is not “the model fixed the code,” but “the model helped the instructor decide where to look next.”
+Alongside automated repair, a key unit of value in this direction is providing instructors with the pedagogical insight needed to decide where to focus their attention next.
 
 ### 4.2 Evaluation requirements (designing for diagnostic humility)
 
@@ -170,15 +171,19 @@ TRACER is a controlled probe designed to test whether LLM outputs about “stude
 - Dataset: 1,200 synthetic CS1 Java submissions from 300 synthetic “students” across three assignments.
 - Each student produces 4 submissions; by design, each contributes 1 misconception-seeded submission and 3 behaviorally correct submissions.
 
-Generation uses a 4×3 persona matrix (coding style × cognitive profile) to reduce near-duplicate canonical forms and create surface-level variation.
+Generation uses a 4×3 persona matrix (coding style × cognitive profile) to inject diversity and prevent the generator LLM from producing a single canonical solution. Without personas, LLMs tend to output nearly identical "textbook" code for each problem, which would make misconception detection trivially easy (the detector could simply memorize surface patterns). The four coding styles—*minimal* (single-letter variables, no comments), *verbose* (descriptive names, step-by-step comments), *textbook* (clean standard Java), and *messy* (inconsistent formatting)—vary surface presentation. The three cognitive profiles—*procedural*, *mathematical*, and *cautious*—vary problem decomposition strategy. This yields 12 distinct "student types" per assignment, forcing detection to rely on conceptual signatures rather than stylistic cues.
+
+**Why synthetic data is a strength, not a limitation.** Evaluating belief attribution requires known ground truth: we must know what the student "actually believes" to measure whether the model's hypothesis is correct. Authentic student data cannot provide this—real misconceptions are ambiguous, often multiple, and fundamentally unobservable. By contrast, synthetic data with injected misconceptions gives us controlled inputs, allowing us to focus entirely on the quality of outputs (the model's belief hypotheses).
+
+This methodological choice enables precise measurement of true positives, false positives, and the structural-vs-semantic gap. It also frames TRACER as a *capability probe*: if LLMs can align with injected beliefs in clean, single-misconception code, the direction is worth pursuing; if they fail  here, the approach needs rethinking before deployment. Transfer to authentic classroom data remains important for ecological validity (Section 7), but the synthetic design is what makes the core evaluation possible.
 
 TRACER validates behavioral correctness using black-box I/O testing on compiled Java programs (compile with `javac`, execute `main` on fixed stdin test cases, check stdout for expected patterns).
 
 ### 5.2 Matching and what is scored
 
-TRACER evaluates whether an LLM can generate a belief hypothesis aligned with injected ground truth. In the main condition, semantic matching compares hypothesized “student thinking” to injected “student thinking” while excluding label text. An ablation includes label text to illustrate how evaluation shortcuts can inflate apparent capability.
+TRACER evaluates whether an LLM can generate a belief hypothesis aligned with injected ground truth. In the main condition, semantic matching compares LLM hypothesized “student belief" to injected “student thinking” while excluding label text. An ablation includes label text to illustrate how evaluation shortcuts can inflate apparent capability.
 
-Importantly, current matching does not verify that the model’s cited evidence spans *entail* its hypothesis; it measures belief-text alignment rather than evidence quality.
+Importantly, current matching does not verify that the model’s cited evidence spans *entail* its hypothesis; it measures semantic alignment to the injected "student thinking" rather than evidence quality.
 
 ### 5.3 Results: feasibility, safety, and blind spots
 
@@ -203,13 +208,12 @@ Importantly, current matching does not verify that the model’s cited evidence 
 
 ![TRACER false-positive flow](runs/run_final_main/assets/hallucinations_sankey.png)
 
-### 5.4 Worked example (TRACER NM_LOGIC_02: “Dangling Else / Indentation Trap”)
+### 5.4 Worked example: Dangling Else / Indentation Trap
 
 The following seeded submission illustrates a semantic misconception where indentation is treated as defining block structure.
 
 ```java
-// authentic_seeded/a2/Wagner_Sarah_543972/Q3.java
-// NM_LOGIC_02: Dangling Else (Indentation Trap)
+// Dangling Else (Indentation Trap)
 
 else if (numeric_grade >= 60)
   if (numeric_grade >= 65)
@@ -220,15 +224,33 @@ else if (numeric_grade >= 60)
 
 In one detection, the model hypothesizes an “indentation-as-blocks / dangling-else confusion,” i.e., the student believes the `else` belongs to the visually-indented outer branch rather than binding to the nearest unmatched `if`.
 
-### 5.5 Abstention in practice (brief)
+### 5.5 Abstention in practice
 
-One practical implication of TRACER’s clean-code false positives is that instructor-facing systems should implement abstention mechanisms. Even lightweight mechanisms—such as consensus across multiple strategies/models (ensemble voting) or calibrated thresholds for accepting a diagnosis—can serve as operational “abstention-by-default” filters.
+One practical implication of TRACER's clean-code false positives is that instructor-facing systems should implement abstention mechanisms. In our experiments, we operationalize abstention through two complementary filters:
+
+1. **Semantic thresholds.** Hypotheses with low similarity scores (below 0.55) to any known misconception are treated as noise—observations about code style or minor issues rather than conceptual gaps. A secondary "noise floor" (0.60) separates borderline cases from confident detections.
+
+2. **Ensemble agreement.** Requiring consensus across multiple models or prompting strategies (e.g., ≥2 of 4 strategies must flag the same misconception) filters spurious detections. In TRACER, ensemble voting reduces false positives by approximately 50% while preserving 99% of true positives.
+
+These are lightweight, implementable mechanisms that treat "I don't know" as a first-class output. More sophisticated approaches—such as calibrated confidence scores or explicit uncertainty quantification—remain important directions for future work.
 
 ## 6. Discussion & Implications
 
-Clean-code false positives are uniquely harmful in CS1 belief attribution: when a program is correct, there may be no misconception to remediate, and a speculative diagnosis can teach a wrong rule. For novice learners, the LLM’s fluency can be mistaken for authority, making “helpful” over-diagnosis a direct risk to concept formation.
+Clean-code false positives are uniquely harmful in CS1 belief attribution: when a program is correct, there may be no misconception to remediate, and a speculative diagnosis can teach a wrong rule. For novice learners, the LLM's fluency can be mistaken for authority, making "helpful" over-diagnosis a direct risk to concept formation.
 
-### 6.1 Implications for tool builders
+### 6.1 Why false positives outweigh false negatives
+
+Belief attribution exhibits risk asymmetry: the cost of a false positive (diagnosing a misconception that does not exist) exceeds the cost of a false negative (missing a real misconception). Three mechanisms drive this asymmetry:
+
+1. **Epistemic interference.** When a student with a correct mental model is told they are confused, the feedback can induce doubt in valid understanding. The student may abandon correct reasoning in favor of the system's erroneous suggestion, wasting cognitive effort on "fixing" what was never broken.
+
+2. **Labeling effects.** Novice programmers, who often experience fragile self-efficacy, are vulnerable to deficit labels. Being told by an authoritative-seeming system that their thinking is flawed—especially when it is not—can reinforce imposter syndrome and reduce persistence (Bandura, 1997).
+
+3. **Trust erosion.** Repeated false alarms degrade trust in the system. Once students or instructors learn that the tool "cries wolf," even valid feedback is discounted, effectively destroying the system's utility (Parasuraman & Riley, 1997).
+
+These dynamics motivate a design stance we term *diagnostic humility*: AI systems should prioritize specificity (avoiding false alarms) over recall, and abstention should be treated as a responsible output rather than a failure mode.
+
+### 6.2 Implications for tool builders
 
 - Prefer evidence-first interfaces: show behavior and code spans before any misconception label.
 - Treat “no diagnosis” and “multiple plausible hypotheses” as normal outputs.
@@ -237,7 +259,7 @@ Clean-code false positives are uniquely harmful in CS1 belief attribution: when 
 - Support instructor verification loops (e.g., inspect a few representative submissions per cluster before acting).
 - Avoid student-facing authoritative labels; keep hypotheses instructor-facing by default.
 
-### 6.2 Implications for computing education research
+### 6.3 Implications for computing education research
 
 - Benchmarks should explicitly include clean submissions to measure over-diagnosis.
 - Reporting should include specificity/false positives, not only recall/accuracy.
@@ -245,23 +267,31 @@ Clean-code false positives are uniquely harmful in CS1 belief attribution: when 
 - “Evidence-grounded” claims require evaluation beyond label alignment (e.g., entailment/justification quality audits).
 - Synthetic probes should be paired with follow-on studies that check transfer to authentic student work before making classroom-impact claims.
 
-### 6.3 Implications for classroom practice
+### 6.4 Implications for classroom practice
 
 - Use hypothesis clusters to guide instructional action (e.g., add tracing exercises, revise examples, or target short interventions).
 - Treat diagnoses as leads for investigation, not as student labels; verify with representative code and, when possible, student explanations.
 - Prefer conservative rollouts: start with cohort-level analytics rather than per-student misconception claims.
 
-## 7. Limitations
+## 7. Limitations and Future Work
 
-- Synthetic data may not capture the full diversity of novice reasoning and error processes (du Boulay, 1986; Qian & Lehman, 2017).
-- Injected ground truth measures proxy-alignment to operationalized misconceptions, not students’ “true beliefs.”
-- Current evaluation does not test whether cited evidence truly supports (entails) the hypothesis.
+The synthetic data design that enables ground-truth evaluation also bounds what TRACER can claim:
+
+- **Ecological validity.** Synthetic submissions may not capture the full diversity of novice reasoning—real students produce messier code, hold multiple misconceptions simultaneously, and make errors that no taxonomy anticipates. Follow-on studies with authentic student data are needed to validate transfer.
+- **Proxy-alignment, not "true belief."** Injected misconceptions operationalize beliefs as textual descriptions; matching measures alignment to these descriptions, not to students' actual cognitive states.
+- **Evidence quality unscored.** Current evaluation checks whether the model's hypothesis aligns with ground truth, not whether its cited code spans logically entail the hypothesis. A model could produce the right label through shallow pattern-matching rather than sound pedagogical reasoning.
+
+These boundaries define the scope of the contribution: TRACER demonstrates that LLM-based belief attribution is *feasible and worth pursuing*, not that it is classroom-ready.
 
 ## 8. Conclusion
 
-Alongside student-facing explanations and repairs, there is a distinct and promising direction for LLMs in CS1: instructor-facing belief attribution grounded in notional machines.
+The integration of LLMs into CS1 is accelerating. Student-facing tools that explain errors and suggest fixes offer genuine value for accessibility and practice. This paper argues for broadening that scope: alongside repair-oriented tools, there is a distinct and complementary direction—instructor-facing hypothesis generators that surface patterns in student thinking.
 
-Because belief attribution is uncertain and risk-asymmetric, the path forward requires diagnostic humility—evidence, abstention, and specificity-first evaluation. If the community treats LLMs as hypothesis generators for instructors rather than arbiters of student belief, we can gain scale while protecting learners from the costs of confident misattribution.
+The evidence from TRACER supports this direction. High recall demonstrates feasibility: LLMs can generate plausible belief hypotheses from code. But the concentration of false positives on correct programs reveals that belief attribution requires more caution than bug detection. When the goal shifts from "what is wrong with the code" to "what does the student believe," the cost of confident misdiagnosis rises sharply.
+
+By treating LLMs as instructor-facing instruments, we unlock their capacity to surface the hidden labor of tutoring—understanding not just *what* is wrong, but *why* the student wrote it—while insulating learners from the noise of confident misattribution. The path forward requires diagnostic humility: evidence-first interfaces, normalized abstention, and evaluation standards that reward specificity over coverage.
+
+If the community embraces this framing, we can achieve something valuable: as our tools become more artificial, our teaching can become more profoundly human.
 
 ## References (working list)
 
@@ -284,3 +314,6 @@ Because belief attribution is uncertain and risk-asymmetric, the path forward re
 - Sirkiä, T., & Sorva, J. (2012). Exploring programming misconceptions: an analysis of student mistakes in visual program simulation exercises. Koli Calling.
 - Sonkar, S., et al. (2024). LLM-based Cognitive Models of Students with Misconceptions. (Preprint).
 - Spohrer, J. C., & Soloway, E. (1986). Novice Mistakes: Are the Folk Wisdoms Correct? Communications of the ACM.
+- Bandura, A. (1997). Self-Efficacy: The Exercise of Control. W.H. Freeman.
+- Parasuraman, R., & Riley, V. (1997). Humans and Automation: Use, Misuse, Disuse, Abuse. Human Factors.
+- Premack, D., & Woodruff, G. (1978). Does the chimpanzee have a theory of mind? Behavioral and Brain Sciences.
