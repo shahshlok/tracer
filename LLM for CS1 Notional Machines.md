@@ -97,8 +97,8 @@ This diagnostic task is a form of Theory of Mind (ToM): attributing mental state
 
 We define a misconception as:
 
-- **Structural** if it manifests as a distinct surface signature, often identifiable via static analysis or API misuse. Examples in our taxonomy include the *Void Machine* (ignoring return values, e.g., `Math.sqrt(x)`) and *Human Indexing* (using 1-based array access).
-- **Semantic** if it involves an invisible mental model of execution state that requires inferring intent beyond surface form. Examples include the *Reactive State Machine* (believing variables auto-update like spreadsheet cells) and the *Independent Switch* (misunderstanding conditional mutual exclusivity).
+- **Structural** if it manifests as a distinct surface signature where the student's code violates the operational rules of language constructs. These errors often leave a unique fingerprint detectable via static analysis. Examples in our taxonomy include the *Void Machine*, where value-returning methods are treated as void commands (e.g., calling `Math.sqrt(x)` without assignment), and *Human Indexing*, where students apply 1-based counting to 0-indexed arrays. In these cases, the divergence is visible in the artifact’s structure itself.
+- **Semantic** if it involves an invisible mental model of *execution state* that requires inferring intent beyond surface form. These are harder to detect because the code is often syntactically valid but functionally incoherent under the standard notional machine. Examples include the *Reactive State Machine*, characterized by the belief that variables automatically update when dependencies change, and the *Independent Switch*, involving a misunderstanding of the mutual exclusivity of conditional blocks. Diagnosis here requires contrasting the student's implied causal model with the actual program flow.
 
 This is a binary operationalization for reporting and evaluation, not a claim that misconception observability is inherently binary.
 
