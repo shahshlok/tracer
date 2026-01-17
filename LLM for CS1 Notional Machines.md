@@ -162,7 +162,7 @@ TRACER (Taxonomic Research of Aligned Cognitive Error Recognition) is used here 
 
 ### 5.1 What TRACER is (and what it is not)
 
-TRACER is a controlled probe designed to test whether LLM outputs about “student thinking” can align with operationalized ground truth misconceptions.
+TRACER is a controlled probe designed to test whether LLM outputs about “student thinking” can align with operationalized ground truth misconceptions. We evaluate three state-of-the-art model families: GPT-5.2, Claude 4.5 Haiku, and Gemini 3 Flash, examining both standard and reasoning-enhanced variants.
 
 - Dataset: 1,200 synthetic CS1 Java submissions from 300 synthetic “students” across three assignments.
 - Each student produces 4 submissions; by design, each contributes 1 misconception-seeded submission and 3 behaviorally correct submissions.
@@ -198,9 +198,9 @@ Our evaluation identifies an inherent trade-off between the model's ability to r
 
 ![TRACER structural vs semantic gap](runs/run_final_main/assets/category_structural_vs_semantic.png)
 
-**Characterization of False Positives.** The aggregate metrics in Table 1 do not fully capture the nature of the system's errors. **Figure 2** decomposes these diagnoses using a Sankey diagram to trace the flow from student intent to model output. The data reveal that the predominant proportion of false positives (represented by the red flow) occurs on behaviorally correct programs. We classify these as "Invented Bugs": instances where the model attributes a specific misconception to code that is functionally valid. This indicates a bias toward positive diagnosis, where the system provides a plausible-sounding hypothesis rather than abstaining when the evidence is ambiguous. This behavior reinforces the necessity for the abstention mechanisms discussed in Section 5.5.
+**Characterization of False Positives.** The aggregate metrics in Table 1 do not fully capture the nature of the system's errors. **Figure 2** decomposes these diagnoses using a Sankey diagram to trace the flow from student intent to model output. The data reveal that the predominant proportion of false positives (represented by the blue flow) occurs on behaviorally correct programs. We classify these as "Invented Bugs": instances where the model diagnoses a misconception in a submission where none was seeded. While some of these detections may react to latent traits in the generated code (e.g., 'messy' persona artifacts), they represent a failure to align strictly with the ground truth signal. This indicates a bias toward positive diagnosis, where the system provides a plausible-sounding hypothesis rather than abstaining when the evidence is ambiguous. This behavior reinforces the necessity for the abstention mechanisms discussed in Section 5.5.
 
-**Figure 2: The anatomy of over-diagnosis.** A Sankey diagram tracing the flow from ground truth (left) to model diagnosis (right). The dominant red flow illustrates the system's primary failure mode: "Invented Bugs," where the model hallucinates a specific misconception on a behaviorally correct (clean) submission. This visualizes the risk asymmetry of the task: false positives are not random noise but a systematic bias toward diagnosing problems that do not exist.
+**Figure 2: The anatomy of over-diagnosis.** A Sankey diagram tracing the flow from ground truth (left) to model diagnosis (right). The dominant blue flow illustrates the system's primary failure mode: "Invented Bugs," where the model diagnoses a specific misconception in the absence of a seeded error. This visualizes the risk asymmetry of the task: false positives are not random noise but a systematic bias toward diagnosing problems that do not exist.
 
 ![TRACER false-positive flow](runs/run_final_main/assets/hallucinations_sankey.png)
 
@@ -226,7 +226,7 @@ One practical implication of TRACER's clean-code false positives is that instruc
 
 1. **Semantic thresholds.** Hypotheses with low similarity scores (below 0.55) to any known misconception are treated as noise—observations about code style or minor issues rather than conceptual gaps. A secondary "noise floor" (0.60) separates borderline cases from confident detections.
 
-2. **Ensemble agreement.** Requiring consensus across multiple models or prompting strategies (e.g., ≥2 of 4 strategies must flag the same misconception) filters spurious detections. In TRACER, ensemble voting reduces false positives by approximately 50% while preserving 99% of true positives.
+2. **Ensemble agreement.** Requiring consensus across multiple models (e.g., ≥2 of 6 models must flag the same misconception) filters spurious detections. In TRACER, ensemble voting reduces false positives by up to 37% while preserving over 99% of true positives.
 
 These are lightweight, implementable mechanisms that treat "I don't know" as a first-class output. More sophisticated approaches—such as calibrated confidence scores or explicit uncertainty quantification—remain important directions for future work.
 
@@ -274,6 +274,7 @@ These dynamics motivate a design stance we term *diagnostic humility*: AI system
 The synthetic data design that enables ground-truth evaluation also bounds what TRACER can claim:
 
 - **Ecological validity.** Synthetic submissions may not capture the full diversity of novice reasoning—real students produce messier code, hold multiple misconceptions simultaneously, and make errors that no taxonomy anticipates. Follow-on studies with authentic student data are needed to validate transfer.
+- **Ambiguity of "Clean" Code.** Our "clean" submissions are functionally correct and lack *seeded* misconceptions. However, the persona-based generation (e.g., "messy" or "procedural" profiles) may inadvertently introduce valid latent misconceptions. Consequently, our Specificity metric is conservative: it penalizes the model for detecting unseeded concepts, even if those detections are arguably supported by the code's style or structure.
 - **Proxy-alignment, not "true belief."** Injected misconceptions operationalize beliefs as textual descriptions; matching measures alignment to these descriptions, not to students' actual cognitive states.
 - **Evidence quality unscored.** Current evaluation checks whether the model's hypothesis aligns with ground truth, not whether its cited code spans logically entail the hypothesis. A model could produce the right label through shallow pattern-matching rather than sound pedagogical reasoning.
 
