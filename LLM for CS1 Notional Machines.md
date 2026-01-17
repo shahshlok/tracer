@@ -183,32 +183,26 @@ Importantly, current matching does not verify that the model’s cited evidence 
 
 ### 5.3 Results: feasibility, safety, and blind spots
 
-**Table 1: TRACER summary metrics (5-fold CV)**
+**Table 1: Performance trade-offs in belief attribution (5-fold cross-validation).** We compare a label-exclusive approach against a label-inclusive baseline. While including label text saturates recall (0.98), it significantly degrades specificity (0.77), illustrating the risk of optimizing for coverage at the expense of diagnostic humility.
 
 | Condition | Precision | Recall | Specificity |
 |---|---:|---:|---:|
-| Standard matching (main run) | 0.577 | 0.872 | 0.848 |
-| Label-inclusive matching (ablation) | 0.511 | 0.982 | 0.774 |
+| Label-exclusive matching (main) | 0.577 | 0.872 | 0.848 |
+| Label-inclusive matching | 0.511 | 0.982 | 0.774 |
 
-Table 1 presents the core trade-off this paper addresses. The modest precision (0.577) is not a system failure but direct evidence for why specificity-first evaluation matters: nearly half of all diagnoses are false positives. The ablation row demonstrates how evaluation shortcuts inflate apparent capability—including label text in matching boosts recall to 0.98 but degrades specificity to 0.77, meaning the model appears more capable while becoming less safe. This pattern illustrates why benchmarks that optimize for coverage alone are inadequate for belief attribution.
+Our evaluation identifies an inherent trade-off between the model's ability to recognize misconceptions and its potential for over-diagnosis. **Table 1** summarizes this dynamic across two matching conditions: **label-exclusive matching (main)**, which relies solely on semantic alignment between the hypothesis and the ground truth description, and **label-inclusive matching**, a baseline where the explicit misconception name (e.g., "Void Machine") is exposed during evaluation. While the model demonstrates high feasibility with a recall of 0.87 in the label-exclusive condition, the precision of 0.577 indicates a substantial rate of false-positive diagnoses. Notably, the label-inclusive condition demonstrates that evaluation metrics are susceptible to artificial inflation: providing the model with label names increases recall to near-saturation (0.98) but compromises safety, as evidenced by the drop in specificity to 0.77. This finding underscores that optimizing for coverage metrics in isolation can obscure significant risks in diagnostic reliability.
 
-**Feasibility:** Recall is high in both settings, suggesting models can often produce belief hypotheses aligned with injected misconceptions.
+**The Observability Gap.** Not all beliefs are equally visible in code. **Figure 1** breaks down model performance by misconception category, revealing a distinct "observability gap." Structural misconceptions—those that violate language rules, such as the *Void Machine*—are detected with high reliability because they leave syntactic fingerprints. In contrast, semantic misconceptions like the *Independent Switch*, which exist only in the student's flawed mental model of execution, are far harder to diagnose reliably. This suggests that instructor-facing tools should explicitly differentiate between syntactically evident errors and speculative semantic inferences.
 
-**Safety:** False positives concentrate on clean programs (Figure 2). In the main run, 3,364 of 3,884 false positives (86.6%) occur on behaviorally correct submissions, indicating a trigger-happy tendency that is harmful if surfaced directly to students.
-
-**Blind spots:** Figure 1 summarizes a structural vs. semantic gap, consistent with the idea that some misconception families are less observable from code alone.
-
-**Figure 1: Structural vs. semantic misconception gap (TRACER main run).**
+**Figure 1: The observability gap.** Detection rates (Recall) disaggregated by misconception type. Structural misconceptions (blue), which leave distinct syntactic fingerprints like the *Void Machine*, are detected with high reliability. In contrast, semantic misconceptions (orange), which require inferring a mental model of execution state like the *Reactive State Machine*, show significantly higher variance and lower detection rates, highlighting a critical blind spot for current models.
 
 ![TRACER structural vs semantic gap](runs/run_final_main/assets/category_structural_vs_semantic.png)
 
-Figure 1 reveals a consistent performance gap: structural misconceptions (e.g., Void Machine, Human Indexing) are detected at higher rates than semantic ones (e.g., Reactive State Machine, Independent Switch). This aligns with our theoretical distinction in Section 3.2—structural errors leave visible fingerprints in code syntax, while semantic errors require inferring invisible mental models of execution state. The gap implies that instructor-facing systems should weight structural detections as higher-confidence and treat semantic hypotheses with greater skepticism, or seek corroborating evidence across multiple submissions.
+**Characterization of False Positives.** The aggregate metrics in Table 1 do not fully capture the nature of the system's errors. **Figure 2** decomposes these diagnoses using a Sankey diagram to trace the flow from student intent to model output. The data reveal that the predominant proportion of false positives (represented by the red flow) occurs on behaviorally correct programs. We classify these as "Invented Bugs": instances where the model attributes a specific misconception to code that is functionally valid. This indicates a bias toward positive diagnosis, where the system provides a plausible-sounding hypothesis rather than abstaining when the evidence is ambiguous. This behavior reinforces the necessity for the abstention mechanisms discussed in Section 5.5.
 
-**Figure 2: False positives are dominated by clean-code over-diagnosis (TRACER main run).**
+**Figure 2: The anatomy of over-diagnosis.** A Sankey diagram tracing the flow from ground truth (left) to model diagnosis (right). The dominant red flow illustrates the system's primary failure mode: "Invented Bugs," where the model hallucinates a specific misconception on a behaviorally correct (clean) submission. This visualizes the risk asymmetry of the task: false positives are not random noise but a systematic bias toward diagnosing problems that do not exist.
 
 ![TRACER false-positive flow](runs/run_final_main/assets/hallucinations_sankey.png)
-
-Figure 2 decomposes the flow of all detections into diagnostic outcomes. The dominant false-positive category is "Invented Bug"—cases where the model diagnoses a misconception on a behaviorally correct program that contains no injected error. This confirms the trigger-happy tendency: when given clean code, models still generate plausible-sounding belief hypotheses rather than abstaining. A smaller but notable flow represents "Wrong Bug" false positives, where the model detects a misconception but misidentifies which one. Together, these flows visualize why precision is low and why abstention mechanisms (Section 5.5) are essential for safe deployment.
 
 ### 5.4 Worked example: Dangling Else / Indentation Trap
 
