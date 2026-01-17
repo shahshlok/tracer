@@ -21,7 +21,7 @@ CS1; notional machines; misconceptions; student modeling; instructor-facing tool
 
 Large language models (LLMs) have become central to CS1 feedback workflows as tools for student-centered learning: they serve as on-demand tutors that help students learn from their mistakes by interpreting error messages, providing pedagogical guidance, and offering just-in-time assistance at scale. By helping students understand and resolve their mistakes in real-time, these systems reduce friction and expand access to personalized support.
 
-This paper takes a position on a distinct, instructor-centered opportunity that is currently under-developed: using LLMs to help instructors reason about what student code suggests about students’ mental models of the notional machine (du Boulay, 1986). Instructors often care less about whether a single submission is correct than about what patterns of errors reveal about how students think, because that is what determines what to teach next.
+This paper takes a position on a distinct, instructor-centered opportunity that is currently under-developed: using LLMs to help instructors reason about what student code suggests about students’ mental models of the notional machine (du Boulay et al., 1981). Instructors often care less about whether a single submission is correct than about what patterns of errors reveal about how students think, because that is what determines what to teach next.
 
 This is not an argument against student-facing “AI-as-tutor” tools—those systems offer genuine value for practice and accessibility. Rather, it is an argument for broadening the scope of LLMs in CS education to include a complementary direction: instructor-facing belief attribution. Bug fixing is about the program. Belief attribution is about the person who wrote it.
 
@@ -57,7 +57,7 @@ This section traces the evolution of belief attribution in CS1 through three his
 
 ### 2.1 The Theoretical Basis: Hidden Minds and Superbugs
 
-The concept of the **notional machine** (du Boulay, 1986) provides the theoretical bedrock for this work. du Boulay argued that the computer acts as a "black box," and learning to program requires the student to construct a  mental model of its execution rules. Difficulties arise when students fill the gaps in their understanding with **misconceptions**—systematic, incorrect beliefs. Pea (1986) famously characterized these as "superbugs," such as the belief that a "hidden mind" inside the computer interprets the student's intent rather than their literal code.
+The concept of the **notional machine** (du Boulay et al., 1981) provides the theoretical bedrock for this work. They argued that the computer acts as a "black box," and learning to program requires the student to construct a mental model of its execution rules. Difficulties arise when students fill the gaps in their understanding with **misconceptions**—systematic, incorrect beliefs. Pea (1986) famously characterized these as "superbugs," such as the belief that a "hidden mind" inside the computer interprets the student's intent rather than their literal code.
 
 Crucially, these are not random errors. Sirkiä and Sorva (2012) demonstrated that students often hold **"viable non-standard models"**—consistent but flawed logic (e.g., "assignment moves values") that they apply robustly. This confirms that "buggy" mental models are distinct cognitive states that can be diagnosed, provided one looks beyond the code's surface.
 
@@ -81,7 +81,7 @@ In an instructor-facing context, this risk is amplified by **automation bias** (
 
 We use:
 
-- **Notional machine** to mean the simplified explanatory machine a course implicitly teaches (du Boulay, 1986).
+- **Notional machine** to mean the simplified explanatory machine a course implicitly teaches (du Boulay et al., 1981).
 - **Mental model** to mean a student’s internal approximation of that machine.
 - **Misconception** to mean a systematic divergence: a coherent but incorrect rule the student may be using.
 
