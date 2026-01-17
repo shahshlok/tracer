@@ -53,31 +53,27 @@ Scope: we focus on CS1-style imperative programs written as standalone Java `mai
 
 ## 2. Related Work
 
-This section briefly situates the paper in four threads: (i) misconceptions and notional machines, (ii) student modeling and intelligent tutoring systems, (iii) automated feedback and error mining at scale, and (iv) LLM-based feedback and reliability.
+This section traces the evolution of belief attribution in CS1 through three historical phases: the theoretical establishment of the notional machine, the scalability bottleneck of early automated diagnosis, and the emerging capabilities, and ethical risks, of LLM-based student modeling.
 
-### 2.1 Notional machines and misconceptions in CS1
+### 2.1 The Theoretical Basis: Hidden Minds and Superbugs
 
-Notional machines frame programming difficulties as failures of an execution model that students carry in their heads (du Boulay, 1986). Related work emphasizes that many novice errors are not random slips but systematic conceptual “bugs” that generalize across languages and persist over time (Pea, 1986; Qian & Lehman, 2017).
+The concept of the **notional machine** (du Boulay, 1986) provides the theoretical bedrock for this work. du Boulay argued that the computer acts as a "black box," and learning to program requires the student to construct a  mental model of its execution rules. Difficulties arise when students fill the gaps in their understanding with **misconceptions**—systematic, incorrect beliefs. Pea (1986) famously characterized these as "superbugs," such as the belief that a "hidden mind" inside the computer interprets the student's intent rather than their literal code.
 
-Computing education research has developed methods to elicit and catalog misconceptions, including interviews and concept inventories (Kaczmarczyk et al., 2010) and tracing/simulation exercises that expose execution-model gaps (Sirkiä & Sorva, 2012). Community efforts have also aggregated misconception inventories to unify terminology and examples (Chiodini et al., 2021).
+Crucially, these are not random errors. Sirkiä and Sorva (2012) demonstrated that students often hold **"viable non-standard models"**—consistent but flawed logic (e.g., "assignment moves values") that they apply robustly. This confirms that "buggy" mental models are distinct cognitive states that can be diagnosed, provided one looks beyond the code's surface.
 
-### 2.2 Student modeling and intelligent tutoring systems
+### 2.2 The Scalability Bottleneck: From PROUST to Big Data
 
-A long line of work models student intent and misconceptions to support tutoring and feedback. PROUST (Johnson & Soloway, 1985) pioneered plan-based program understanding to diagnose where student code deviates from canonical solution plans. Cognitive tutors, such as the LISP Tutor, use explicit models of student knowledge to recognize errors and provide targeted support (Anderson et al., 1989). Early empirical work also challenged “folk wisdom” about novice mistakes and argued for systematic, evidence-based accounts of error patterns (Spohrer & Soloway, 1986).
+Attributing these beliefs has been a long-standing goal of intelligent tutoring systems. In the 1980s, **PROUST** (Johnson & Soloway, 1985) pioneered intention-based diagnosis by matching student code against a library of "buggy plans." However, PROUST was brittle: it relied on hand-crafted rules that could not scale to the diversity of student approaches.
 
-These systems demonstrate that belief/intent attribution is valuable, but they depend on heavy manual knowledge engineering and are often domain- or task-specific—motivating investigation of whether modern LLMs can generate *hypotheses* at lower authoring cost while preserving safety.
+In the absence of scalable tools, the field relied on instructor intuition or aggregate data. However, Brown and Altadmri (2014) revealed the danger of this approach: they found a near-zero correlation (**r = -0.04**) between what educators *believed* were frequent errors and the actual frequency of those errors in large-scale data. This disconnect highlights a critical gap: instructors cannot rely on intuition alone, yet they lack the tools to diagnose individual students' "viable non-standard models" in real-time.
 
-### 2.3 Automated feedback and error mining at scale
+### 2.3 The LLM Opportunity and the Safety Gap
 
-Large-scale telemetry and data mining enable measurement of novice error patterns and mismatches between instructor intuition and observed behavior (Brown & Altadmri, 2014). More recent approaches use code representations and clustering to semi-automatically surface candidate misconception families for instructor inspection (Shi et al., 2021). These threads emphasize scaling diagnosis beyond one student at a time, but still require interpretive work to translate patterns into instructional hypotheses.
+Recent advances offer a solution to this scalability challenge. Emerging work, such as **McMining** (Al-Hossami & Bunescu, 2025) and cognitive simulation models (Sonkar et al., 2024), suggests that LLMs can automate the discovery of misconceptions without the brittle libraries of PROUST.
 
-### 2.4 LLM-based feedback in programming education
+However, this capability introduces a new risk: **reliability**. Current evaluations (Azaiz et al., 2024; Koutcheme et al., 2024) focus on feedback helpfulness, often neglecting the specific harms of misdiagnosis. This oversight is dangerous because LLMs are prone to **hallucination** (Ji et al., 2023).
 
-Recent work evaluates LLMs’ ability to generate feedback for programming exercises and observes reliability issues such as inconsistent or incorrect advice (Azaiz et al., 2024). Other recent computing education work compares how LLM-generated code differs from student code and bug distributions (MacNeil et al., 2024), explores LLM-based classification of novice logical errors (Lee et al., 2024), and proposes using LLMs as cognitive models of students with misconceptions (Sonkar et al., 2024). Work on misconception mining also suggests that LLMs may articulate misconception hypotheses from code at scale (Al-Hossami & Bunescu, 2025). The broader education community highlights opportunities and risks of LLMs, including over-trust in fluent outputs and the need for careful pedagogical integration (Kasneci et al., 2023).
-
-### 2.5 Reliability and “hallucination” as a design constraint
-
-In natural language generation, hallucination and overconfident errors are well-studied failure modes (Ji et al., 2023). For belief attribution, these failures are not merely inconvenient; they are pedagogically harmful because they can mislabel students’ thinking. This motivates explicit “diagnostic humility”: abstention, calibrated uncertainty, and workflows that keep hypotheses instructor-facing rather than student-authoritative.
+In an instructor-facing context, this risk is amplified by **automation bias** (Parasuraman & Riley, 1997)—the tendency for humans to substitute their own vigilance with the machine's output (the "heuristic of least effort"). If an instructor blindly accepts a false diagnosis (a "commission error"), they risk intervening on a problem that doesn't exist. Bandura (1997) warns that such mislabeling can lead to **"self-debilitating attribution,"** where students internalize the false error as a lack of ability, damaging their self-efficacy. Thus, the transition to AI-driven belief attribution requires a shift from maximizing *coverage* to maximizing *diagnostic humility*.
 
 ## 3. Notional Machines and Belief Attribution: An Inverse Problem
 
@@ -294,6 +290,8 @@ By treating LLMs as instructor-facing instruments, we unlock their capacity to s
 If the community embraces this framing, we can achieve something valuable: as our tools become more artificial, our teaching can become more profoundly human.
 
 ## References
+
+du Boulay, B., O'Shea, T., & Monk, J. (1981). The black box inside the glass box: Presenting computing concepts to novices. *International Journal of Man-Machine Studies*, 14(3), 237–249. https://doi.org/10.1016/S0020-7373(81)80047-9
 
 Johnson, W. L., & Soloway, E. (1985). PROUST: Knowledge-based program understanding. *IEEE Transactions on Software Engineering*, SE-11(3), 267–275. https://doi.org/10.1109/TSE.1985.232210
 
