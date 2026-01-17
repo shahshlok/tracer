@@ -302,7 +302,7 @@ After individual model detections, we apply ensemble voting to filter hallucinat
 │  Strategy Ensemble (≥2/4) │ 0.625     │ 0.872  │ 0.728 │ +0.048 precision │
 │  Model Ensemble (≥2/6)    │ 0.682     │ 0.864  │ 0.762 │ +0.105 precision │
 │                                                                             │
-│  Interpretation: Model ensemble filters 50% of false positives while      │
+│  Interpretation: Model ensemble filters 37% of false positives while      │
 │  keeping 99% of true positives (losing only 1% recall).                   │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
