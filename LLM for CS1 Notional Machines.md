@@ -202,9 +202,13 @@ Table 1 presents the core trade-off this paper addresses. The modest precision (
 
 ![TRACER structural vs semantic gap](runs/run_final_main/assets/category_structural_vs_semantic.png)
 
+Figure 1 reveals a consistent performance gap: structural misconceptions (e.g., Void Machine, Human Indexing) are detected at higher rates than semantic ones (e.g., Reactive State Machine, Independent Switch). This aligns with our theoretical distinction in Section 3.2—structural errors leave visible fingerprints in code syntax, while semantic errors require inferring invisible mental models of execution state. The gap implies that instructor-facing systems should weight structural detections as higher-confidence and treat semantic hypotheses with greater skepticism, or seek corroborating evidence across multiple submissions.
+
 **Figure 2: False positives are dominated by clean-code over-diagnosis (TRACER main run).**
 
 ![TRACER false-positive flow](runs/run_final_main/assets/hallucinations_sankey.png)
+
+Figure 2 decomposes the flow of all detections into diagnostic outcomes. The dominant false-positive category is "Invented Bug"—cases where the model diagnoses a misconception on a behaviorally correct program that contains no injected error. This confirms the trigger-happy tendency: when given clean code, models still generate plausible-sounding belief hypotheses rather than abstaining. A smaller but notable flow represents "Wrong Bug" false positives, where the model detects a misconception but misidentifies which one. Together, these flows visualize why precision is low and why abstention mechanisms (Section 5.5) are essential for safe deployment.
 
 ### 5.4 Worked example: Dangling Else / Indentation Trap
 
