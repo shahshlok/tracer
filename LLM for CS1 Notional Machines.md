@@ -293,27 +293,46 @@ By treating LLMs as instructor-facing instruments, we unlock their capacity to s
 
 If the community embraces this framing, we can achieve something valuable: as our tools become more artificial, our teaching can become more profoundly human.
 
-## References (working list)
+## References
 
-- Al-Hossami, E., & Bunescu, R. (2025). McMining: Automated Discovery of Misconceptions in Student Code. arXiv.
-- Anderson, J. R., Conrad, F. G., & Corbett, A. T. (1989). Skill Acquisition and the LISP Tutor. Cognitive Science.
-- Azaiz, I., Kiesler, N., & Strickroth, S. (2024). Feedback-Generation for Programming Exercises With GPT-4. ITiCSE.
-- Bender, E. M., Gebru, T., McMillan-Major, A., & Shmitchell, S. (2021). On the Dangers of Stochastic Parrots. FAccT.
-- Brown, N. C. C., & Altadmri, A. (2014). Investigating novice programming mistakes. ICER.
-- Chiodini, L., et al. (2021). A Curated Inventory of Programming Language Misconceptions. ITiCSE.
-- du Boulay, B. (1986). Some Difficulties of Learning to Program. Journal of Educational Computing Research.
-- Ji, Z., et al. (2023). Survey of Hallucination in Natural Language Generation. ACM Computing Surveys.
-- Johnson, W. L., & Soloway, E. (1985). PROUST: Knowledge-Based Program Understanding. IEEE Transactions on Software Engineering.
-- Lee, Y., Jeong, S., & Kim, J. (2024). Improving LLM Classification of Logical Errors by Integrating Error Relationship into Prompts. (Preprint).
-- MacNeil, S., et al. (2024). Synthetic Students: A Comparative Study of Bug Distribution Between Large Language Models and Computing Students. (ACM).
-- Kaczmarczyk, L. C., Petrick, E. R., East, J. P., & Herman, G. L. (2010). Identifying student misconceptions of programming. SIGCSE.
-- Kasneci, E., et al. (2023). ChatGPT for good? On opportunities and challenges of large language models for education. Learning and Individual Differences.
-- Pea, R. D. (1986). Language-Independent Conceptual “Bugs” in Novice Programming. Journal of Educational Computing Research.
-- Qian, Y., & Lehman, J. (2017). Students’ Misconceptions and Other Difficulties in Introductory Programming: A Literature Review. ACM TOCE.
-- Shi, Y., et al. (2021). Toward Semi-Automatic Misconception Discovery Using Code Embeddings. LAK.
-- Sirkiä, T., & Sorva, J. (2012). Exploring programming misconceptions: an analysis of student mistakes in visual program simulation exercises. Koli Calling.
-- Sonkar, S., et al. (2024). LLM-based Cognitive Models of Students with Misconceptions. (Preprint).
-- Spohrer, J. C., & Soloway, E. (1986). Novice Mistakes: Are the Folk Wisdoms Correct? Communications of the ACM.
-- Bandura, A. (1997). Self-Efficacy: The Exercise of Control. W.H. Freeman.
-- Parasuraman, R., & Riley, V. (1997). Humans and Automation: Use, Misuse, Disuse, Abuse. Human Factors.
-- Premack, D., & Woodruff, G. (1978). Does the chimpanzee have a theory of mind? Behavioral and Brain Sciences.
+Premack, D., & Woodruff, G. (1978). Does the chimpanzee have a theory of mind? *Behavioral and Brain Sciences*, 1(4), 515–526. https://doi.org/10.1017/S0140525X00076512
+
+Johnson, W. L., & Soloway, E. (1985). PROUST: Knowledge-based program understanding. *IEEE Transactions on Software Engineering*, SE-11(3), 267–275. https://doi.org/10.1109/TSE.1985.232210
+
+du Boulay, B. (1986). Some difficulties of learning to program. *Journal of Educational Computing Research*, 2(1), 57–73. https://doi.org/10.2190/3LFX-9RRF-67T8-UVK9
+
+Pea, R. D. (1986). Language-independent conceptual "bugs" in novice programming. *Journal of Educational Computing Research*, 2(1), 25–36. https://doi.org/10.2190/689T-1R2A-X4W4-29J2
+
+Spohrer, J. C., & Soloway, E. (1986). Novice mistakes: Are the folk wisdoms correct? *Communications of the ACM*, 29(7), 624–632. https://doi.org/10.1145/6138.6145
+
+Anderson, J. R., Conrad, F. G., & Corbett, A. T. (1989). Skill acquisition and the LISP tutor. *Cognitive Science*, 13(4), 467–505. https://doi.org/10.1016/0364-0213(89)90021-9
+
+Bandura, A. (1997). *Self-efficacy: The exercise of control*. W. H. Freeman.
+
+Parasuraman, R., & Riley, V. (1997). Humans and automation: Use, misuse, disuse, abuse. *Human Factors*, 39(2), 230–253. https://doi.org/10.1518/001872097778543886
+
+Kaczmarczyk, L. C., Petrick, E. R., East, J. P., & Herman, G. L. (2010). Identifying student misconceptions of programming. In *Proceedings of the 41st ACM Technical Symposium on Computer Science Education* (SIGCSE '10), 107–111. https://doi.org/10.1145/1734263.1734299
+
+Sirkiä, T., & Sorva, J. (2012). Exploring programming misconceptions: An analysis of student mistakes in visual program simulation exercises. In *Proceedings of the 12th Koli Calling International Conference on Computing Education Research* (Koli Calling '12), 19–28. https://doi.org/10.1145/2401796.2401799
+
+Brown, N. C. C., & Altadmri, A. (2014). Investigating novice programming mistakes: Educator beliefs vs. student data. In *Proceedings of the 10th Annual Conference on International Computing Education Research* (ICER '14), 43–50. https://doi.org/10.1145/2632320.2632343
+
+Qian, Y., & Lehman, J. (2017). Students' misconceptions and other difficulties in introductory programming: A literature review. *ACM Transactions on Computing Education*, 18(1), Article 1, 1–24. https://doi.org/10.1145/3077618
+
+Chiodini, L., Moreno Santos, I., Gallidabino, A., Tafliovich, A., Santos, A. L., & Hauswirth, M. (2021). A curated inventory of programming language misconceptions. In *Proceedings of the 26th ACM Conference on Innovation and Technology in Computer Science Education V. 1* (ITiCSE '21), 380–386. https://doi.org/10.1145/3430665.3456343
+
+Shi, Y., Shah, K., Wang, W., Marwan, S., Penmetsa, P., & Price, T. W. (2021). Toward semi-automatic misconception discovery using code embeddings. In *Proceedings of the 11th International Learning Analytics and Knowledge Conference* (LAK '21), 606–612. https://doi.org/10.1145/3448139.3448205
+
+Ji, Z., Lee, N., Frieske, R., Yu, T., Su, D., Xu, Y., Ishii, E., Bang, Y., Madotto, A., & Fung, P. (2023). Survey of hallucination in natural language generation. *ACM Computing Surveys*, 55(12), Article 248. https://doi.org/10.1145/3571730
+
+Kasneci, E., Seßler, K., Küchemann, S., Bannert, M., Dementieva, D., Fischer, F., Gasser, U., Groh, G., Günnemann, S., Hüllermeier, E., Kruber, S., Kuber, S., Nerdel, C., Ngo, C., Nguyen, V., Nguyen, P., Pritlove, E., Rothkopf, C. A., Rummel, N., ... Kasneci, G. (2023). ChatGPT for good? On opportunities and challenges of large language models for education. *Learning and Individual Differences*, 103, Article 102274. https://doi.org/10.1016/j.lindif.2023.102274
+
+Azaiz, I., Kiesler, N., & Strickroth, S. (2024). Feedback-generation for programming exercises with GPT-4. In *Proceedings of the 2024 ACM Conference on Innovation and Technology in Computer Science Education* (ITiCSE '24), 8 pages. https://doi.org/10.1145/3649217.3653594
+
+Lee, Y., Jeong, S., & Kim, J. (2024). Improving LLM classification of logical errors by integrating error relationship into prompts. In *Intelligent Tutoring Systems* (ITS 2024), LNCS 14798, 91–103. Springer. https://doi.org/10.1007/978-3-031-63028-6_8 [Best Paper Award]
+
+MacNeil, S., Rogalska, M., Leinonen, J., Denny, P., Hellas, A., & Crosland, X. (2024). Synthetic students: A comparative study of bug distribution between large language models and computing students. In *Proceedings of the 2024 ACM Virtual Global Computing Education Conference V. 1* (SIGCSE Virtual 2024), 137–143. https://doi.org/10.1145/3649165.3690100
+
+Sonkar, S., Chen, X., Liu, N., Baraniuk, R. G., & Sachan, M. (2024). LLM-based cognitive models of students with misconceptions. *arXiv preprint arXiv:2410.12294*. https://doi.org/10.48550/arXiv.2410.12294
+
+Al-Hossami, E., & Bunescu, R. (2025). McMining: Automated discovery of misconceptions in student code. *arXiv preprint arXiv:2510.08827*. https://doi.org/10.48550/arXiv.2510.08827
