@@ -27,7 +27,7 @@ This is not an argument against student-facing “AI-as-tutor” tools—those s
 
 ### 1.1 Gaps in current approaches
 
-Prior work in computing education has deeply documented misconceptions and execution-model failures (e.g., du Boulay, 1986; Pea, 1986; Qian & Lehman, 2017) and has built tutoring systems that model student knowledge to deliver targeted feedback (e.g., Anderson et al., 1989; Johnson & Soloway, 1985). More recently, LLM-based tools can produce fluent explanations and feedback for novice programs (e.g., Azaiz et al., 2024).
+Prior work in computing education has deeply documented misconceptions and execution-model failures (e.g., du Boulay, 1986; Pea, 1986) and has built tutoring systems that model student knowledge to deliver targeted feedback (e.g., Johnson & Soloway, 1985). More recently, LLM-based tools can produce fluent explanations and feedback for novice programs (e.g., Azaiz et al., 2024).
 
 However, in the CS1 LLM era, there is a specific gap: we lack norms and evaluations for when a model should *not* diagnose. Belief attribution is intrinsically uncertain and risk-asymmetric: a false-positive diagnosis (“this student believes X”) can be more harmful than abstaining. Novices often cannot reliably adjudicate between competing explanations, and a confident but wrong story can induce confusion, mistrust, and wasted effort.
 
@@ -189,6 +189,8 @@ Importantly, current matching does not verify that the model’s cited evidence 
 |---|---:|---:|---:|
 | Standard matching (main run) | 0.577 | 0.872 | 0.848 |
 | Label-inclusive matching (ablation) | 0.511 | 0.982 | 0.774 |
+
+Table 1 presents the core trade-off this paper addresses. The modest precision (0.577) is not a system failure but direct evidence for why specificity-first evaluation matters: nearly half of all diagnoses are false positives. The ablation row demonstrates how evaluation shortcuts inflate apparent capability—including label text in matching boosts recall to 0.98 but degrades specificity to 0.77, meaning the model appears more capable while becoming less safe. This pattern illustrates why benchmarks that optimize for coverage alone are inadequate for belief attribution.
 
 **Feasibility:** Recall is high in both settings, suggesting models can often produce belief hypotheses aligned with injected misconceptions.
 
