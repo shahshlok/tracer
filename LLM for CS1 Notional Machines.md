@@ -87,7 +87,7 @@ We use:
 
 A single incorrect submission can arise from many latent causes: a misconception, a partial understanding, or a one-off slip. Therefore, inferring a student's mental model from code is an inverse problem with a multi-modal posterior.
 
-This diagnostic task is a form of Theory of Mind (ToM): attributing mental states—beliefs, intents, knowledge—to another agent based on observable behavior (Premack & Woodruff, 1978). When an instructor looks at buggy code and infers "this student believes assignment works like algebraic equality," they are simulating the student's reasoning process. For an LLM to perform this attribution, it must go beyond pattern-matching surface errors to generating hypotheses about the cognitive state that produced them. Unlike syntax checking, which identifies properties of the text, belief attribution infers properties of the agent who wrote it—a fundamentally more uncertain task.
+This diagnostic task performs **cognitive student modeling** at an interpretive level, inferring latent knowledge states—beliefs, intents, and misconceptions—from observable behavior (Sonkar et al., 2024). When an instructor looks at buggy code and infers "this student believes assignment works like algebraic equality," they are simulating the student's reasoning process. For an LLM to support this, it must generate hypotheses about the cognitive state that produced the code, rather than simply identifying surface errors. Unlike syntax checking, which identifies properties of the text, belief attribution infers properties of the agent who wrote it—a fundamentally more uncertain task.
 
 ### 3.2 Structural vs. semantic misconceptions (definition)
 
@@ -162,7 +162,7 @@ TRACER (Taxonomic Research of Aligned Cognitive Error Recognition) is used here 
 
 ### 5.1 What TRACER is (and what it is not)
 
-TRACER is a controlled probe designed to test whether LLM outputs about “student thinking” can align with operationalized ground truth misconceptions. We evaluate three state-of-the-art model families: GPT-5.2, Claude 4.5 Haiku, and Gemini 3 Flash, examining both standard and reasoning-enhanced variants.
+TRACER is a controlled probe designed to test whether LLM outputs about “student thinking” can align with operationalized ground truth misconceptions. We evaluate three state-of-the-art model families: GPT-5.2, Claude 4.5 Haiku, and Gemini 3 Flash, examining both standard and reasoning-enhanced variants, yielding a total of six distinct model configurations.
 
 - Dataset: 1,200 synthetic CS1 Java submissions from 300 synthetic “students” across three assignments.
 - Each student produces 4 submissions; by design, each contributes 1 misconception-seeded submission and 3 behaviorally correct submissions.
