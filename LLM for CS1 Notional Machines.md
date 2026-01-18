@@ -49,6 +49,8 @@ This paper contributes:
 - Design and evaluation requirements for “diagnostic humility” (abstention and specificity-first reporting).
 - Empirical grounding using TRACER (Taxonomic Research of Aligned Cognitive Error Recognition), a controlled probe illustrating feasibility, false-positive risk, and structural-vs-semantic blind spots.
 
+By surfacing the hidden labor of belief attribution, we outline an instructor-facing pedagogical capability, yet one characterized by significant risk asymmetry: a false diagnosis of misconception is more harmful than a missed detection. This paper contends that mitigating such epistemic interference requires a new standard of diagnostic humility, where tools are explicitly rewarded for abstaining when evidence is insufficient.
+
 Scope: we focus on CS1-style imperative programs written as standalone Java `main` programs, and on instructor-facing use (not grading; not authoritative student-facing diagnosis).
 
 ## 2. Related Work
